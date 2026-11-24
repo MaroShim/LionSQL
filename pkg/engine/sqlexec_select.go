@@ -105,53 +105,15 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		allVolcanoSchemas = append(allVolcanoSchemas, leftSchema)
 	}
 	for _, j := range joins {
+		if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
+			continue
+		}
 		if rSchema := rightSchemas[j.Table]; rSchema != nil {
 			allVolcanoSchemas = append(allVolcanoSchemas, rSchema)
 		}
 	}
-	if len(allVolcanoSchemas) > 1 {
-		for _, proj := range qInfo.Projections {
-			projTrim := strings.TrimSpace(proj)
-			if projTrim == "*" || strings.HasSuffix(projTrim, ".*") {
-				continue
-			}
-			exprPart := projTrim
-			if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
-				exprPart = strings.TrimSpace(projTrim[:asIdx])
-			}
-			for _, ref := range planner.ExtractColumnRefs(exprPart) {
-				if ref.TableOrAlias == "" {
-					matches := 0
-					seenTables := make(map[string]bool)
-					for _, sch := range allVolcanoSchemas {
-						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
-							seenTables[strings.ToLower(sch.Name)] = true
-							if _, _, ok := sch.FindColumn(ref.Column); ok {
-								matches++
-							}
-						}
-					}
-					if matches > 1 {
-						return nil, fmt.Errorf("column reference %q is ambiguous", ref.Column)
-					}
-				}
-			}
-		}
-	}
-	if qInfo.WhereClause != "" {
-		if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, allVolcanoSchemas...); err != nil {
-			return nil, err
-		}
-	}
-	if qInfo.OrderByClause != "" {
-		if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, allVolcanoSchemas...); err != nil {
-			return nil, err
-		}
-	}
-	if len(qInfo.GroupByCols) > 0 {
-		if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), allVolcanoSchemas...); err != nil {
-			return nil, err
-		}
+	if err := ValidateSelectScope(qInfo, allVolcanoSchemas); err != nil {
+		return nil, err
 	}
 
 	var tx storage.Transaction
@@ -2367,75 +2329,48 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			schemas = append(schemas, tblSch)
 		}
 		for _, j := range qInfo.Joins {
+			if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
+				continue
+			}
 			if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
 				schemas = append(schemas, jSch)
 			}
 		}
-		if qInfo.Join != nil {
-			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
-				schemas = append(schemas, jSch)
+		if qInfo.Join != nil && !strings.EqualFold(qInfo.Join.Type, "SEMI") && !strings.EqualFold(qInfo.Join.Type, "ANTI") {
+			found := false
+			for _, sch := range schemas {
+				if sch != nil && strings.EqualFold(sch.Name, cleanIdentifier(qInfo.Join.Table)) {
+					found = true
+					break
+				}
 			}
-		}
-
-		if len(schemas) > 1 {
-			for _, proj := range qInfo.Projections {
-				projTrim := strings.TrimSpace(proj)
-				if projTrim == "*" || strings.HasSuffix(projTrim, ".*") {
-					continue
-				}
-				exprPart := projTrim
-				if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
-					exprPart = strings.TrimSpace(projTrim[:asIdx])
-				}
-				for _, ref := range planner.ExtractColumnRefs(exprPart) {
-					if ref.TableOrAlias == "" {
-						matches := 0
-						seenTables := make(map[string]bool)
-						for _, sch := range schemas {
-							if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
-								seenTables[strings.ToLower(sch.Name)] = true
-								if _, _, ok := sch.FindColumn(ref.Column); ok {
-									matches++
-								}
-							}
-						}
-						if matches > 1 {
-							return nil, fmt.Errorf("column reference %q is ambiguous", ref.Column)
-						}
-					}
+			if !found {
+				if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
+					schemas = append(schemas, jSch)
 				}
 			}
 		}
 
-		if qInfo.WhereClause != "" {
-			if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, schemas...); err != nil {
-				return nil, err
-			}
-		}
-		if qInfo.HavingClause != "" {
-			if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
-				return nil, err
-			}
-		}
-		if qInfo.OrderByClause != "" {
-			if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, schemas...); err != nil {
-				return nil, err
-			}
-		}
-		if len(qInfo.GroupByCols) > 0 {
-			if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), schemas...); err != nil {
-				return nil, err
-			}
+		if err := ValidateSelectScope(qInfo, schemas); err != nil {
+			return nil, err
 		}
 		for _, j := range qInfo.Joins {
 			if j.Filter != "" {
-				if err := ValidateWhereClauseWithSchemas(j.Filter, schemas...); err != nil {
+				jSchemas := schemas
+				if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
+					jSchemas = append([]*storage.TableSchema{jSch}, schemas...)
+				}
+				if err := ValidateWhereClauseWithSchemas(j.Filter, jSchemas...); err != nil {
 					return nil, err
 				}
 			}
 		}
 		if qInfo.Join != nil && qInfo.Join.Filter != "" {
-			if err := ValidateWhereClauseWithSchemas(qInfo.Join.Filter, schemas...); err != nil {
+			jSchemas := schemas
+			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
+				jSchemas = append([]*storage.TableSchema{jSch}, schemas...)
+			}
+			if err := ValidateWhereClauseWithSchemas(qInfo.Join.Filter, jSchemas...); err != nil {
 				return nil, err
 			}
 		}

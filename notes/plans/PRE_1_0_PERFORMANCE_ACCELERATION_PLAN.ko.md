@@ -1,0 +1,92 @@
+# 1.0 GA 대비 3대 성능 가속 핵심 아키텍처 설계서 (Pre-1.0 Performance Acceleration Plan)
+
+> **작성일자**: 2026-11-24  
+> **상태**: 진행 중 (In Progress)  
+> **문서 버전**: v1.0  
+> **관련 마일스톤**: v0.96.0 (Pre-1.0)  
+> **관련 태스크**: `ARCH-PARALLEL-SCAN-1`, `PERF-FLAT-ARRAY-HASH-JOIN-1`, `PERF-JOIN-AGG-OPERATOR-FUSION-1`  
+> **기반 소스**: `/tmp/sql9.txt` 및 `notes/COMPLEX_QUERY_PERFORMANCE_ACCELERATION_PLAN.ko.md`
+
+---
+
+## 1. 개요 및 배경 (Context & Problem Statement)
+
+현재 LionSQL의 대용량 분석 및 조인 쿼리 지연시간은 수많은 마이크로 최적화(WiredTiger Cursor Zero-Copy, Hash Join Small-Table Build-Side, Vectorized Primitive Accumulator)를 통해 44ms 수준까지 단축되었다.
+그러나 상용 C 엔진(PostgreSQL, DuckDB) 대비 1.5배 수준(15~20ms대)으로 진입하기 위해서는 단일 코어의 한계를 돌파하고 CPU L1/L2 캐시 및 파이프라인 융합을 극대화하는 **3대 핵심 성능 급소**를 1.0 이전에 해결해야 한다.
+
+---
+
+## 2. 3대 핵심 성능 가속 아키텍처
+
+```mermaid
+flowchart TD
+    Query[분석/조인 쿼리 요청] --> Planner[CBO 최적화 플래너]
+    
+    subgraph MultiCoreParallel [1. Intra-Query 멀티코어 병렬화: ARCH-PARALLEL-SCAN-1]
+        Planner --> Partitioner[테이블 64,000행 / N-Partition 분할]
+        Partitioner --> Worker1[Goroutine Worker 1<br/>Local Scan & Filter]
+        Partitioner --> Worker2[Goroutine Worker 2<br/>Local Scan & Filter]
+        Partitioner --> Worker3[Goroutine Worker 3<br/>Local Scan & Filter]
+        Partitioner --> Worker4[Goroutine Worker 4<br/>Local Scan & Filter]
+    end
+    
+    subgraph FlatHashJoin [2. Flat Array Hash Join: PERF-FLAT-ARRAY-HASH-JOIN-1]
+        Worker1 & Worker2 & Worker3 & Worker4 --> BuildCheck{Build 테이블 <= 1,000건?}
+        BuildCheck --Yes--> FlatArrayProbe[L1/L2 캐시 친화 Flat Slice<br/>1ns Direct Pointerless Probe]
+        BuildCheck --No--> StandardHash[표준 버킷 해시 조인]
+    end
+    
+    subgraph OperatorFusion [3. Join-Aggregate Operator Fusion: PERF-JOIN-AGG-OPERATOR-FUSION-1]
+        FlatArrayProbe --> FusedCheck{조인키 == 그룹키?}
+        FusedCheck --Yes--> DirectAccum[중간 튜플 생성 생략<br/>Direct Hash Slot Accumulate: sum += val]
+        FusedCheck --No--> MaterializeJoin[중간 조인 튜플 생성]
+    end
+    
+    DirectAccum --> Gather[Gather / Final Merge Node]
+    MaterializeJoin --> Gather
+    Gather --> Result[최종 클라이언트 결과 반환 (15~20ms 진입)]
+```
+
+---
+
+## 3. 세부 설계 및 구현 전략
+
+### 3.1 [급소 1] Intra-Query 멀티코어 병렬화 (`ARCH-PARALLEL-SCAN-1`)
+- **문제점**: 10,000건 ~ 100,000건 이상의 스캔 시 머신의 16~36개 코어 중 단 1개의 Goroutine만 100% 사용하고 나머지 코어가 유휴 상태(Idle)로 낭비됨.
+- **KISS 해결책 (Parallel Chunk Scan & Gather Merge)**:
+  1. 테이블 레코드 범위를 4~8개 파티션 청크로 분할 (`atomic.Uint64` 또는 고정 오프셋 인출).
+  2. 가용 CPU 코어 수(GOMAXPROCS 기반 4~8개)의 워커 Goroutine이 병렬 스캔 수행.
+  3. 각 워커가 로컬 청크에서 필터링 및 부분 집계(Partial Aggregation)를 수행.
+  4. 최종 `Gather` 노드가 워커들의 부분 집계 결과(카테고리별 부분 합)만 병합(Merge).
+- **예상 절감 효과**: 스캔 및 집계 시간 2.5배 ~ 3배 단축 (약 25~30ms 단축 ➔ 16~18ms 진입).
+
+### 3.2 [급소 2] Flat Array Direct Probe 해시 조인 (`PERF-FLAT-ARRAY-HASH-JOIN-1`)
+- **문제점**: 소형 빌드 테이블(1,000건 이하, 예: `test_cat` 5건)에서도 Go `map[uint64]*Tuple` 또는 연결 리스트 버킷을 조회하면서 포인터 체이싱(Pointer Chasing)으로 인한 CPU L1/L2 캐시 미스 발생.
+- **KISS 해결책 (Flat Array Direct Probe)**:
+  1. 빌드 테이블 행 수가 1,000건 이하인 경우, 포인터 기반 해시 테이블 대신 **평탄화된 연속 메모리 슬라이스(`[]FlatEntry`)**에 데이터 상주.
+  2. 프로브 행이 지나갈 때 포인터 역참조 없이 CPU L1 캐시 속도(~1ns)로 연속 인덱스 다이렉트 매칭.
+- **예상 절감 효과**: 조인 프로브 루프 연산 지연시간 30~40% 감소 (약 5~8ms 절감).
+
+### 3.3 [급소 3] Join-Aggregate Operator Fusion (`PERF-JOIN-AGG-OPERATOR-FUSION-1`)
+- **문제점**: `HashJoinIterator`가 10,000건을 조인하여 중간 튜플(`Left+Right`)을 메모리에 만들었다가, 상위 `AggregateIterator`가 이를 즉시 풀어서 `SUM(val)`, `COUNT(id)`에 누적한 뒤 버리는 불필요한 중간 행 생성/GC 낭비 발생.
+- **KISS 해결책 (Fused Hash Join-Agg)**:
+  1. 조인 키와 그룹핑 키가 일치하거나 포함 관계인 경우, 조인과 집계 연산자를 하나로 융합(`FusedJoinAggIterator`).
+  2. 프로브 매칭 성공 즉시 중간 튜플 조립을 건너뛰고, 해시 테이블의 집계 슬롯(`sum += val`, `count++`)에 다이렉트 누적.
+- **예상 절감 효과**: 중간 조인 튜플 생성 및 파이프라인 전송 오버헤드 100% 제거 (약 5ms 절감).
+
+---
+
+## 4. 백로그 태스크 매핑 (1.0 GA 이전 완료 확정)
+
+| 태스크 ID | 도메인 | 우선순위 | 마일스톤 | 작업 내용 |
+| :--- | :---: | :---: | :---: | :--- |
+| `ARCH-PARALLEL-SCAN-1` | Engine | **P1** | **v0.96.0** | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) |
+| `PERF-FLAT-ARRAY-HASH-JOIN-1` | Execution | **P1** | **v0.96.0** | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) |
+| `PERF-JOIN-AGG-OPERATOR-FUSION-1` | Execution | **P1** | **v0.96.0** | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) |
+
+---
+
+## 5. 완료 기준 (Definition of Done)
+1. 3개 가속 기술 구현 및 벤치마크 검증 완료 (`cmd/bench`, `TestComplexQueryBenchmark`).
+2. 10,000건 조인+집계 쿼리 처리 시간 44ms ➔ **15~20ms대 진입** 달성.
+3. 3단계 파이프라인(Build ➔ Test `-race` ➔ Commit) 100% 무결성 통과.

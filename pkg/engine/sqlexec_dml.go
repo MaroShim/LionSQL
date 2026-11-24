@@ -352,7 +352,14 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			}
 		}
 		if dml.Values != "" {
-			tupleStrings := sqlutil.ExtractTopLevelTuples(dml.Values)
+			rawVals := dml.Values
+			if conflictIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON CONFLICT"); conflictIdx != -1 {
+				rawVals = strings.TrimSpace(rawVals[:conflictIdx])
+			}
+			if dupIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON DUPLICATE"); dupIdx != -1 {
+				rawVals = strings.TrimSpace(rawVals[:dupIdx])
+			}
+			tupleStrings := sqlutil.ExtractTopLevelTuples(rawVals)
 			for _, tupleStr := range tupleStrings {
 				for _, v := range splitValues(tupleStr) {
 					if err := ValidateInsertValueExpr(v); err != nil {

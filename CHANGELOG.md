@@ -40,7 +40,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - implement transitive predicate inference across equi-joined tables (`InferTransitivePredicates`), automatically propagating single-column filters (`= const`, `> const`, `IN`, `BETWEEN`) to joined relations for early index seeks and storage filtering prior to join execution
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
 
+### Refactored
+- prune redundant ad-hoc validation loops across `sqlexec_select.go` into centralized `ValidateSelectScope` and `ValidateAmbiguousProjections` (`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`), eliminating 90+ lines of duplicate branch checks across `execVolcanoSelect` and `execSelect`
+
 ### Fixed
+- strip ON CONFLICT and ON DUPLICATE clauses before tuple extraction in INSERT VALUES validation, preventing target columns from being falsely rejected as ghost columns
+- exclude subquery SEMI and ANTI join relations from outer query ambiguity checks in SELECT scope validation
+- include target join table schema when validating join filter expressions
 - disallow aggregate functions (COUNT, SUM, AVG, MIN, MAX) in WHERE clause with SQLSTATE 42803 (`BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1`)
 - disallow aggregate functions in JOIN ON clauses with SQLSTATE 42803 (`BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1`)
 - propagate subquery errors (missing table, relation does not exist) fail-closed in WHERE IN expressions with SQLSTATE 42P01 (`BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1`)

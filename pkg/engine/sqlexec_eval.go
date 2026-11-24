@@ -275,6 +275,74 @@ func ValidateWhereClause(whereStr string) error {
 	return ValidateWhereClauseWithSchemas(whereStr)
 }
 
+// ValidateAmbiguousProjections checks whether any unqualified column in projections exists in multiple schemas.
+func ValidateAmbiguousProjections(projections []string, schemas []*storage.TableSchema) error {
+	if len(schemas) <= 1 {
+		return nil
+	}
+	for _, proj := range projections {
+		projTrim := strings.TrimSpace(proj)
+		if projTrim == "*" || strings.HasSuffix(projTrim, ".*") {
+			continue
+		}
+		exprPart := projTrim
+		if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
+			exprPart = strings.TrimSpace(projTrim[:asIdx])
+		}
+		for _, ref := range planner.ExtractColumnRefs(exprPart) {
+			if ref.TableOrAlias == "" {
+				matches := 0
+				seenTables := make(map[string]bool)
+				for _, sch := range schemas {
+					if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+						seenTables[strings.ToLower(sch.Name)] = true
+						if _, _, ok := sch.FindColumn(ref.Column); ok {
+							matches++
+						}
+					}
+				}
+				if matches > 1 {
+					return fmt.Errorf("column reference %q is ambiguous", ref.Column)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateSelectScope enforces semantic binder invariants across projections, WHERE, HAVING, ORDER BY, and GROUP BY.
+func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) error {
+	if qInfo == nil {
+		return nil
+	}
+	if len(schemas) > 1 {
+		if err := ValidateAmbiguousProjections(qInfo.Projections, schemas); err != nil {
+			return err
+		}
+	}
+	if qInfo.WhereClause != "" {
+		if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, schemas...); err != nil {
+			return err
+		}
+	}
+	if qInfo.HavingClause != "" {
+		if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
+			return err
+		}
+	}
+	if qInfo.OrderByClause != "" {
+		if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, schemas...); err != nil {
+			return err
+		}
+	}
+	if len(qInfo.GroupByCols) > 0 {
+		if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), schemas...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateOrderByClauseWithSchemas verifies that orderStr in SELECT is syntactically well-formed,
 // checks disallowed expressions, and checks for ambiguous column references across joined schemas.
 func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.TableSchema) error {

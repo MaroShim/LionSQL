@@ -30,7 +30,7 @@
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v0.96.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
+| `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v0.96.0` | Engine | P1 | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.10.0` | Planner | P2 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
@@ -525,10 +525,12 @@
 | `DONE` | **`PERF-CURSOR-ZERO-COPY-SCAN-1`** | `v0.95.0` | Storage | P1 | WiredTiger 커서 Zero-Copy 버퍼 재사용 및 Scan 힙 메모리 할당 제거 | [`notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md`](notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-FLAT-ARRAY-HASH-JOIN-1`** | `v0.96.0` | Execution | P1 | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
 | `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
@@ -569,7 +571,7 @@
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`** | `v0.96.0` | Refactoring | P2 | 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
+| `COMPLETED` | **`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`** | `v0.96.0` | Refactoring | P2 | 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.96.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -800,10 +802,10 @@
 
 ---
 
-### [PENDING] 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) `ARCH-PARALLEL-SCAN-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 07:14:29
+### [PENDING] Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) `ARCH-PARALLEL-SCAN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-23 07:14:29
 - **Milestone**: `v0.96.0`
-- **Plan Doc**: [`ROADMAP.md`](ROADMAP.md)
+- **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
 
@@ -5108,6 +5110,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) `PERF-FLAT-ARRAY-HASH-JOIN-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 08:48:17
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
+
+---
+
 ### [DONE] GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 `PERF-GROUPBY-SLOT-HASH-1`
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 04:38:36
 - **Milestone**: `v0.99.0`
@@ -5146,6 +5155,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 `PERF-HYBRID-TEMPMEM-1`
 - **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Plan Doc**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
+
+---
+
+### [PENDING] Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) `PERF-JOIN-AGG-OPERATOR-FUSION-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 08:48:17
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
 
@@ -5467,7 +5483,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) `REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`
+### [COMPLETED] 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) `REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`
 - **Domain**: Refactoring | **Priority**: P2 | **Updated**: 2026-11-24 08:40:17
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
