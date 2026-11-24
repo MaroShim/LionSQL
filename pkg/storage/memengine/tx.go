@@ -2695,11 +2695,16 @@ func (tx *Transaction) Commit() error {
 			if rawData == nil && ch.kind != changeDelete {
 				return fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table)
 			}
+			var opSchema *storage.TableSchema
+			if chTD != nil {
+				opSchema = &chTD.Schema
+			}
 			ops = append(ops, WALOp{
 				Type:    opType,
 				Table:   ch.table,
 				Key:     ch.key,
 				Data:    rawData,
+				Schema:  opSchema,
 				BaseVer: ch.baseVer,
 			})
 		}

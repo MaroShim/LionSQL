@@ -158,3 +158,148 @@ func TestStorage_BatchInsert_WiredTiger(t *testing.T) {
 
 	runBatchInsertTestsOnEngine(t, eng)
 }
+
+func BenchmarkStorage_BatchInsert_MemEngine(b *testing.B) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		b.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_batch_users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "email", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "age", Type: storage.TypeInt, Nullable: false},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_batch_email", Columns: []string{"email"}, Unique: true},
+			{Name: "idx_batch_age", Columns: []string{"age"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		b.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		b.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	batchSize := 1000
+	records := make([]storage.Record, batchSize)
+	for i := 0; i < batchSize; i++ {
+		records[i] = storage.Record{
+			"id":    storage.IntValue(int64(i + 1)),
+			"name":  storage.StringValue(fmt.Sprintf("User_%05d", i+1)),
+			"email": storage.StringValue(fmt.Sprintf("user_%05d@test.com", i+1)),
+			"age":   storage.IntValue(int64(20 + (i % 50))),
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	totalRows := 0
+	for i := 0; i < b.N; i++ {
+		tx, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			b.Fatalf("BeginTx failed: %v", err)
+		}
+		// Offset IDs to avoid collision across iterations
+		for j := 0; j < batchSize; j++ {
+			rowID := int64(totalRows + j + 1)
+			records[j]["id"] = storage.IntValue(rowID)
+			records[j]["email"] = storage.StringValue(fmt.Sprintf("user_%08d@test.com", rowID))
+		}
+		if err := tx.BatchInsert("bench_batch_users", records); err != nil {
+			tx.Rollback()
+			b.Fatalf("BatchInsert failed: %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			b.Fatalf("Commit failed: %v", err)
+		}
+		totalRows += batchSize
+	}
+	b.ReportMetric(float64(totalRows)/b.Elapsed().Seconds(), "rows/sec")
+}
+
+func BenchmarkStorage_BatchInsert_WiredTiger(b *testing.B) {
+	dir, err := os.MkdirTemp("", "wt_batch_bench_*")
+	if err != nil {
+		b.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	eng := wiredtiger.New()
+	if err := eng.Open(dir); err != nil {
+		if strings.Contains(err.Error(), "not enabled in this build") {
+			b.Skip("wiredtiger storage engine not enabled in this build")
+		}
+		b.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_batch_users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "email", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "age", Type: storage.TypeInt, Nullable: false},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_batch_email", Columns: []string{"email"}, Unique: true},
+			{Name: "idx_batch_age", Columns: []string{"age"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		b.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		b.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	batchSize := 1000
+	records := make([]storage.Record, batchSize)
+	for i := 0; i < batchSize; i++ {
+		records[i] = storage.Record{
+			"id":    storage.IntValue(int64(i + 1)),
+			"name":  storage.StringValue(fmt.Sprintf("User_%05d", i+1)),
+			"email": storage.StringValue(fmt.Sprintf("user_%05d@test.com", i+1)),
+			"age":   storage.IntValue(int64(20 + (i % 50))),
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	totalRows := 0
+	for i := 0; i < b.N; i++ {
+		tx, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			b.Fatalf("BeginTx failed: %v", err)
+		}
+		for j := 0; j < batchSize; j++ {
+			rowID := int64(totalRows + j + 1)
+			records[j]["id"] = storage.IntValue(rowID)
+			records[j]["email"] = storage.StringValue(fmt.Sprintf("user_%08d@test.com", rowID))
+		}
+		if err := tx.BatchInsert("bench_batch_users", records); err != nil {
+			tx.Rollback()
+			b.Fatalf("BatchInsert failed: %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			b.Fatalf("Commit failed: %v", err)
+		}
+		totalRows += batchSize
+	}
+	b.ReportMetric(float64(totalRows)/b.Elapsed().Seconds(), "rows/sec")
+}
+

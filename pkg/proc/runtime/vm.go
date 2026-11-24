@@ -797,6 +797,13 @@ func (f *VMFrame) getTableSchema(tableName string) (*storage.TableSchema, error)
 			}
 		}
 	}
+	if f.session != nil {
+		if se, ok := f.session.(interface{ Engine() storage.Engine }); ok && se.Engine() != nil {
+			if schema, err := se.Engine().GetTable(resolved); err == nil && schema != nil {
+				return schema, nil
+			}
+		}
+	}
 	if f.executor != nil {
 		if tm := f.executor.getTableManager(); tm != nil {
 			if schema, err := tm.GetTable(resolved); err == nil && schema != nil {

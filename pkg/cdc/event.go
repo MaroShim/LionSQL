@@ -99,6 +99,10 @@ func WALRecordToChangeEvents(rec memengine.WALRecord) []ChangeEvent {
 		}
 		if op.Record != nil {
 			ev.Data = RecordToMap(op.Record)
+		} else if op.Schema != nil && len(op.Data) > 0 {
+			if rec, err := storage.DecodeTuple(op.Schema, op.Data); err == nil {
+				ev.Data = RecordToMap(rec)
+			}
 		}
 		events = append(events, ev)
 	}

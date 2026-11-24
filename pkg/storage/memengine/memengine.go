@@ -163,6 +163,11 @@ func (e *Engine) CurrentLSN() int64 {
 func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.walHookMu.Lock()
+	if e.lastHookLSN < e.nextLSN.Load() && len(e.pendingHooks) == 0 {
+		e.lastHookLSN = e.nextLSN.Load()
+	}
+	e.walHookMu.Unlock()
 	e.walHook = fn
 }
 
@@ -170,6 +175,11 @@ func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 func (e *Engine) AddWALHook(fn func(rec WALRecord)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.walHookMu.Lock()
+	if e.lastHookLSN < e.nextLSN.Load() && len(e.pendingHooks) == 0 {
+		e.lastHookLSN = e.nextLSN.Load()
+	}
+	e.walHookMu.Unlock()
 	prev := e.walHook
 	if prev == nil {
 		e.walHook = fn

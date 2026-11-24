@@ -72,9 +72,11 @@ func TestCDC_DuckDB_InitialSnapshotGeneration(t *testing.T) {
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}
-	if wha, ok := eng.(walHookAdder); ok {
-		wha.AddWALHook(streamer.OnWALRecord)
+	wha, ok := eng.(walHookAdder)
+	if !ok {
+		t.Fatalf("eng does not implement walHookAdder")
 	}
+	wha.AddWALHook(streamer.OnWALRecord)
 
 	snapGen := NewSnapshotGenerator(eng)
 	streamer.SetSnapshotGenerator(snapGen)
@@ -95,22 +97,44 @@ func TestCDC_DuckDB_InitialSnapshotGeneration(t *testing.T) {
 		streamer.ServeHTTP(rec, req)
 	}()
 
-	// Allow snapshot to emit and enter streaming loop
-	time.Sleep(50 * time.Millisecond)
+	// Wait deterministically until snapshot (5 rows) is emitted
+	snapDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(snapDeadline) {
+		if strings.Count(rec.Body.String(), `"op":"SNAPSHOT"`) >= 5 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Perform a new live insert while connected
-	sess, _ := eng.NewSession()
-	tx, _ := sess.BeginTx(storage.TxOptions{})
-	_ = tx.Insert("orders", storage.Record{
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("orders", storage.Record{
 		"id":          storage.IntValue(6),
 		"customer_id": storage.IntValue(106),
 		"amount":      storage.FloatValue(63.0),
 		"status":      storage.StringValue("COMPLETED"),
-	})
-	_ = tx.Commit()
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
 	sess.Close()
 
-	time.Sleep(50 * time.Millisecond)
+	liveDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(liveDeadline) {
+		if strings.Contains(rec.Body.String(), `"id":6`) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel()
 	<-doneCh
 
@@ -165,9 +189,11 @@ func TestCDC_DuckDB_PersistentCheckpointAndReconnect(t *testing.T) {
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}
-	if wha, ok := eng.(walHookAdder); ok {
-		wha.AddWALHook(streamer.OnWALRecord)
+	wha, ok := eng.(walHookAdder)
+	if !ok {
+		t.Fatalf("eng does not implement walHookAdder")
 	}
+	wha.AddWALHook(streamer.OnWALRecord)
 
 	snapGen := NewSnapshotGenerator(eng)
 	streamer.SetSnapshotGenerator(snapGen)
@@ -239,7 +265,13 @@ func TestCDC_DuckDB_PersistentCheckpointAndReconnect(t *testing.T) {
 		streamer.ServeHTTP(rec2, req2)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	reconnectDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(reconnectDeadline) {
+		if strings.Contains(rec2.Body.String(), `"id":5`) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel2()
 	<-done2
 

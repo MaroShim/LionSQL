@@ -442,6 +442,11 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			p.nextToken()
 		}
 
+		var querySQL string
+		if selStmt != nil && (hasWindowFunctions(selStmt.Projections) || hasAggregates(selStmt.Projections) || len(selStmt.Joins) > 0 || len(selStmt.CTEs) > 0) {
+			querySQL = selStmt.String()
+		}
+
 		return &DeclareCursorStmt{
 			Name:     name,
 			Table:    selStmt.From.Name,
@@ -449,7 +454,7 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			Where:    selStmt.Where,
 			OrderBy:  selStmt.OrderBy,
 			Select:   selStmt,
-			QuerySQL: selStmt.String(),
+			QuerySQL: querySQL,
 		}, nil
 	}
 
