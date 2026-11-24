@@ -27,6 +27,9 @@ type HashJoinIterator struct {
 	joinType       string   // "INNER", "LEFT", "RIGHT", "FULL", "SEMI", "ANTI"
 	leftKey        string
 	rightKey       string
+	leftKeyIdx     int
+	rightKeyIdx    int
+	intHashTable   map[int64][]hashMatch
 	hashTable      map[string][]hashMatch
 	allRightTuples []Tuple
 	matchedRight   []bool
@@ -56,13 +59,16 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		jType = "INNER"
 	}
 	return &HashJoinIterator{
-		left:      left,
-		right:     right,
-		joinType:  jType,
-		leftKey:   strings.TrimSpace(leftKey),
-		rightKey:  strings.TrimSpace(rightKey),
-		hashTable: make(map[string][]hashMatch),
-		workMem:   DefaultWorkMem,
+		left:         left,
+		right:        right,
+		joinType:     jType,
+		leftKey:      strings.TrimSpace(leftKey),
+		rightKey:     strings.TrimSpace(rightKey),
+		leftKeyIdx:   -1,
+		rightKeyIdx:  -1,
+		hashTable:    make(map[string][]hashMatch),
+		intHashTable: make(map[int64][]hashMatch),
+		workMem:      DefaultWorkMem,
 	}
 }
 
@@ -156,6 +162,13 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		}
 	}
 
+	h.leftKeyIdx = -1
+	h.rightKeyIdx = -1
+	if !strings.Contains(h.rightKey, ",") && !strings.Contains(h.leftKey, ",") {
+		h.rightKeyIdx = resolveColIndex(h.right.ColIndexMap(), h.rightKey)
+		h.leftKeyIdx = resolveColIndex(h.left.ColIndexMap(), h.leftKey)
+	}
+
 	// 1. Build phase: drain right child into hash table
 	if err := h.right.Open(ctx); err != nil {
 		return fmt.Errorf("hash join build open error: %w", err)
@@ -166,10 +179,12 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	trackRight := isFull || isRight
 
 	h.hashTable = make(map[string][]hashMatch)
+	h.intHashTable = make(map[int64][]hashMatch)
 	h.allRightTuples = nil
 	h.matchedRight = nil
 	h.unmatchedIdx = 0
 	h.buildMemory = 0
+	h.rightHasNullKey = false
 	h.inChunk.Reset()
 	h.inIdx = 0
 	h.outChunk.Reset()
@@ -210,18 +225,34 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				h.matchedRight = append(h.matchedRight, false)
 			}
 
-			var kStr string
-			var found bool
 			if h.joinType == "CROSS" || (h.leftKey == "" && h.rightKey == "") {
-				kStr, found = "", true
-			} else {
-				kStr, found = extractTupleKey(tuple, h.rightKey, h.arena)
-			}
-			if !found {
-				h.rightHasNullKey = true
+				h.hashTable[""] = append(h.hashTable[""], hashMatch{tuple: tuple, idx: rIdx})
 				continue
 			}
-			h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+
+			if strings.Contains(h.rightKey, ",") {
+				kStr, found := extractTupleKey(tuple, h.rightKey, h.arena)
+				if !found {
+					h.rightHasNullKey = true
+					continue
+				}
+				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+			} else {
+				keyVal, found := getTupleValFast(tuple, h.rightKeyIdx, h.rightKey)
+				if !found || keyVal == nil {
+					h.rightHasNullKey = true
+					continue
+				}
+				if iKey, isInt := extractIntKey(keyVal); isInt {
+					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: tuple, idx: rIdx})
+				} else {
+					kStr := formatKeyVal(keyVal)
+					if h.arena != nil {
+						kStr = h.arena.AllocString(kStr)
+					}
+					h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+				}
+			}
 		}
 
 		if err == io.EOF {
@@ -323,17 +354,51 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		h.emittedAny = false
 
 		hasMatch := false
-		var kStr string
 		var found bool
 		if h.joinType == "CROSS" || (h.leftKey == "" && h.rightKey == "") {
-			kStr, found = "", true
-		} else {
-			kStr, found = extractTupleKey(probeTuple, h.leftKey, nil)
-		}
-		if found {
-			if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+			found = true
+			if matches, exists := h.hashTable[""]; exists && len(matches) > 0 {
 				hasMatch = true
 				h.currentMatches = matches
+			}
+		} else if strings.Contains(h.leftKey, ",") {
+			var kStr string
+			kStr, found = extractTupleKey(probeTuple, h.leftKey, nil)
+			if found {
+				if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+					hasMatch = true
+					h.currentMatches = matches
+				}
+			}
+		} else {
+			keyVal, ok := getTupleValFast(probeTuple, h.leftKeyIdx, h.leftKey)
+			if ok && keyVal != nil {
+				found = true
+				if iKey, isInt := extractIntKey(keyVal); isInt {
+					if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
+						hasMatch = true
+						h.currentMatches = matches
+					} else if len(h.hashTable) > 0 {
+						kStr := strconv.FormatInt(iKey, 10)
+						if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+							hasMatch = true
+							h.currentMatches = matches
+						}
+					}
+				} else {
+					kStr := formatKeyVal(keyVal)
+					if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+						hasMatch = true
+						h.currentMatches = matches
+					} else if len(h.intHashTable) > 0 {
+						if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
+							if matches, exists := h.intHashTable[pInt]; exists && len(matches) > 0 {
+								hasMatch = true
+								h.currentMatches = matches
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -438,6 +503,7 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 
 func (h *HashJoinIterator) Close() error {
 	h.hashTable = nil
+	h.intHashTable = nil
 	h.allRightTuples = nil
 	h.matchedRight = nil
 	h.currentProbe = Tuple{}
@@ -967,4 +1033,86 @@ func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {
 		return arena.AllocString(res), true
 	}
 	return res, true
+}
+
+func resolveColIndex(cmap *ColumnIndexMap, key string) int {
+	if cmap == nil {
+		return -1
+	}
+	key = strings.Trim(strings.TrimSpace(key), "\"`[]")
+	if idx, ok := cmap.Index(key); ok && idx >= 0 {
+		return idx
+	}
+	if dot := strings.Index(key, "."); dot != -1 {
+		bare := key[dot+1:]
+		if idx, ok := cmap.Index(bare); ok && idx >= 0 {
+			return idx
+		}
+	}
+	return -1
+}
+
+func getTupleValFast(t Tuple, colIdx int, keyName string) (any, bool) {
+	if !strings.Contains(keyName, ",") && colIdx >= 0 && colIdx < len(t.Values) {
+		val := t.Values[colIdx]
+		if val != nil {
+			return val, true
+		}
+		if t.Lazy != nil {
+			sv, err := t.Lazy.Get(colIdx)
+			if err == nil {
+				formatted := formatStorageVal(sv)
+				t.Values[colIdx] = formatted
+				return formatted, true
+			}
+		}
+		return nil, false
+	}
+	return lookupVal(t, keyName)
+}
+
+func extractIntKey(val any) (int64, bool) {
+	if val == nil {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case int16:
+		return int64(v), true
+	case int8:
+		return int64(v), true
+	case uint64:
+		return int64(v), true
+	case uint32:
+		return int64(v), true
+	case uint16:
+		return int64(v), true
+	case uint8:
+		return int64(v), true
+	case uint:
+		return int64(v), true
+	case float64:
+		if v == float64(int64(v)) {
+			return int64(v), true
+		}
+		return 0, false
+	case storage.Value:
+		if v.IsNull {
+			return 0, false
+		}
+		if v.Type == storage.TypeInt {
+			return v.IVal, true
+		}
+		if v.Type == storage.TypeFloat && v.FVal == float64(int64(v.FVal)) {
+			return int64(v.FVal), true
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
 }

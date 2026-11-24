@@ -271,6 +271,46 @@ func TestHashJoinIterator(t *testing.T) {
 	}
 }
 
+func TestHashJoinIterator_IntFastPath(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Storage Value and mixed int types
+	leftIter := newMockIterator([]string{"id", "val"},
+		map[string]any{"id": int32(10), "val": "A"},
+		map[string]any{"id": int64(20), "val": "B"},
+		map[string]any{"id": "30", "val": "C"}, // string probe matching int build
+		map[string]any{"id": nil, "val": "D"},
+	)
+	rightIter := newMockIterator([]string{"rid", "desc"},
+		map[string]any{"rid": int64(10), "desc": "Ten"},
+		map[string]any{"rid": int32(20), "desc": "Twenty"},
+		map[string]any{"rid": int64(30), "desc": "Thirty"},
+		map[string]any{"rid": int64(40), "desc": "Forty"},
+	)
+
+	join := execution.NewHashJoinIterator(leftIter, rightIter, "INNER", "id", "rid")
+	if err := join.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer join.Close()
+
+	var rows []execution.Tuple
+	for {
+		tuple, err := join.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		rows = append(rows, tuple)
+	}
+
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 join rows matching int fast path, got %d", len(rows))
+	}
+}
+
 func TestAggregateIterator(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"dept", "salary"},
