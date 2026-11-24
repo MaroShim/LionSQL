@@ -53,11 +53,15 @@ flowchart TD
 
 ### 3.1 [급소 1] Intra-Query 멀티코어 병렬화 (`ARCH-PARALLEL-SCAN-1`)
 - **문제점**: 10,000건 ~ 100,000건 이상의 스캔 시 머신의 16~36개 코어 중 단 1개의 Goroutine만 100% 사용하고 나머지 코어가 유휴 상태(Idle)로 낭비됨.
+- **워커 수(DOP: Degree of Parallelism) 공식 [사용자 확정 불변식]**:
+  - 공식: `workers = max(1, min(8, runtime.NumCPU() / 2))`
+  - **CPU 수의 절반 (`numCPU / 2`)**: 단일 대형 분석 쿼리가 머신의 CPU를 100% 독점하여 동시 실행 중인 OLTP 트랜잭션, WAL flush, 웹 스튜디오 요청이 기아(Starvation) 상태에 빠지는 것을 방지하고 충분한 시스템 여유 자원(Headroom) 확보.
+  - **최소 1개 (`min = 1`)**: 1코어 환경/저사양 컨테이너에서 `1 / 2 = 0`이 되어 데드락이 발생하는 것을 방어 (`Defensive Minimum = 1`).
+  - **최대 8개 (`max = 8`)**: 32~64코어 고사양 서버에서도 단일 쿼리의 과도한 스케줄링 오버헤드, L3 캐시 경합(캐시 트래싱), Gather 병합 병목(Amdahl's Law)에 의한 수확 체감을 차단하는 엄격한 상한선 캡 (`Upper Cap = 8`).
 - **KISS 해결책 (Parallel Chunk Scan & Gather Merge)**:
-  1. 테이블 레코드 범위를 4~8개 파티션 청크로 분할 (`atomic.Uint64` 또는 고정 오프셋 인출).
-  2. 가용 CPU 코어 수(GOMAXPROCS 기반 4~8개)의 워커 Goroutine이 병렬 스캔 수행.
-  3. 각 워커가 로컬 청크에서 필터링 및 부분 집계(Partial Aggregation)를 수행.
-  4. 최종 `Gather` 노드가 워커들의 부분 집계 결과(카테고리별 부분 합)만 병합(Merge).
+  1. 테이블 레코드 범위를 `workers`개 파티션 청크로 분할 (`atomic.Uint64` 또는 고정 오프셋 인출).
+  2. 산출된 `workers`개 고루틴이 병렬 스캔 및 로컬 필터/부분 집계(Partial Aggregation) 수행.
+  3. 최종 `Gather` 노드가 워커들의 부분 집계 결과(카테고리별 부분 합)만 병합(Merge).
 - **예상 절감 효과**: 스캔 및 집계 시간 2.5배 ~ 3배 단축 (약 25~30ms 단축 ➔ 16~18ms 진입).
 
 ### 3.2 [급소 2] Flat Array Direct Probe 해시 조인 (`PERF-FLAT-ARRAY-HASH-JOIN-1`)
