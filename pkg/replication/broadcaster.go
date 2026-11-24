@@ -32,6 +32,13 @@ type subscriber struct {
 	lastSeen   time.Time
 	connected  time.Time
 	hasGap     bool // marked true if channel buffer overflowed, resulting in eviction
+	closeOnce  sync.Once
+}
+
+func (s *subscriber) close() {
+	s.closeOnce.Do(func() {
+		close(s.ch)
+	})
 }
 
 // NewWALBroadcaster creates a broadcaster with a ring buffer for recent WAL records.
@@ -76,7 +83,7 @@ func (b *WALBroadcaster) Broadcast(rec memengine.WALRecord) {
 			// Fail-closed: close the channel immediately and evict the slow subscriber
 			// so the replica detects disconnect and safely reconnects/resyncs from its last LSN.
 			sub.hasGap = true
-			close(sub.ch)
+			sub.close()
 			slowSubscribers = append(slowSubscribers, id)
 		}
 	}
@@ -124,7 +131,7 @@ func (b *WALBroadcaster) Subscribe(replicaID, remoteAddr string, fromLSN int64, 
 
 	// If existing subscriber with same ID, close old one
 	if old, exists := b.subscribers[replicaID]; exists {
-		close(old.ch)
+		old.close()
 	}
 	b.subscribers[replicaID] = sub
 
@@ -144,7 +151,7 @@ func (b *WALBroadcaster) Subscribe(replicaID, remoteAddr string, fromLSN int64, 
 			defer b.mu.Unlock()
 			if current, exists := b.subscribers[replicaID]; exists && current == sub {
 				delete(b.subscribers, replicaID)
-				close(sub.ch)
+				sub.close()
 			}
 		})
 	}
@@ -197,6 +204,18 @@ func (b *WALBroadcaster) GetReplicas(primaryLSN int64) []ReplicaInfo {
 	return result
 }
 
+// DisconnectAllSubscribers closes and removes all active subscriber channels without marking the broadcaster as closed.
+// This is used during demotion so connected replicas detect disconnection immediately and reconnect to the new primary.
+func (b *WALBroadcaster) DisconnectAllSubscribers() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for _, sub := range b.subscribers {
+		sub.close()
+	}
+	b.subscribers = make(map[string]*subscriber)
+}
+
 // Close shuts down the broadcaster and closes all subscriber channels.
 func (b *WALBroadcaster) Close() {
 	b.mu.Lock()
@@ -207,7 +226,7 @@ func (b *WALBroadcaster) Close() {
 	}
 	b.closed = true
 	for _, sub := range b.subscribers {
-		close(sub.ch)
+		sub.close()
 	}
 	b.subscribers = make(map[string]*subscriber)
 }

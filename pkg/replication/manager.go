@@ -334,6 +334,10 @@ func (m *Manager) DemoteWithTerm(newPrimaryURL string, newTerm int64) error {
 	m.votedFor = ""
 	m.lastHeartbeat.Store(time.Now().UnixNano())
 
+	if m.broadcaster != nil {
+		m.broadcaster.DisconnectAllSubscribers()
+	}
+
 	m.restartClientLocked()
 
 	return nil

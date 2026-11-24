@@ -2630,6 +2630,7 @@ type WTTx struct {
 	hasWrites         bool
 	undoLog           []*storage.PhysiologicalRecord
 	savepoints        map[string]int
+	spLocks           map[string]int
 	spNames           []string
 	tempSpPreCreated  map[string]bool
 	walOps            []memengine.WALOp
@@ -2741,6 +2742,38 @@ func (tx *WTTx) releaseAcquiredLocksLocked() {
 	} else {
 		tx.acquiredLocks = tx.acquiredLocks[:0]
 	}
+}
+
+// releaseLocksSinceLocked releases only the locks acquired after targetLocks index.
+// Used during RollbackTo savepoint to reclaim exclusive write locks acquired since the savepoint.
+func (tx *WTTx) releaseLocksSinceLocked(targetLocks int) {
+	tx.lockMu.Lock()
+	defer tx.lockMu.Unlock()
+
+	nLocks := len(tx.acquiredLocks)
+	if targetLocks < 0 || targetLocks >= nLocks {
+		return
+	}
+	eng := tx.sess.engine
+	if eng == nil {
+		tx.acquiredLocks = tx.acquiredLocks[:targetLocks]
+		return
+	}
+
+	for i := targetLocks; i < nLocks; i++ {
+		shardIdx := tx.acquiredLocks[i].shardIdx
+		if shardIdx < 0 || shardIdx >= numWTLockShards {
+			continue
+		}
+		lockKey := tx.acquiredLocks[i].key
+		sh := &eng.lockShards[shardIdx]
+		sh.mu.Lock()
+		if sh.activeWriters != nil && sh.activeWriters[lockKey] == tx.txID {
+			delete(sh.activeWriters, lockKey)
+		}
+		sh.mu.Unlock()
+	}
+	tx.acquiredLocks = tx.acquiredLocks[:targetLocks]
 }
 
 func (tx *WTTx) clearUndoLogLocked() {
@@ -3805,19 +3838,10 @@ func (tx *WTTx) checkForeignKeyFromRowLocked(tbl *storage.TableSchema, row stora
 			continue
 		}
 
-		cur, err := tx.scanLocked(pTbl.Name)
-		if err != nil {
-			return err
+		matched, mErr := tx.parentRecordExistsUnderLock(pTbl, pCols, childVals)
+		if mErr != nil {
+			return mErr
 		}
-		matched := false
-		for cur.Next() {
-			r, rErr := cur.Row()
-			if rErr == nil && pTbl.RowMatchesFK(r, pCols, childVals) {
-				matched = true
-				break
-			}
-		}
-		cur.Close()
 		if !matched {
 			return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
 				storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
@@ -3856,35 +3880,99 @@ func (tx *WTTx) checkForeignKeyLocked(tbl *storage.TableSchema, childRec storage
 			pCols = []string{pkCol.Name}
 		}
 
-		parentPkCol, _ := pTbl.PrimaryKeyColumn()
-		if parentPkCol != nil && len(pCols) == 1 && strings.EqualFold(pCols[0], parentPkCol.Name) {
-			_, err := tx.getRawBytesLocked(pTbl.Name, childVals[0])
-			if err != nil {
-				return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
-					storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
-			}
-			continue
+		matched, mErr := tx.parentRecordExistsUnderLock(pTbl, pCols, childVals)
+		if mErr != nil {
+			return mErr
 		}
-
-		cur, err := tx.scanLocked(pTbl.Name)
-		if err != nil {
-			return err
-		}
-		matched := false
-		for cur.Next() {
-			r, rErr := cur.Row()
-			if rErr == nil && pTbl.RowMatchesFK(r, pCols, childVals) {
-				matched = true
-				break
-			}
-		}
-		cur.Close()
 		if !matched {
 			return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
 				storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
 		}
 	}
 	return nil
+}
+
+func (tx *WTTx) parentRecordExistsUnderLock(pTbl *storage.TableSchema, pCols []string, childVals []storage.Value) (bool, error) {
+	parentPkCol, _ := pTbl.PrimaryKeyColumn()
+	if parentPkCol != nil && len(pCols) == 1 && strings.EqualFold(pCols[0], parentPkCol.Name) {
+		_, err := tx.getRawBytesLocked(pTbl.Name, childVals[0])
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	}
+
+	// Try unique secondary index fast-path (O(log N))
+	if len(pCols) > 0 {
+		var matchingIdx *storage.IndexSchema
+		for i := range pTbl.Indexes {
+			idx := &pTbl.Indexes[i]
+			if len(idx.Columns) == len(pCols) {
+				match := true
+				for cIdx, col := range idx.Columns {
+					if !strings.EqualFold(col, pCols[cIdx]) {
+						match = false
+						break
+					}
+				}
+				if match {
+					matchingIdx = idx
+					break
+				}
+			}
+		}
+		if matchingIdx != nil {
+			idxKey := extractCompositeIndexKey(childVals)
+			var cur storage.Cursor
+			var err error
+			if storage.IsTemporaryTable(pTbl.Name) {
+				ttx, tErr := tx.ensureTempTxLocked()
+				if tErr == nil {
+					cur, err = ttx.IndexScan(pTbl.Name, matchingIdx.Name, &idxKey, &idxKey)
+				} else {
+					err = tErr
+				}
+			} else {
+				cur, err = tx.indexScanBTreeLocked(pTbl.Name, matchingIdx.Name, &idxKey, &idxKey, false)
+			}
+			if err == nil {
+				matched := cur.Next()
+				_ = cur.Close()
+				return matched, nil
+			}
+		}
+	}
+
+	// Fallback to table scan
+	cur, err := tx.scanLocked(pTbl.Name)
+	if err != nil {
+		return false, err
+	}
+	defer cur.Close()
+	for cur.Next() {
+		r, rErr := cur.Row()
+		if rErr == nil && pTbl.RowMatchesFK(r, pCols, childVals) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func extractCompositeIndexKey(vals []storage.Value) storage.Value {
+	if len(vals) == 0 {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	if len(vals) == 1 {
+		return vals[0]
+	}
+	var sb strings.Builder
+	for i, v := range vals {
+		if i > 0 {
+			sb.WriteByte(0)
+		}
+		sb.WriteString(storage.EncodeIndexKeyPart(v))
+	}
+	return storage.StringValue(sb.String())
 }
 
 func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.Value) error {
@@ -4876,6 +4964,9 @@ func (tx *WTTx) Savepoint(name string) error {
 	if tx.spWALIndices == nil {
 		tx.spWALIndices = make(map[string]int)
 	}
+	if tx.spLocks == nil {
+		tx.spLocks = make(map[string]int)
+	}
 
 	for i, n := range tx.spNames {
 		if n == normName {
@@ -4886,6 +4977,7 @@ func (tx *WTTx) Savepoint(name string) error {
 	tx.spNames = append(tx.spNames, normName)
 	tx.savepoints[normName] = len(tx.undoLog)
 	tx.spWALIndices[normName] = len(tx.walOps)
+	tx.spLocks[normName] = len(tx.acquiredLocks)
 	return nil
 }
 
@@ -4995,6 +5087,10 @@ func (tx *WTTx) RollbackTo(name string) error {
 		tx.walOps = tx.walOps[:targetWAL]
 	}
 
+	if savedLocks, hasLocks := tx.spLocks[normName]; hasLocks {
+		tx.releaseLocksSinceLocked(savedLocks)
+	}
+
 	// Invalidate subsequent savepoints defined after this savepoint
 	idx := -1
 	for i, n := range tx.spNames {
@@ -5007,6 +5103,7 @@ func (tx *WTTx) RollbackTo(name string) error {
 		for i := idx + 1; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
 			delete(tx.spWALIndices, tx.spNames[i])
+			delete(tx.spLocks, tx.spNames[i])
 			delete(tx.tempSpPreCreated, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx+1]
@@ -5049,6 +5146,7 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 		for i := idx; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
 			delete(tx.spWALIndices, tx.spNames[i])
+			delete(tx.spLocks, tx.spNames[i])
 			delete(tx.tempSpPreCreated, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx]

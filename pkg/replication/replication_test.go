@@ -476,3 +476,38 @@ func TestReplicationClient_LSNGap_FailsClosed(t *testing.T) {
 	}
 }
 
+func TestManager_DemoteDisconnectsSubscribers(t *testing.T) {
+	eng := memengine.New()
+	mgr, err := replication.NewManager(replication.Config{
+		NodeID: "primary-1",
+		Role:   replication.RolePrimary,
+		Engine: eng,
+	})
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+	defer mgr.Close()
+
+	ch, cancel, err := mgr.Broadcaster().Subscribe("replica-sub", "127.0.0.1:9000", 0, 100)
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	defer cancel()
+
+	// Demote primary
+	if err := mgr.Demote("http://new-primary:8090"); err != nil {
+		t.Fatalf("failed to demote: %v", err)
+	}
+
+	// Verify subscriber channel receives EOF (close) immediately
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("expected channel to be closed upon demote, but received value")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for subscriber to be disconnected upon demote")
+	}
+}
+
+
