@@ -345,6 +345,70 @@ func TestAggregateIterator(t *testing.T) {
 	}
 }
 
+func TestAggregateIterator_IntFastPath(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Single integer key GROUP BY (user_id)
+	mock := newMockIterator([]string{"user_id", "amount"},
+		map[string]any{"user_id": int64(10), "amount": int64(100)},
+		map[string]any{"user_id": int64(10), "amount": int64(150)},
+		map[string]any{"user_id": int64(20), "amount": int64(200)},
+		map[string]any{"user_id": int64(20), "amount": int64(50)},
+		map[string]any{"user_id": int64(30), "amount": int64(300)},
+	)
+
+	agg := execution.NewAggregateIterator(mock, []string{"user_id"}, []string{"user_id", "COUNT(*) AS cnt", "SUM(amount) AS total"}, "")
+	if err := agg.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer agg.Close()
+
+	var rows []execution.Tuple
+	for {
+		tuple, err := agg.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		rows = append(rows, tuple)
+	}
+
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 groups for integer fast path, got %d", len(rows))
+	}
+
+	// 2. Fallback check when non-integer appears in single group key
+	mockFallback := newMockIterator([]string{"user_id", "amount"},
+		map[string]any{"user_id": int64(10), "amount": int64(100)},
+		map[string]any{"user_id": "VIP-10", "amount": int64(500)}, // triggers string fallback
+		map[string]any{"user_id": int64(10), "amount": int64(50)},
+	)
+
+	agg2 := execution.NewAggregateIterator(mockFallback, []string{"user_id"}, []string{"user_id", "COUNT(*) AS cnt", "SUM(amount) AS total"}, "")
+	if err := agg2.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer agg2.Close()
+
+	rows = nil
+	for {
+		tuple, err := agg2.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		rows = append(rows, tuple)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 groups for fallback path, got %d", len(rows))
+	}
+}
+
 func TestEndToEnd_VolcanoWithMemEngine(t *testing.T) {
 	eng := memengine.New()
 	if err := eng.Open(""); err != nil {

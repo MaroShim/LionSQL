@@ -507,7 +507,7 @@
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-FILTER-PROJECT-EVALMAP-1`** | `1` | --domain | P2 | Filter/Project 무조건 ToEvalMap() 및 Materialize() 지연화로 불필요한 디코딩/할당 제거 (P0) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-OPT-GROUP-BY-INT-FASTPATH-1`** | `v0.99.0` | Execution | P2 | AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 | [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-OPT-GROUP-BY-INT-FASTPATH-1`** | `v0.99.0` | Execution | P2 | AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 | [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `v0.99.0` | Execution | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-OPT-MERGE-JOIN-ARENA-AND-CHUNK-1`** | `Post-1.0` | Execution | P2 | Sort Merge Join NextChunk 벡터화 및 Arena 제로-GC 최적화 | [`notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
@@ -4961,8 +4961,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 `PERF-OPT-GROUP-BY-INT-FASTPATH-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
+### [DONE] AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 `PERF-OPT-GROUP-BY-INT-FASTPATH-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 02:45:16
 - **Milestone**: `v0.99.0`
 - **Plan Doc**: [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 
