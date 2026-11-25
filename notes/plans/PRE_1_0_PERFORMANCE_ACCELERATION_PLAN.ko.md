@@ -90,6 +90,10 @@ flowchart TD
 | `ARCH-PARALLEL-SCAN-1` | Engine | **P1** | **v0.96.0** | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) |
 | `PERF-FLAT-ARRAY-HASH-JOIN-1` | Execution | **P1** | **v0.96.0** | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) |
 | `PERF-JOIN-AGG-OPERATOR-FUSION-1` | Execution | **P1** | **v0.96.0** | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) |
+| `PERF-TOP-N-SORT-FUSION-1` | Execution | **P1** | **v0.96.0** | Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) |
+| `PERF-SCAN-FILTER-FUSION-1` | Execution | **P2** | **v0.96.0** | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) |
+| `PERF-MIN-MAX-INDEX-SEEK-1` | Execution | **P1** | **v0.96.0** | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) |
+| `PERF-RUNTIME-BLOOM-FILTER-1` | Execution | **P2** | **v0.96.0** | Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) |
 
 ---
 
