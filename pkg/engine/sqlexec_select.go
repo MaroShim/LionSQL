@@ -2322,26 +2322,30 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
+		scope := BuildTableScope(qInfo, schemas)
+		for _, j := range qInfo.Joins {
+			if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
+				scope.Register(j.Table, j.Alias, jSch)
+			}
+		}
+		if qInfo.Join != nil {
+			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
+				scope.Register(qInfo.Join.Table, qInfo.Join.Alias, jSch)
+			}
+		}
+
 		if err := ValidateSelectScope(qInfo, schemas); err != nil {
 			return nil, err
 		}
 		for _, j := range qInfo.Joins {
 			if j.Filter != "" {
-				jSchemas := schemas
-				if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
-					jSchemas = append([]*storage.TableSchema{jSch}, schemas...)
-				}
-				if err := ValidateWhereClauseWithSchemas(j.Filter, jSchemas...); err != nil {
+				if err := ValidateWhereClauseWithScope(j.Filter, scope); err != nil {
 					return nil, err
 				}
 			}
 		}
 		if qInfo.Join != nil && qInfo.Join.Filter != "" {
-			jSchemas := schemas
-			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
-				jSchemas = append([]*storage.TableSchema{jSch}, schemas...)
-			}
-			if err := ValidateWhereClauseWithSchemas(qInfo.Join.Filter, jSchemas...); err != nil {
+			if err := ValidateWhereClauseWithScope(qInfo.Join.Filter, scope); err != nil {
 				return nil, err
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -229,11 +230,22 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 		return nil, false
 	}
 
-	tableStr, _ := splitTableAndAlias(tablePart)
+	tableStr, aliasStr := splitTableAndAlias(tablePart)
 	cleanTable := cleanIdentifier(tableStr)
+	cleanAlias := cleanIdentifier(aliasStr)
 	cleanCol := cleanIdentifier(colIdent)
 	if idx := strings.LastIndex(cleanCol, "."); idx != -1 {
+		colPrefix := cleanCol[:idx]
 		cleanCol = cleanCol[idx+1:]
+		if cleanAlias != "" {
+			if !strings.EqualFold(colPrefix, cleanAlias) {
+				return nil, false // Prefix does not match table alias, fall back to semantic validator
+			}
+		} else {
+			if !strings.EqualFold(colPrefix, cleanTable) && !strings.EqualFold(colPrefix, proc.CleanSchemaPrefix(cleanTable)) {
+				return nil, false // Prefix does not match table name, fall back to semantic validator
+			}
+		}
 	}
 
 	cleanLit := cleanLiteral(rawLiteral)
@@ -252,7 +264,17 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 			}
 			sc := cleanIdentifier(c)
 			if idx := strings.LastIndex(sc, "."); idx != -1 {
+				projPrefix := sc[:idx]
 				sc = sc[idx+1:]
+				if cleanAlias != "" {
+					if !strings.EqualFold(projPrefix, cleanAlias) {
+						return nil, false
+					}
+				} else {
+					if !strings.EqualFold(projPrefix, cleanTable) && !strings.EqualFold(projPrefix, proc.CleanSchemaPrefix(cleanTable)) {
+						return nil, false
+					}
+				}
 			}
 			selectedCols = append(selectedCols, sc)
 		}

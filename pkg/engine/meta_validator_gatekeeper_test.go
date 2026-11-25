@@ -260,3 +260,100 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestBinder_Phase2_IdentifierAndScopeBinding(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sess := "test_sess_binder_p2"
+	_, _ = coord.GetOrCreateSession(sess)
+	defer coord.CloseSession(sess)
+
+	setupSQLs := []string{
+		"CREATE TABLE employees (id INT PRIMARY KEY, name VARCHAR(50), dept_id INT);",
+		"CREATE TABLE departments (id INT PRIMARY KEY, dept_name VARCHAR(50));",
+		"INSERT INTO employees VALUES (1, 'Alice', 10);",
+		"INSERT INTO departments VALUES (10, 'Engineering');",
+	}
+	for _, sql := range setupSQLs {
+		if _, err := coord.ExecuteSessionSQL(sess, sql); err != nil {
+			t.Fatalf("setup failed for %q: %v", sql, err)
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		sql         string
+		expectedErr string
+	}{
+		{
+			name:        "SELECT unqualified non-existent ghost column rejected",
+			sql:         "SELECT ghost_col FROM employees;",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+		{
+			name:        "SELECT qualified non-existent ghost column on valid alias rejected",
+			sql:         "SELECT e.ghost_col FROM employees e;",
+			expectedErr: "does not exist in table or alias",
+		},
+		{
+			name:        "SELECT qualified column on non-existent table alias rejected",
+			sql:         "SELECT e.id FROM employees x;",
+			expectedErr: "does not exist in query scope",
+		},
+		{
+			name:        "WHERE unqualified non-existent ghost column rejected",
+			sql:         "SELECT * FROM employees WHERE ghost_col = 1;",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+		{
+			name:        "WHERE qualified non-existent column rejected",
+			sql:         "SELECT * FROM employees e WHERE e.ghost_col = 1;",
+			expectedErr: "does not exist in table or alias",
+		},
+		{
+			name:        "WHERE qualified column on wrong alias rejected",
+			sql:         "SELECT * FROM employees x WHERE e.id = 1;",
+			expectedErr: "does not exist in query scope",
+		},
+		{
+			name:        "ORDER BY non-existent column rejected",
+			sql:         "SELECT id FROM employees ORDER BY ghost_col;",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+		{
+			name:        "GROUP BY non-existent column rejected",
+			sql:         "SELECT count(*) FROM employees GROUP BY ghost_col;",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := coord.ExecuteSessionSQL(sess, tc.sql)
+			if err == nil {
+				t.Fatalf("[%s] expected error containing %q, got nil", tc.name, tc.expectedErr)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.expectedErr)) {
+				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
+			}
+		})
+	}
+
+	// Positive tests: valid qualified columns and projection aliases in ORDER BY
+	positiveSQLs := []string{
+		"SELECT e.id, e.name FROM employees e;",
+		"SELECT id, name FROM employees;",
+		"SELECT id AS my_alias FROM employees ORDER BY my_alias;",
+		"SELECT e.id FROM employees e WHERE e.id = 1;",
+	}
+	for _, sql := range positiveSQLs {
+		res, err := coord.ExecuteSessionSQL(sess, sql)
+		if err != nil {
+			t.Fatalf("valid SQL %q failed: %v", sql, err)
+		}
+		if res == nil {
+			t.Fatalf("expected non-nil result for %q", sql)
+		}
+	}
+}

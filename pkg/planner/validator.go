@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -256,29 +257,41 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 		}
 	}
 
-	// 5. Ambiguous Column References across JOINs
-	if len(schemas) > 1 {
+	// 5. Ambiguous Column References across JOINs and Qualified Column Binding
+	if len(schemas) > 0 {
+		scope := NewTableScopeFromMap(schemas)
+		if stmt.From.Name != "" {
+			scope.Register(stmt.From.Name, stmt.From.Alias, schemas[stmt.From.Name])
+		}
+		for _, j := range stmt.Joins {
+			scope.Register(j.Table.Name, j.Table.Alias, schemas[j.Table.Name])
+		}
+		for _, p := range stmt.Projections {
+			if p.Alias != "" {
+				scope.AddProjectionAlias(p.Alias)
+			}
+		}
 		// Projections
 		for _, p := range stmt.Projections {
-			if err := ValidateAmbiguousExpr(p.Expr, schemas); err != nil {
+			if err := scope.ValidateExpr(p.Expr); err != nil {
 				return err
 			}
 		}
 		// WHERE
 		if stmt.Where != nil {
-			if err := ValidateAmbiguousExpr(stmt.Where, schemas); err != nil {
+			if err := scope.ValidateExpr(stmt.Where); err != nil {
 				return err
 			}
 		}
 		// ORDER BY
 		for _, ob := range stmt.OrderBy {
-			if err := ValidateAmbiguousExpr(ob.Expr, schemas); err != nil {
+			if err := scope.ValidateOrderByExpr(ob.Expr); err != nil {
 				return err
 			}
 		}
 		// GROUP BY
 		for _, gb := range stmt.GroupBy {
-			if err := ValidateAmbiguousExpr(gb, schemas); err != nil {
+			if err := scope.ValidateExpr(gb); err != nil {
 				return err
 			}
 		}
@@ -287,9 +300,95 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 	return nil
 }
 
-// ValidateAmbiguousExpr checks whether any unqualified column in the expression exists in multiple table schemas.
-func ValidateAmbiguousExpr(expr proc.Expr, schemas map[string]*storage.TableSchema) error {
-	if expr == nil || len(schemas) <= 1 {
+// TableScope manages visible table schemas and aliases within a query scope.
+type TableScope struct {
+	schemas           map[string]*storage.TableSchema
+	uniqueTables      []*storage.TableSchema
+	projectionAliases map[string]bool
+}
+
+// NewTableScope creates an empty TableScope.
+func NewTableScope() *TableScope {
+	return &TableScope{
+		schemas:           make(map[string]*storage.TableSchema),
+		projectionAliases: make(map[string]bool),
+	}
+}
+
+// NewTableScopeFromMap constructs a TableScope from a map of table/alias names to schemas.
+func NewTableScopeFromMap(schemas map[string]*storage.TableSchema) *TableScope {
+	scope := NewTableScope()
+	if schemas == nil {
+		return scope
+	}
+	for name, sch := range schemas {
+		scope.Register(name, "", sch)
+	}
+	return scope
+}
+
+// Register registers a table name and optional alias into the scope.
+func (s *TableScope) Register(table, alias string, schema *storage.TableSchema) {
+	if s == nil {
+		return
+	}
+	cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(table))
+	bareTbl := strings.ToLower(proc.CleanSchemaPrefix(table))
+	cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(alias))
+
+	if cleanAlias != "" {
+		s.schemas[cleanAlias] = schema
+	}
+	if cleanTbl != "" {
+		s.schemas[cleanTbl] = schema
+	}
+	if bareTbl != "" && bareTbl != cleanTbl {
+		s.schemas[bareTbl] = schema
+	}
+
+	if schema != nil {
+		found := false
+		for _, u := range s.uniqueTables {
+			if u == schema || strings.EqualFold(u.Name, schema.Name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			s.uniqueTables = append(s.uniqueTables, schema)
+		}
+	}
+}
+
+// AddProjectionAlias registers a projection alias (allowed in ORDER BY).
+func (s *TableScope) AddProjectionAlias(alias string) {
+	if s == nil {
+		return
+	}
+	clean := strings.ToLower(sqlutil.CleanIdentifier(alias))
+	if clean != "" {
+		s.projectionAliases[clean] = true
+	}
+}
+
+// HasSchemas returns whether any schemas are known in this scope.
+func (s *TableScope) HasSchemas() bool {
+	return s != nil && (len(s.schemas) > 0 || len(s.uniqueTables) > 0)
+}
+
+// ValidateExpr checks all column references within an expression against the table scope.
+func (s *TableScope) ValidateExpr(expr proc.Expr) error {
+	return s.validateExprInternal(expr, false)
+}
+
+// ValidateOrderByExpr checks all column references within an ORDER BY expression against the table scope,
+// permitting projection aliases.
+func (s *TableScope) ValidateOrderByExpr(expr proc.Expr) error {
+	return s.validateExprInternal(expr, true)
+}
+
+func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias bool) error {
+	if s == nil || expr == nil || !s.HasSchemas() {
 		return nil
 	}
 	return WalkAST(expr, func(node proc.Expr) error {
@@ -297,28 +396,81 @@ func ValidateAmbiguousExpr(expr proc.Expr, schemas map[string]*storage.TableSche
 		if !ok {
 			return nil
 		}
-		colName := col.Name
-		if colName == "*" || strings.Contains(colName, ".") {
-			return nil // Qualified or wildcard
+		raw := strings.TrimSpace(col.Name)
+		if raw == "" || raw == "*" {
+			return nil
 		}
-		cleanName := strings.Trim(strings.ToLower(colName), "\"`[]")
-		matchCount := 0
-		for _, schema := range schemas {
-			if schema == nil {
-				continue
+		if strings.HasPrefix(raw, "@") {
+			return nil
+		}
+		if proc.IsBuiltinFunction(raw) {
+			return nil
+		}
+
+		parts := strings.Split(raw, ".")
+		if len(parts) > 1 {
+			// Qualified column reference: e.g. tbl.col or db.tbl.col
+			last := len(parts) - 1
+			colPart := sqlutil.CleanIdentifier(parts[last])
+			tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[last-1]))
+
+			if colPart == "*" {
+				if len(s.schemas) > 0 {
+					if _, ok := s.schemas[tblPart]; !ok {
+						return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+					}
+				}
+				return nil
 			}
-			for _, c := range schema.Columns {
-				if strings.EqualFold(c.Name, cleanName) {
-					matchCount++
-					break
+
+			if len(s.schemas) > 0 {
+				sch, ok := s.schemas[tblPart]
+				if !ok {
+					return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+				}
+				if sch != nil {
+					if _, _, found := sch.FindColumn(colPart); !found {
+						return fmt.Errorf("column %q does not exist in table or alias %q", parts[last], parts[last-1])
+					}
 				}
 			}
+			return nil
 		}
-		if matchCount > 1 {
-			return fmt.Errorf("column reference %q is ambiguous", colName)
+
+		// Unqualified column reference
+		cleanCol := strings.ToLower(sqlutil.CleanIdentifier(raw))
+		if allowProjectionAlias && s.projectionAliases[cleanCol] {
+			return nil
+		}
+
+		if len(s.uniqueTables) > 0 {
+			matchCount := 0
+			for _, sch := range s.uniqueTables {
+				if sch == nil {
+					continue
+				}
+				if _, _, ok := sch.FindColumn(cleanCol); ok {
+					matchCount++
+				}
+			}
+			if matchCount > 1 {
+				return fmt.Errorf("column reference %q is ambiguous", raw)
+			}
+			if matchCount == 0 {
+				return fmt.Errorf("column %q does not exist", raw)
+			}
 		}
 		return nil
 	})
+}
+
+// ValidateAmbiguousExpr checks whether any unqualified column in the expression exists in multiple table schemas.
+func ValidateAmbiguousExpr(expr proc.Expr, schemas map[string]*storage.TableSchema) error {
+	if expr == nil || len(schemas) == 0 {
+		return nil
+	}
+	scope := NewTableScopeFromMap(schemas)
+	return scope.ValidateExpr(expr)
 }
 
 // ValidateConstantDomainBounds checks constant argument bounds for functions such as NTILE and PERCENTILE_CONT.

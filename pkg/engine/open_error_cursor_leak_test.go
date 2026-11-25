@@ -75,8 +75,8 @@ func TestEngine_OpenError_VolcanoCleanTeardown(t *testing.T) {
 		t.Fatalf("table setup failed: %v", err)
 	}
 
-	// Execute a query where Volcano Open() fails during execution (e.g. invalid having column)
-	_, err := coord.ExecuteSQL("SELECT val, COUNT(*) FROM _t_cursor_leak GROUP BY val HAVING unaggregated_invalid_col > 10;")
+	// Execute a query where Volcano Open() fails during execution (e.g. unaggregated having column)
+	_, err := coord.ExecuteSQL("SELECT val, COUNT(*) FROM _t_cursor_leak GROUP BY val HAVING id > 10;")
 	if err == nil {
 		t.Fatalf("expected query to fail, but succeeded")
 	}

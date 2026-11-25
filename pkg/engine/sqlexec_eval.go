@@ -180,89 +180,80 @@ func ValidateWhereClauseWithSchemas(whereStr string, schemas ...*storage.TableSc
 		return err
 	}
 
-	if len(schemas) > 0 {
-		var checkColumns func(e proc.Expr) error
-		checkColumns = func(e proc.Expr) error {
-			if e == nil {
-				return nil
-			}
-			switch node := e.(type) {
-			case *proc.ColumnRefExpr:
-				colName := cleanIdentifier(node.Name)
-				tblPrefix := ""
-				if dotIdx := strings.Index(colName, "."); dotIdx != -1 {
-					tblPrefix = colName[:dotIdx]
-					colName = colName[dotIdx+1:]
-				}
-				if tblPrefix == "" {
-					matches := 0
-					seenTables := make(map[string]bool)
-					for _, sch := range schemas {
-						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
-							seenTables[strings.ToLower(sch.Name)] = true
-							if _, _, ok := sch.FindColumn(colName); ok {
-								matches++
-							}
-						}
-					}
-					if matches > 1 {
-						return fmt.Errorf("column reference %q is ambiguous", node.Name)
-					}
-					if matches == 0 && len(schemas) > 0 && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
-						return fmt.Errorf("column %q does not exist", node.Name)
-					}
-				} else {
-					found := false
-					for _, sch := range schemas {
-						if sch != nil && (strings.EqualFold(sch.Name, tblPrefix) || strings.EqualFold(cleanIdentifier(sch.Name), tblPrefix)) {
-							if _, _, ok := sch.FindColumn(colName); ok {
-								found = true
-								break
-							}
-						}
-					}
-					if !found {
-						for _, sch := range schemas {
-							if sch != nil {
-								if _, _, ok := sch.FindColumn(colName); ok {
-									found = true
-									break
-								}
-							}
-						}
-					}
-					if !found && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
-						return fmt.Errorf("column %q does not exist", node.Name)
-					}
-				}
-			case *proc.BinaryExpr:
-				if err := checkColumns(node.Left); err != nil {
-					return err
-				}
-				return checkColumns(node.Right)
-			case *proc.UnaryExpr:
-				return checkColumns(node.Expr)
-			case *proc.InExpr:
-				if err := checkColumns(node.Expr); err != nil {
-					return err
-				}
-				for _, item := range node.List {
-					if err := checkColumns(item); err != nil {
-						return err
-					}
-				}
-			case *proc.BetweenExpr:
-				if err := checkColumns(node.Expr); err != nil {
-					return err
-				}
-				if err := checkColumns(node.Low); err != nil {
-					return err
-				}
-				return checkColumns(node.High)
-			}
+	scope := planner.NewTableScope()
+	for _, sch := range schemas {
+		if sch != nil {
+			scope.Register(sch.Name, "", sch)
+		}
+	}
+
+	if scope.HasSchemas() {
+		if err := scope.ValidateExpr(expr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateWhereClauseWithScope verifies that whereStr is syntactically well-formed if non-empty,
+// checks disallowed expressions (e.g. aggregate functions), and checks column bindings against the table scope.
+func ValidateWhereClauseWithScope(whereStr string, scope *planner.TableScope) error {
+	whereStr = strings.TrimSpace(whereStr)
+	if whereStr == "" {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(whereStr))
+	expr := p.ParseExpr()
+	if len(p.Errors()) > 0 {
+		return fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.Errors(), "; "))
+	}
+	if expr == nil {
+		return fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+
+	for p.CurrentToken().Type == proc.TokenSemicolon {
+		p.NextToken()
+	}
+	if p.CurrentToken().Type != proc.TokenEOF {
+		return fmt.Errorf("syntax error: unexpected trailing token %q in WHERE clause", p.CurrentToken().Literal)
+	}
+
+	if err := planner.CheckDisallowedExprs(expr, planner.ScopeWhere); err != nil {
+		return err
+	}
+
+	var checkConditionExpr func(e proc.Expr) error
+	checkConditionExpr = func(e proc.Expr) error {
+		if e == nil {
 			return nil
 		}
-		if err := checkColumns(expr); err != nil {
+		switch node := e.(type) {
+		case *proc.LiteralExpr:
+			if node.Val.Type != storage.TypeBool {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+		case *proc.UnaryExpr:
+			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+			return checkConditionExpr(node.Expr)
+		case *proc.BinaryExpr:
+			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
+				if err := checkConditionExpr(node.Left); err != nil {
+					return err
+				}
+				return checkConditionExpr(node.Right)
+			}
+		}
+		return nil
+	}
+	if err := checkConditionExpr(expr); err != nil {
+		return err
+	}
+
+	if scope != nil && scope.HasSchemas() {
+		if err := scope.ValidateExpr(expr); err != nil {
 			return err
 		}
 	}
@@ -310,19 +301,148 @@ func ValidateAmbiguousProjections(projections []string, schemas []*storage.Table
 	return nil
 }
 
+// BuildTableScope builds a planner.TableScope from QueryInfo and visible table schemas.
+func BuildTableScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) *planner.TableScope {
+	scope := planner.NewTableScope()
+	if qInfo == nil {
+		return scope
+	}
+	// 1. Primary table
+	if qInfo.TableName != "" {
+		var priSch *storage.TableSchema
+		cleanPri := strings.ToLower(proc.CleanSchemaPrefix(qInfo.TableName))
+		for _, sch := range schemas {
+			if sch != nil && (strings.EqualFold(sch.Name, qInfo.TableName) || strings.EqualFold(proc.CleanSchemaPrefix(sch.Name), cleanPri)) {
+				priSch = sch
+				break
+			}
+		}
+		if priSch == nil && len(schemas) == 1 && len(qInfo.Joins) == 0 && qInfo.Join == nil {
+			priSch = schemas[0]
+		}
+		scope.Register(qInfo.TableName, qInfo.TableAlias, priSch)
+	} else if len(schemas) == 1 && qInfo.TableAlias != "" {
+		scope.Register("", qInfo.TableAlias, schemas[0])
+	}
+	// 2. Joins
+	for _, j := range qInfo.Joins {
+		if j == nil {
+			continue
+		}
+		var jSch *storage.TableSchema
+		cleanJ := strings.ToLower(proc.CleanSchemaPrefix(j.Table))
+		for _, sch := range schemas {
+			if sch != nil && (strings.EqualFold(sch.Name, j.Table) || strings.EqualFold(proc.CleanSchemaPrefix(sch.Name), cleanJ)) {
+				jSch = sch
+				break
+			}
+		}
+		scope.Register(j.Table, j.Alias, jSch)
+	}
+	if qInfo.Join != nil {
+		var jSch *storage.TableSchema
+		cleanJ := strings.ToLower(proc.CleanSchemaPrefix(qInfo.Join.Table))
+		for _, sch := range schemas {
+			if sch != nil && (strings.EqualFold(sch.Name, qInfo.Join.Table) || strings.EqualFold(proc.CleanSchemaPrefix(sch.Name), cleanJ)) {
+				jSch = sch
+				break
+			}
+		}
+		scope.Register(qInfo.Join.Table, qInfo.Join.Alias, jSch)
+	}
+	// 3. CTEs
+	for _, cte := range qInfo.CTEs {
+		scope.Register(cte.Name, "", nil)
+	}
+	// 4. Projection aliases
+	for _, proj := range qInfo.Projections {
+		if asIdx := sqlutil.FindTopLevelKeyword(proj, "AS"); asIdx != -1 {
+			alias := strings.TrimSpace(proj[asIdx+2:])
+			scope.AddProjectionAlias(alias)
+		}
+	}
+	return scope
+}
+
+// ValidateHavingClauseWithScope verifies that havingStr in SELECT is syntactically well-formed,
+// checks disallowed expressions (ScopeHaving, which permits aggregates but bans window functions),
+// and checks column references against the table scope.
+func ValidateHavingClauseWithScope(havingStr string, scope *planner.TableScope) error {
+	havingStr = strings.TrimSpace(havingStr)
+	if havingStr == "" {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(havingStr))
+	expr := p.ParseExpr()
+	if len(p.Errors()) > 0 {
+		return fmt.Errorf("syntax error in HAVING clause: %s", strings.Join(p.Errors(), "; "))
+	}
+	if expr == nil {
+		return fmt.Errorf("syntax error: empty or invalid expression in HAVING clause")
+	}
+
+	for p.CurrentToken().Type == proc.TokenSemicolon {
+		p.NextToken()
+	}
+	if p.CurrentToken().Type != proc.TokenEOF {
+		return fmt.Errorf("syntax error: unexpected trailing token %q in HAVING clause", p.CurrentToken().Literal)
+	}
+
+	if err := planner.CheckDisallowedExprs(expr, planner.ScopeHaving); err != nil {
+		return err
+	}
+
+	if scope != nil && scope.HasSchemas() {
+		if err := scope.ValidateExpr(expr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateHavingClause verifies that havingStr in SELECT is non-empty and syntactically well-formed.
+func ValidateHavingClause(havingStr string) error {
+	return ValidateHavingClauseWithScope(havingStr, nil)
+}
+
 // ValidateSelectScope enforces semantic binder invariants across projections, WHERE, HAVING, ORDER BY, and GROUP BY.
 func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) error {
 	if qInfo == nil {
 		return nil
 	}
+	scope := BuildTableScope(qInfo, schemas)
+
 	for _, proj := range qInfo.Projections {
-		p := proc.NewParser(proc.NewLexer(proj))
+		projTrim := strings.TrimSpace(proj)
+		if projTrim == "*" {
+			continue
+		}
+		if strings.HasSuffix(projTrim, ".*") {
+			prefix := strings.TrimSuffix(projTrim, ".*")
+			col := &proc.ColumnRefExpr{Name: prefix + ".*"}
+			if err := scope.ValidateExpr(col); err != nil {
+				return err
+			}
+			continue
+		}
+		exprPart := projTrim
+		if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
+			exprPart = strings.TrimSpace(projTrim[:asIdx])
+		}
+		p := proc.NewParser(proc.NewLexer(exprPart))
 		if expr := p.ParseExpr(); expr != nil {
 			if err := planner.ValidateConstantDomainBounds(expr); err != nil {
 				return err
 			}
+			if scope.HasSchemas() {
+				if err := scope.ValidateExpr(expr); err != nil {
+					return err
+				}
+			}
 		}
 	}
+
 	if len(schemas) > 1 {
 		if err := ValidateAmbiguousProjections(qInfo.Projections, schemas); err != nil {
 			return err
@@ -357,31 +477,31 @@ func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchem
 		}
 	}
 	if qInfo.WhereClause != "" {
-		if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, schemas...); err != nil {
+		if err := ValidateWhereClauseWithScope(qInfo.WhereClause, scope); err != nil {
 			return err
 		}
 	}
 	if qInfo.HavingClause != "" {
-		if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
+		if err := ValidateHavingClauseWithScope(qInfo.HavingClause, scope); err != nil {
 			return err
 		}
 	}
 	if qInfo.OrderByClause != "" {
-		if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, schemas...); err != nil {
+		if err := ValidateOrderByClauseWithScope(qInfo.OrderByClause, scope); err != nil {
 			return err
 		}
 	}
 	if len(qInfo.GroupByCols) > 0 {
-		if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), schemas...); err != nil {
+		if err := ValidateGroupByClauseWithScope(strings.Join(qInfo.GroupByCols, ", "), scope); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// ValidateOrderByClauseWithSchemas verifies that orderStr in SELECT is syntactically well-formed,
-// checks disallowed expressions, and checks for ambiguous column references across joined schemas.
-func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.TableSchema) error {
+// ValidateOrderByClauseWithScope verifies that orderStr in SELECT is syntactically well-formed,
+// checks disallowed expressions, and checks for invalid or ambiguous column references.
+func ValidateOrderByClauseWithScope(orderStr string, scope *planner.TableScope) error {
 	orderStr = strings.TrimSpace(orderStr)
 	if orderStr == "" {
 		return fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
@@ -414,23 +534,9 @@ func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.Table
 		if err := planner.CheckDisallowedExprs(expr, planner.ScopeOrderBy); err != nil {
 			return err
 		}
-		if len(schemas) > 1 {
-			for _, ref := range planner.ExtractColumnRefs(item) {
-				if ref.TableOrAlias == "" {
-					matches := 0
-					seenTables := make(map[string]bool)
-					for _, sch := range schemas {
-						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
-							seenTables[strings.ToLower(sch.Name)] = true
-							if _, _, ok := sch.FindColumn(ref.Column); ok {
-								matches++
-							}
-						}
-					}
-					if matches > 1 {
-						return fmt.Errorf("column reference %q is ambiguous", ref.Column)
-					}
-				}
+		if scope != nil && scope.HasSchemas() {
+			if err := scope.ValidateOrderByExpr(expr); err != nil {
+				return err
 			}
 		}
 		if p.CurrentToken().Type == proc.TokenAsc || p.CurrentToken().Type == proc.TokenDesc {
@@ -453,15 +559,27 @@ func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.Table
 	return nil
 }
 
+// ValidateOrderByClauseWithSchemas verifies that orderStr in SELECT is syntactically well-formed,
+// checks disallowed expressions, and checks for ambiguous column references across joined schemas.
+func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.TableSchema) error {
+	scope := planner.NewTableScope()
+	for _, sch := range schemas {
+		if sch != nil {
+			scope.Register(sch.Name, "", sch)
+		}
+	}
+	return ValidateOrderByClauseWithScope(orderStr, scope)
+}
+
 // ValidateOrderByClause verifies that orderStr in SELECT is non-empty and syntactically well-formed.
 func ValidateOrderByClause(orderStr string) error {
 	return ValidateOrderByClauseWithSchemas(orderStr)
 }
 
-// ValidateGroupByClauseWithSchemas verifies that groupStr in SELECT is syntactically well-formed,
+// ValidateGroupByClauseWithScope verifies that groupStr in SELECT is syntactically well-formed,
 // checks disallowed expressions (e.g. aggregate functions, window functions, non-positive ordinals),
-// and checks for ambiguous column references across joined schemas.
-func ValidateGroupByClauseWithSchemas(groupStr string, schemas ...*storage.TableSchema) error {
+// and checks column references.
+func ValidateGroupByClauseWithScope(groupStr string, scope *planner.TableScope) error {
 	groupStr = strings.TrimSpace(groupStr)
 	if groupStr == "" {
 		return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
@@ -499,23 +617,9 @@ func ValidateGroupByClauseWithSchemas(groupStr string, schemas ...*storage.Table
 		if intVal != nil && *intVal <= 0 {
 			return fmt.Errorf("GROUP BY position %d is not in select list", *intVal)
 		}
-		if len(schemas) > 1 {
-			for _, ref := range planner.ExtractColumnRefs(item) {
-				if ref.TableOrAlias == "" {
-					matches := 0
-					seenTables := make(map[string]bool)
-					for _, sch := range schemas {
-						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
-							seenTables[strings.ToLower(sch.Name)] = true
-							if _, _, ok := sch.FindColumn(ref.Column); ok {
-								matches++
-							}
-						}
-					}
-					if matches > 1 {
-						return fmt.Errorf("column reference %q is ambiguous", ref.Column)
-					}
-				}
+		if scope != nil && scope.HasSchemas() {
+			if err := scope.ValidateExpr(expr); err != nil {
+				return err
 			}
 		}
 		for p.CurrentToken().Type == proc.TokenSemicolon {
@@ -526,6 +630,19 @@ func ValidateGroupByClauseWithSchemas(groupStr string, schemas ...*storage.Table
 		}
 	}
 	return nil
+}
+
+// ValidateGroupByClauseWithSchemas verifies that groupStr in SELECT is syntactically well-formed,
+// checks disallowed expressions (e.g. aggregate functions, window functions, non-positive ordinals),
+// and checks for ambiguous column references across joined schemas.
+func ValidateGroupByClauseWithSchemas(groupStr string, schemas ...*storage.TableSchema) error {
+	scope := planner.NewTableScope()
+	for _, sch := range schemas {
+		if sch != nil {
+			scope.Register(sch.Name, "", sch)
+		}
+	}
+	return ValidateGroupByClauseWithScope(groupStr, scope)
 }
 
 // ValidateGroupByClause verifies that groupStr in SELECT is non-empty and syntactically well-formed.

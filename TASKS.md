@@ -93,7 +93,7 @@
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-1`** | `v0.95.0` | Architecture | P1 | 바인더 통합 1단계: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-2`** | `v0.95.0` | Architecture | P1 | 바인더 통합 2단계: 식별자 및 문법 스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-1`** | `v0.95.0` | Architecture | P1 | WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
@@ -540,7 +540,7 @@
 | `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.95.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Lock-Free / OLC 기반 Adaptive Radix Tree (ART) 인메모리 인덱스 엔진 도입 (EncodeIndexKeyPart 바이너리 인코딩 기반) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
@@ -1405,8 +1405,8 @@
 
 ---
 
-### [IN_PROGRESS] Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 `BINDER-EVOL-PHASE-2`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:37:24
+### [DONE] Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 `BINDER-EVOL-PHASE-2`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-25 00:03:13
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
@@ -5240,8 +5240,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Lock-Free / OLC 기반 Adaptive Radix Tree (ART) 인메모리 인덱스 엔진 도입 (EncodeIndexKeyPart 바이너리 인코딩 기반) `PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 23:42:11
+### [PENDING] Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) `PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 23:51:00
 - **Milestone**: `v1.20.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
