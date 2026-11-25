@@ -105,7 +105,14 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	if leftSchema != nil {
 		allVolcanoSchemas = append(allVolcanoSchemas, leftSchema)
 	}
+	var allJoinSchemas []*storage.TableSchema
+	if leftSchema != nil {
+		allJoinSchemas = append(allJoinSchemas, leftSchema)
+	}
 	for _, j := range joins {
+		if rSchema := rightSchemas[j.Table]; rSchema != nil {
+			allJoinSchemas = append(allJoinSchemas, rSchema)
+		}
 		if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
 			continue
 		}
@@ -113,7 +120,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 			allVolcanoSchemas = append(allVolcanoSchemas, rSchema)
 		}
 	}
-	if err := ValidateSelectScope(qInfo, allVolcanoSchemas); err != nil {
+	if err := ValidateSelectScope(qInfo, allVolcanoSchemas, allJoinSchemas); err != nil {
 		return nil, err
 	}
 
@@ -163,10 +170,13 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 	if cs != nil {
 		cs.Mu.Lock()
-		if len(cs.Vars) > 0 {
-			opts.SessionVars = make(map[string]any, len(cs.Vars))
+		if len(cs.Vars) > 0 || cs.IsSQLite() {
+			opts.SessionVars = make(map[string]any, len(cs.Vars)+1)
 			for k, v := range cs.Vars {
 				opts.SessionVars[k] = v
+			}
+			if cs.IsSQLite() {
+				opts.SessionVars["__sqlite_compat__"] = true
 			}
 		}
 		if wmVal, ok := cs.Vars["work_mem"]; ok {
@@ -1370,15 +1380,9 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		exprStr := item
 		alias := ""
 
-		if expr, aliasPart, hasAs := sqlutil.SplitAsAlias(item); hasAs {
+		if expr, aliasPart, hasAlias := sqlutil.SplitProjectionAlias(item); hasAlias {
 			exprStr = strings.TrimSpace(expr)
 			alias = cleanIdentifier(aliasPart)
-		} else {
-			parts := sqlutil.SplitTopLevelTokens(item)
-			if len(parts) == 2 && !strings.ContainsAny(parts[0], "()+-*/%") && !strings.ContainsAny(parts[1], "()+-*/%") && len(parts[1]) > 0 && (parts[1][0] < '0' || parts[1][0] > '9') {
-				exprStr = strings.TrimSpace(parts[0])
-				alias = cleanIdentifier(parts[1])
-			}
 		}
 
 		if sqlutil.ContainsKeyword(exprStr, "SELECT", true) {
@@ -2345,7 +2349,22 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
-		if err := ValidateSelectScope(qInfo, schemas); err != nil {
+		var allJoinSchemas []*storage.TableSchema
+		allJoinSchemas = append(allJoinSchemas, schemas...)
+		for _, j := range qInfo.Joins {
+			if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
+				if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
+					allJoinSchemas = append(allJoinSchemas, jSch)
+				}
+			}
+		}
+		if qInfo.Join != nil && (strings.EqualFold(qInfo.Join.Type, "SEMI") || strings.EqualFold(qInfo.Join.Type, "ANTI")) {
+			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
+				allJoinSchemas = append(allJoinSchemas, jSch)
+			}
+		}
+
+		if err := ValidateSelectScope(qInfo, schemas, allJoinSchemas); err != nil {
 			return nil, err
 		}
 

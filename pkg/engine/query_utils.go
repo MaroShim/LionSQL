@@ -50,6 +50,14 @@ func isExecHeader(s string) bool {
 	return sqlutil.HasAnyPrefixKeyword(StripLeadingComments(s), "EXEC", "EXECUTE")
 }
 
+func isDeclareHeader(s string) bool {
+	return sqlutil.HasPrefixKeyword(StripLeadingComments(s), "DECLARE")
+}
+
+func isSetHeader(s string) bool {
+	return sqlutil.HasPrefixKeyword(StripLeadingComments(s), "SET")
+}
+
 func isStatementStart(s string) bool {
 	return sqlutil.HasAnyPrefixKeyword(StripLeadingComments(s),
 		"SELECT", "INSERT", "UPDATE", "DELETE", "DECLARE", "SET",
@@ -120,9 +128,12 @@ func SplitStatements(query string) []string {
 	inLineComment := false
 	inBlockComment := false
 	blockDepth := 0
+	parenDepth := 0
 	isIfStmt := false
 	isProcStmt := false
 	isExecStmt := false
+	isDeclareStmt := false
+	isSetStmt := false
 	hasHadBegin := false
 	hasHadDollarQuote := false
 	needHeaderCheck := true
@@ -205,17 +216,26 @@ func SplitStatements(query string) []string {
 			continue
 		}
 
+		if ch == '(' {
+			parenDepth++
+		} else if ch == ')' && parenDepth > 0 {
+			parenDepth--
+		}
+
 		if needHeaderCheck {
 			if ch > ' ' {
 				isIfStmt = isIfHeader(query[start:])
 				isProcStmt = isProcOrFuncHeader(query[start:])
 				isExecStmt = isExecHeader(query[start:])
+				isDeclareStmt = isDeclareHeader(query[start:])
+				isSetStmt = isSetHeader(query[start:])
 				hasHadBegin = false
 				needHeaderCheck = false
 			}
 		}
 
-		if ch == '\n' && isExecStmt && blockDepth == 0 {
+		canSplitOnNewline := isExecStmt || isDeclareStmt || isSetStmt
+		if ch == '\n' && canSplitOnNewline && blockDepth == 0 && parenDepth == 0 {
 			trimmedPrev := strings.TrimRight(query[start:i], " \t\r")
 			if !strings.HasSuffix(trimmedPrev, ",") && isStatementStart(query[i+1:]) {
 				stmt := strings.TrimSpace(query[start:i])
@@ -226,9 +246,12 @@ func SplitStatements(query string) []string {
 				isIfStmt = false
 				isProcStmt = false
 				isExecStmt = false
+				isDeclareStmt = false
+				isSetStmt = false
 				hasHadBegin = false
 				hasHadDollarQuote = false
 				blockDepth = 0
+				parenDepth = 0
 				needHeaderCheck = true
 				continue
 			}

@@ -82,6 +82,30 @@ func normalizeDatePart(dp string) string {
 	}
 }
 
+// IsDatePart returns true if s is a recognized SQL datepart identifier (e.g. year, month, day, minute).
+func IsDatePart(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "year", "yy", "yyyy",
+		"quarter", "qq", "q",
+		"month", "mm", "m",
+		"day", "dd", "d",
+		"weekday", "dw", "w",
+		"dayofyear", "dy", "y",
+		"week", "wk", "ww",
+		"hour", "hh",
+		"minute", "mi", "n",
+		"second", "ss", "s",
+		"millisecond", "ms",
+		"microsecond", "mcs",
+		"nanosecond", "ns",
+		"tzoffset", "tz",
+		"epoch":
+		return true
+	default:
+		return false
+	}
+}
+
 func evalDatePart(part string, t time.Time) storage.Value {
 	switch part {
 	case "epoch":

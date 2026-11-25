@@ -492,13 +492,15 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	} else {
 		if identityCol != nil && !identityInsertAllowed {
 			for _, c := range schema.Columns {
-				if !c.Identity {
+				if !c.Identity && !c.Hidden {
 					targetCols = append(targetCols, c.Name)
 				}
 			}
 		} else {
 			for _, c := range schema.Columns {
-				targetCols = append(targetCols, c.Name)
+				if !c.Hidden {
+					targetCols = append(targetCols, c.Name)
+				}
 			}
 		}
 	}
@@ -1077,13 +1079,15 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	} else {
 		if identityCol != nil && !identityInsertAllowed {
 			for _, c := range schema.Columns {
-				if !c.Identity {
+				if !c.Identity && !c.Hidden {
 					targetCols = append(targetCols, c.Name)
 				}
 			}
 		} else {
 			for _, c := range schema.Columns {
-				targetCols = append(targetCols, c.Name)
+				if !c.Hidden {
+					targetCols = append(targetCols, c.Name)
+				}
 			}
 		}
 	}
@@ -1573,6 +1577,8 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	var updateSchemas []*storage.TableSchema
 	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
 		updateSchemas = append(updateSchemas, tblSch)
+	} else if baseSch, _, _, ok := s.resolveUpdatableView(cs, dml.Table); ok && baseSch != nil {
+		updateSchemas = append(updateSchemas, baseSch)
 	}
 	var targetSchema *storage.TableSchema
 	if len(updateSchemas) > 0 {
@@ -1623,38 +1629,17 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	rawOutput := dml.Output
 	whereClause := dml.Where
 
-	schema, err := s.engine.GetTable(tableName)
+	schema, err := s.getTable(cs, tableName)
 	if err != nil {
-		if s.catalog != nil {
-			if v, vErr := s.catalog.GetView(tableName); vErr == nil && v != nil {
-				fromIdx := sqlutil.FindTopLevelKeyword(v.Query, "FROM")
-				if fromIdx != -1 {
-					rest := strings.TrimSpace(v.Query[fromIdx+4:])
-					whereIdx := sqlutil.FindTopLevelKeyword(rest, "WHERE")
-					tblPart := rest
-					viewWhere := ""
-					if whereIdx != -1 {
-						tblPart = strings.TrimSpace(rest[:whereIdx])
-						viewWhere = strings.TrimSpace(rest[whereIdx+5:])
-					}
-					if !strings.ContainsAny(tblPart, ",()") && sqlutil.FindTopLevelKeyword(tblPart, "JOIN") == -1 {
-						fields := strings.Fields(tblPart)
-						if len(fields) > 0 {
-							baseTbl := cleanIdentifier(fields[0])
-							if baseSchema, bErr := s.engine.GetTable(baseTbl); bErr == nil && baseSchema != nil {
-								tableName = baseTbl
-								schema = baseSchema
-								err = nil
-								if viewWhere != "" {
-									if whereClause != "" {
-										whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
-									} else {
-										whereClause = viewWhere
-									}
-								}
-							}
-						}
-					}
+		if baseSchema, baseTbl, viewWhere, ok := s.resolveUpdatableView(cs, tableName); ok {
+			tableName = baseTbl
+			schema = baseSchema
+			err = nil
+			if viewWhere != "" {
+				if whereClause != "" {
+					whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
+				} else {
+					whereClause = viewWhere
 				}
 			}
 		}
@@ -2007,6 +1992,8 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	var updateSchemas []*storage.TableSchema
 	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
 		updateSchemas = append(updateSchemas, tblSch)
+	} else if baseSch, _, _, ok := s.resolveUpdatableView(cs, dml.Table); ok && baseSch != nil {
+		updateSchemas = append(updateSchemas, baseSch)
 	}
 	if dml.Output != "" && len(updateSchemas) > 0 {
 		if err := ValidateOutputClause(dml.Output, updateSchemas[0]); err != nil {
@@ -2032,38 +2019,17 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	rawOutput := dml.Output
 	whereClause := dml.Where
 
-	schema, err := s.engine.GetTable(tableName)
+	schema, err := s.getTable(cs, tableName)
 	if err != nil {
-		if s.catalog != nil {
-			if v, vErr := s.catalog.GetView(tableName); vErr == nil && v != nil {
-				fromIdx := sqlutil.FindTopLevelKeyword(v.Query, "FROM")
-				if fromIdx != -1 {
-					rest := strings.TrimSpace(v.Query[fromIdx+4:])
-					whereIdx := sqlutil.FindTopLevelKeyword(rest, "WHERE")
-					tblPart := rest
-					viewWhere := ""
-					if whereIdx != -1 {
-						tblPart = strings.TrimSpace(rest[:whereIdx])
-						viewWhere = strings.TrimSpace(rest[whereIdx+5:])
-					}
-					if !strings.ContainsAny(tblPart, ",()") && sqlutil.FindTopLevelKeyword(tblPart, "JOIN") == -1 {
-						fields := strings.Fields(tblPart)
-						if len(fields) > 0 {
-							baseTbl := cleanIdentifier(fields[0])
-							if baseSchema, bErr := s.engine.GetTable(baseTbl); bErr == nil && baseSchema != nil {
-								tableName = baseTbl
-								schema = baseSchema
-								err = nil
-								if viewWhere != "" {
-									if whereClause != "" {
-										whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
-									} else {
-										whereClause = viewWhere
-									}
-								}
-							}
-						}
-					}
+		if baseSchema, baseTbl, viewWhere, ok := s.resolveUpdatableView(cs, tableName); ok {
+			tableName = baseTbl
+			schema = baseSchema
+			err = nil
+			if viewWhere != "" {
+				if whereClause != "" {
+					whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
+				} else {
+					whereClause = viewWhere
 				}
 			}
 		}

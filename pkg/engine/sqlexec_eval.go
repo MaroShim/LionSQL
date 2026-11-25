@@ -128,6 +128,35 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 }
 
 
+// checkConditionExpr enforces T-SQL / SQL Standard semantics: Condition expressions (WHERE, JOIN ON)
+// cannot be non-boolean scalar literals (e.g. integer 1, string 'x').
+// NULL literals and folded NULL/unknown expressions in SQL conditions evaluate to UNKNOWN in 3-valued logic.
+func checkConditionExpr(e proc.Expr) error {
+	if e == nil {
+		return nil
+	}
+	switch node := e.(type) {
+	case *proc.LiteralExpr:
+		if node.Val.IsNull || node.Val.Type == storage.TypeUnknown || node.Val.Type == storage.TypeBool {
+			return nil
+		}
+		return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+	case *proc.UnaryExpr:
+		if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
+			return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+		}
+		return checkConditionExpr(node.Expr)
+	case *proc.BinaryExpr:
+		if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
+			if err := checkConditionExpr(node.Left); err != nil {
+				return err
+			}
+			return checkConditionExpr(node.Right)
+		}
+	}
+	return nil
+}
+
 // ValidateWhereClauseWithSchemas verifies that whereStr is syntactically well-formed if non-empty,
 // and optionally validates that all referenced column identifiers exist in schemas or outer names.
 func ValidateWhereClauseWithSchemas(whereStr string, schemas ...*storage.TableSchema) error {
@@ -150,32 +179,6 @@ func ValidateWhereClauseWithSchemas(whereStr string, schemas ...*storage.TableSc
 		return fmt.Errorf("syntax error: unexpected trailing token %q in WHERE clause", p.CurrentToken().Literal)
 	}
 
-	// T-SQL / SQL Standard semantics: Condition expressions cannot be non-boolean literals
-	var checkConditionExpr func(e proc.Expr) error
-	checkConditionExpr = func(e proc.Expr) error {
-		if e == nil {
-			return nil
-		}
-		switch node := e.(type) {
-		case *proc.LiteralExpr:
-			if node.Val.Type != storage.TypeBool {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-		case *proc.UnaryExpr:
-			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-			return checkConditionExpr(node.Expr)
-		case *proc.BinaryExpr:
-			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
-				if err := checkConditionExpr(node.Left); err != nil {
-					return err
-				}
-				return checkConditionExpr(node.Right)
-			}
-		}
-		return nil
-	}
 	if err := checkConditionExpr(expr); err != nil {
 		return err
 	}
@@ -223,31 +226,6 @@ func ValidateWhereClauseWithScope(whereStr string, scope *planner.TableScope) er
 		return err
 	}
 
-	var checkConditionExpr func(e proc.Expr) error
-	checkConditionExpr = func(e proc.Expr) error {
-		if e == nil {
-			return nil
-		}
-		switch node := e.(type) {
-		case *proc.LiteralExpr:
-			if node.Val.Type != storage.TypeBool {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-		case *proc.UnaryExpr:
-			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-			return checkConditionExpr(node.Expr)
-		case *proc.BinaryExpr:
-			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
-				if err := checkConditionExpr(node.Left); err != nil {
-					return err
-				}
-				return checkConditionExpr(node.Right)
-			}
-		}
-		return nil
-	}
 	if err := checkConditionExpr(expr); err != nil {
 		return err
 	}
@@ -289,31 +267,6 @@ func ValidateJoinOnClauseWithScope(onStr string, scope *planner.TableScope) erro
 		return err
 	}
 
-	var checkConditionExpr func(e proc.Expr) error
-	checkConditionExpr = func(e proc.Expr) error {
-		if e == nil {
-			return nil
-		}
-		switch node := e.(type) {
-		case *proc.LiteralExpr:
-			if node.Val.Type != storage.TypeBool {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-		case *proc.UnaryExpr:
-			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
-				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
-			}
-			return checkConditionExpr(node.Expr)
-		case *proc.BinaryExpr:
-			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
-				if err := checkConditionExpr(node.Left); err != nil {
-					return err
-				}
-				return checkConditionExpr(node.Right)
-			}
-		}
-		return nil
-	}
 	if err := checkConditionExpr(expr); err != nil {
 		return err
 	}
@@ -470,6 +423,9 @@ func BuildTableScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) *
 		if j == nil {
 			continue
 		}
+		if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
+			continue
+		}
 		var jSch *storage.TableSchema
 		cleanJ := strings.ToLower(proc.CleanSchemaPrefix(j.Table))
 		for _, sch := range schemas {
@@ -480,7 +436,7 @@ func BuildTableScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) *
 		}
 		scope.Register(j.Table, j.Alias, jSch)
 	}
-	if qInfo.Join != nil {
+	if qInfo.Join != nil && !strings.EqualFold(qInfo.Join.Type, "SEMI") && !strings.EqualFold(qInfo.Join.Type, "ANTI") {
 		var jSch *storage.TableSchema
 		cleanJ := strings.ToLower(proc.CleanSchemaPrefix(qInfo.Join.Table))
 		for _, sch := range schemas {
@@ -548,7 +504,7 @@ func ValidateHavingClause(havingStr string) error {
 }
 
 // ValidateSelectScope enforces semantic binder invariants across projections, WHERE, HAVING, ORDER BY, and GROUP BY.
-func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) error {
+func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema, allJoinSchemas ...[]*storage.TableSchema) error {
 	if qInfo == nil {
 		return nil
 	}
@@ -624,7 +580,11 @@ func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchem
 			}
 		}
 	}
-	if err := ValidateJoinScope(qInfo, schemas); err != nil {
+	joinSchemas := schemas
+	if len(allJoinSchemas) > 0 && len(allJoinSchemas[0]) > 0 {
+		joinSchemas = allJoinSchemas[0]
+	}
+	if err := ValidateJoinScope(qInfo, joinSchemas); err != nil {
 		return err
 	}
 	if qInfo.WhereClause != "" {

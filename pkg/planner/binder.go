@@ -650,9 +650,12 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 		}, nil
 
 	case *proc.FunctionCallExpr:
-		isAgg := proc.IsAggregateFunctionName(e.Name)
+		isAgg := proc.IsAggregateFunctionName(e.Name) && !e.HasOver
 		if isAgg && b.inAggregate {
 			return nil, fmt.Errorf("aggregate function calls cannot be nested (SQLSTATE 42803)")
+		}
+		if e.HasOver && b.inAggregate {
+			return nil, fmt.Errorf("aggregate function calls cannot contain window function calls (SQLSTATE 42P20)")
 		}
 		prevInAgg := b.inAggregate
 		if isAgg {

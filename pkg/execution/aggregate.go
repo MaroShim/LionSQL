@@ -453,15 +453,9 @@ func (a *AggregateIterator) parseFields() {
 
 		var extractedAlias string
 		exprPart := p
-		if expr, alias, hasAs := sqlutil.SplitAsAlias(p); hasAs {
+		if expr, alias, hasAlias := sqlutil.SplitProjectionAlias(p); hasAlias {
 			exprPart = strings.TrimSpace(expr)
 			extractedAlias = sqlutil.CleanIdentifier(alias)
-		} else {
-			parts := sqlutil.SplitTopLevelTokens(p)
-			if len(parts) == 2 && !strings.Contains(parts[1], "(") && !strings.Contains(parts[1], "-") && !isUnaryOp(parts[0]) {
-				exprPart = strings.TrimSpace(parts[0])
-				extractedAlias = sqlutil.CleanIdentifier(parts[1])
-			}
 		}
 
 		pLex := proc.NewParser(proc.NewLexer(exprPart))

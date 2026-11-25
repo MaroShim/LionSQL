@@ -725,6 +725,113 @@ func SplitAsAlias(item string) (expr string, alias string, hasAs bool) {
 	return item, "", false
 }
 
+var nonAliasKeywords = map[string]struct{}{
+	"AND": {}, "OR": {}, "NOT": {}, "IS": {}, "IN": {}, "LIKE": {}, "BETWEEN": {},
+	"THEN": {}, "ELSE": {}, "WHEN": {}, "CASE": {}, "END": {}, "ASC": {}, "DESC": {},
+	"NULL": {}, "TRUE": {}, "FALSE": {}, "FROM": {}, "WHERE": {}, "JOIN": {}, "ON": {},
+	"GROUP": {}, "BY": {}, "HAVING": {}, "ORDER": {}, "SELECT": {}, "UNION": {},
+	"EXCEPT": {}, "INTERSECT": {}, "LIMIT": {}, "OFFSET": {}, "TOP": {}, "DISTINCT": {},
+	"ALL": {}, "AS": {}, "INTO": {}, "OVER": {}, "PARTITION": {}, "WINDOW": {},
+	"ROWS": {}, "RANGE": {},
+}
+
+var operatorKeywords = map[string]struct{}{
+	"AND": {}, "OR": {}, "NOT": {}, "IS": {}, "IN": {}, "LIKE": {}, "BETWEEN": {},
+	"THEN": {}, "ELSE": {}, "WHEN": {}, "CASE": {},
+}
+
+// SplitProjectionAlias splits a projection item into an expression and alias.
+// It handles both explicit aliases ("expr AS alias") and implicit aliases ("expr alias").
+// An implicit alias must be a trailing identifier preceded by an expression (e.g. "COUNT(*) col2",
+// "a + b total", "tab.col my_col", "32 val").
+// If the trailing identifier is an operand of an operator (e.g. "+ b", "= c", "AND d"), it is not an alias.
+func SplitProjectionAlias(item string) (expr string, alias string, hasAlias bool) {
+	item = strings.TrimSpace(item)
+	if item == "" {
+		return "", "", false
+	}
+
+	if exp, al, hasAs := SplitAsAlias(item); hasAs {
+		return exp, al, true
+	}
+
+	n := len(item)
+	// Check if ends with bracketed identifier: [...]
+	if item[n-1] == ']' {
+		openIdx := strings.LastIndexByte(item, '[')
+		if openIdx > 0 {
+			prefix := strings.TrimRight(item[:openIdx], " \t\r\n")
+			if prefix != "" && !isPrefixEndingWithOp(prefix) {
+				return prefix, CleanIdentifier(item[openIdx:]), true
+			}
+		}
+		return item, "", false
+	}
+
+	// Check if ends with quoted identifier: "..." or `...`
+	if item[n-1] == '"' || item[n-1] == '`' {
+		quoteChar := item[n-1]
+		openIdx := strings.LastIndexByte(item[:n-1], quoteChar)
+		if openIdx > 0 {
+			prefix := strings.TrimRight(item[:openIdx], " \t\r\n")
+			if prefix != "" && !isPrefixEndingWithOp(prefix) {
+				return prefix, CleanIdentifier(item[openIdx:]), true
+			}
+		}
+		return item, "", false
+	}
+
+	// Scan backward for standard identifier (letters, digits, underscores, dollar)
+	i := n - 1
+	for i >= 0 && (isIdentByte(item[i]) || item[i] == '$') {
+		i--
+	}
+	// An identifier cannot start with a digit
+	aliasStart := i + 1
+	if aliasStart >= n || (item[aliasStart] >= '0' && item[aliasStart] <= '9') {
+		return item, "", false
+	}
+
+	rawAlias := item[aliasStart:]
+	upperAlias := strings.ToUpper(rawAlias)
+	if _, isReserved := nonAliasKeywords[upperAlias]; isReserved {
+		return item, "", false
+	}
+
+	prefix := strings.TrimRight(item[:aliasStart], " \t\r\n")
+	if prefix == "" || isPrefixEndingWithOp(prefix) {
+		return item, "", false
+	}
+
+	return prefix, CleanIdentifier(rawAlias), true
+}
+
+func isIdentByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+func isPrefixEndingWithOp(prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+	lastChar := prefix[len(prefix)-1]
+	// Check operator characters
+	switch lastChar {
+	case '+', '-', '*', '/', '%', '=', '<', '>', '!', '~', '^', '&', '|', ',', '(', '[', '.':
+		return true
+	}
+	// Check operator keywords (find last word in prefix)
+	i := len(prefix) - 1
+	for i >= 0 && isIdentByte(prefix[i]) {
+		i--
+	}
+	lastWord := strings.ToUpper(prefix[i+1:])
+	if _, isOpKw := operatorKeywords[lastWord]; isOpKw {
+		return true
+	}
+	return false
+}
+
 func isWhitespaceByte(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }

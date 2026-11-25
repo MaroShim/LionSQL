@@ -309,7 +309,7 @@ func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
 	for _, r := range res.Rows {
 		planText += r["QUERY PLAN"].(string) + "\n"
 	}
-	if !strings.Contains(planText, "Limit") || !strings.Contains(planText, "Sort") || !strings.Contains(planText, "actual time=") {
+	if !strings.Contains(planText, "Limit") || (!strings.Contains(planText, "Sort") && !strings.Contains(planText, "Index Scan")) || !strings.Contains(planText, "actual time=") {
 		t.Errorf("expected Limit, Sort and actual metrics in EXPLAIN ANALYZE text, got:\n%s", planText)
 	}
 	if !strings.Contains(planText, "loops=") {

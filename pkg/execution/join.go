@@ -346,47 +346,52 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 			}
 			h.buildMemory += tSize
 
+			// [PERF-HASH-JOIN-BUILD-ISOLATION-1] Deep clone tuple values into independent storage
+			// so that if buildIter is a child HashJoin whose Close() returns slabs to pool,
+			// the stored build tuples retain their values and never get wiped to nil.
+			bTuple := CloneTuple(tuple)
+
 			rIdx := -1
 			if trackRight {
 				rIdx = len(h.allRightTuples)
-				h.allRightTuples = append(h.allRightTuples, tuple)
+				h.allRightTuples = append(h.allRightTuples, bTuple)
 				h.matchedRight = append(h.matchedRight, false)
 			}
 
 			if h.joinType == "CROSS" || (buildKey == "" && len(buildKeyParts) == 0) {
-				h.hashTable[""] = append(h.hashTable[""], hashMatch{tuple: tuple, idx: rIdx})
+				h.hashTable[""] = append(h.hashTable[""], hashMatch{tuple: bTuple, idx: rIdx})
 				continue
 			}
 
 			if len(buildKeyParts) > 0 {
-				kStr, found := extractTupleKeyFast(tuple, buildKeyParts, buildKeyIdxs, h.arena)
+				kStr, found := extractTupleKeyFast(bTuple, buildKeyParts, buildKeyIdxs, h.arena)
 				if !found {
 					h.rightHasNullKey = true
 					continue
 				}
-				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
 			} else if strings.Contains(buildKey, ",") {
-				kStr, found := extractTupleKey(tuple, buildKey, h.arena)
+				kStr, found := extractTupleKey(bTuple, buildKey, h.arena)
 				if !found {
 					h.rightHasNullKey = true
 					continue
 				}
-				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
 			} else {
-				keyVal, found := getTupleValFast(tuple, buildKeyIdx, buildKey)
+				keyVal, found := getTupleValFast(bTuple, buildKeyIdx, buildKey)
 				if !found || keyVal == nil {
 					h.rightHasNullKey = true
 					continue
 				}
 				if iKey, isInt := extractIntKey(keyVal); isInt {
-					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: tuple, idx: rIdx})
-					flatItems = append(flatItems, flatIntMatch{key: iKey, tuple: tuple, idx: rIdx})
+					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: bTuple, idx: rIdx})
+					flatItems = append(flatItems, flatIntMatch{key: iKey, tuple: bTuple, idx: rIdx})
 				} else {
 					kStr := formatKeyVal(keyVal)
 					if h.arena != nil {
 						kStr = h.arena.AllocString(kStr)
 					}
-					h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+					h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
 				}
 			}
 		}

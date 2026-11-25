@@ -377,3 +377,131 @@ func TestContract_RecursiveSubqueries(t *testing.T) {
 		t.Errorf("expected 42601 for unaliased subquery in subquery, got: %v", err)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// 9. Separate Window and Aggregate State Validation Contract Tests
+// -----------------------------------------------------------------------------
+func TestContract_WindowAndAggregateStateSeparation(t *testing.T) {
+	schemas := setupContractCatalog()
+
+	// 1. Window function inside aggregate function -> 42P20
+	err := parseAndValidate(t, "SELECT dept_id, SUM(ROW_NUMBER() OVER ()) FROM users GROUP BY dept_id;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "42P20") || !strings.Contains(err.Error(), "cannot contain window function calls") {
+		t.Errorf("expected 42P20 for window function inside aggregate, got: %v", err)
+	}
+
+	// 2. Unaggregated, un-grouped column inside window function argument under GROUP BY -> 42803
+	err = parseAndValidate(t, "SELECT dept_id, AVG(age) OVER () FROM users GROUP BY dept_id;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "42803") || !strings.Contains(err.Error(), "must appear in the GROUP BY clause") {
+		t.Errorf("expected 42803 for unaggregated column inside window under GROUP BY, got: %v", err)
+	}
+
+	// 3. Aggregated column inside window function argument under GROUP BY -> PASS
+	if err := parseAndValidate(t, "SELECT dept_id, AVG(SUM(age)) OVER () FROM users GROUP BY dept_id;", schemas); err != nil {
+		t.Errorf("expected aggregated column inside window under GROUP BY to pass, got: %v", err)
+	}
+
+	// 4. Grouped column inside window function argument under GROUP BY -> PASS
+	if err := parseAndValidate(t, "SELECT dept_id, ROW_NUMBER() OVER (PARTITION BY dept_id) FROM users GROUP BY dept_id;", schemas); err != nil {
+		t.Errorf("expected grouped column inside window under GROUP BY to pass, got: %v", err)
+	}
+
+	// 5. Window function in HAVING -> 42803 disallowed
+	err = parseAndValidate(t, "SELECT dept_id FROM users GROUP BY dept_id HAVING ROW_NUMBER() OVER () > 1;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "window functions are not allowed in HAVING") {
+		t.Errorf("expected error for window function in HAVING, got: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// 10. Nil-Safe Subquery AST Validation Contract Tests
+// -----------------------------------------------------------------------------
+func TestContract_NilSafeSubqueryHandling(t *testing.T) {
+	schemas := setupContractCatalog()
+
+	// 1. Synthetic InExpr with nil Query -> must return nil without panic
+	inExpr := &proc.InExpr{
+		Expr:  &proc.ColumnRefExpr{Name: "id"},
+		Query: nil,
+	}
+	if err := planner.ValidateSubqueryExprs(inExpr, schemas); err != nil {
+		t.Errorf("expected InExpr with nil Query to pass safely, got: %v", err)
+	}
+
+	// 2. Synthetic ScalarSubqueryExpr with nil Query -> must return nil without panic
+	scalarExpr := &proc.ScalarSubqueryExpr{
+		Query: nil,
+	}
+	if err := planner.ValidateSubqueryExprs(scalarExpr, schemas); err != nil {
+		t.Errorf("expected ScalarSubqueryExpr with nil Query to pass safely, got: %v", err)
+	}
+
+	// 3. Synthetic QuantifiedComparisonExpr with nil Query -> must return nil without panic
+	quantExpr := &proc.QuantifiedComparisonExpr{
+		Expr:       &proc.ColumnRefExpr{Name: "age"},
+		Op:         proc.TokenGt,
+		Quantifier: proc.TokenAll,
+		Query:      nil,
+	}
+	if err := planner.ValidateSubqueryExprs(quantExpr, schemas); err != nil {
+		t.Errorf("expected QuantifiedComparisonExpr with nil Query to pass safely, got: %v", err)
+	}
+
+	// 4. Synthetic ExistsExpr with nil Query -> must return nil without panic
+	existsExpr := &proc.ExistsExpr{
+		Query: nil,
+	}
+	if err := planner.ValidateSubqueryExprs(existsExpr, schemas); err != nil {
+		t.Errorf("expected ExistsExpr with nil Query to pass safely, got: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// 11. Unified Common Filter Expression Contract Tests
+// -----------------------------------------------------------------------------
+func TestContract_CommonFilterExpression(t *testing.T) {
+	schemas := setupContractCatalog()
+
+	// 1. Aggregate in WHERE filter scope -> rejected
+	aggExpr := &proc.FunctionCallExpr{
+		Name: "COUNT",
+		Args: []proc.Expr{&proc.ColumnRefExpr{Name: "*"}},
+	}
+	if err := planner.ValidateCommonFilterExpr(aggExpr, planner.ScopeWhere, schemas); err == nil {
+		t.Errorf("expected aggregate in ScopeWhere to be rejected")
+	}
+
+	// 2. Window function in WHERE filter scope -> rejected
+	winExpr := &proc.FunctionCallExpr{
+		Name:    "ROW_NUMBER",
+		HasOver: true,
+	}
+	if err := planner.ValidateCommonFilterExpr(winExpr, planner.ScopeWhere, schemas); err == nil {
+		t.Errorf("expected window function in ScopeWhere to be rejected")
+	}
+
+	// 3. Aggregate allowed in ScopeHaving, but nested aggregate rejected (SQLSTATE 42803)
+	nestedAgg := &proc.FunctionCallExpr{
+		Name: "SUM",
+		Args: []proc.Expr{
+			&proc.FunctionCallExpr{
+				Name: "AVG",
+				Args: []proc.Expr{&proc.ColumnRefExpr{Name: "age"}},
+			},
+		},
+	}
+	if err := planner.ValidateCommonFilterExpr(nestedAgg, planner.ScopeHaving, schemas); err == nil || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected nested aggregate in ScopeHaving to fail with 42803, got: %v", err)
+	}
+
+	// 4. Valid scalar binary comparison in ScopeWhere -> PASS
+	validFilter := &proc.BinaryExpr{
+		Left:  &proc.ColumnRefExpr{Name: "age"},
+		Op:    proc.TokenGt,
+		Right: &proc.LiteralExpr{Val: storage.Value{Type: storage.TypeInt, IVal: 18}},
+	}
+	if err := planner.ValidateCommonFilterExpr(validFilter, planner.ScopeWhere, schemas); err != nil {
+		t.Errorf("expected valid filter to pass, got: %v", err)
+	}
+}
+

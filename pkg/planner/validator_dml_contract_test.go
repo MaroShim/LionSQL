@@ -272,6 +272,16 @@ func TestContract_DML_WhereClause(t *testing.T) {
 			sql:         "DELETE FROM users WHERE id IN (SELECT id, name FROM users)",
 			expectedErr: "subquery must return only one column",
 		},
+		{
+			name:        "UPDATE WHERE ANY multi-column subquery rejected",
+			sql:         "UPDATE users SET age = 30 WHERE age = ANY (SELECT age, id FROM users)",
+			expectedErr: "subquery must return only one column",
+		},
+		{
+			name:        "DELETE WHERE ALL multi-column subquery rejected",
+			sql:         "DELETE FROM users WHERE age > ALL (SELECT age, id FROM users)",
+			expectedErr: "subquery must return only one column",
+		},
 	}
 
 	for _, tc := range cases {
@@ -304,6 +314,8 @@ func TestContract_DML_PositiveValidStatements(t *testing.T) {
 		"DELETE FROM users WHERE id = 2",
 		"DELETE FROM orders WHERE user_id = 1 AND amount < 10.0",
 		"DELETE FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 500.0)",
+		"UPDATE users SET age = 30 WHERE age > ALL (SELECT age FROM users WHERE status = 'active')",
+		"DELETE FROM users WHERE age = ANY (SELECT age FROM users WHERE status = 'inactive')",
 	}
 
 	for _, sqlStr := range validSQLs {

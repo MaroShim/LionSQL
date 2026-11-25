@@ -1346,6 +1346,9 @@ vmLoop:
 
 				if len(cols) == 0 {
 					for _, c := range schema.Columns {
+						if c.Hidden {
+							continue
+						}
 						if c.Identity && !identityInsertAllowed {
 							continue
 						}

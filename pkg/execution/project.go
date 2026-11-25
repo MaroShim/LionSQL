@@ -165,23 +165,18 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		}
 
 		// Check for [AS] alias: e.g. "col AS alias" or "col alias"
-		if expr, alias, hasAs := sqlutil.SplitAsAlias(item); hasAs {
+		if expr, alias, hasAlias := sqlutil.SplitProjectionAlias(item); hasAlias {
 			addField(expr, alias)
 		} else {
-			parts := sqlutil.SplitTopLevelTokens(item)
-			if len(parts) == 2 && !strings.ContainsAny(parts[0], "()+-*/%") && !strings.ContainsAny(parts[1], "()+-*/%") {
-				addField(parts[0], sqlutil.CleanIdentifier(parts[1]))
-			} else {
-				// Bare expression / column name
-				alias := item
-				if !strings.Contains(alias, "(") {
-					if dotIdx := strings.LastIndex(alias, "."); dotIdx != -1 {
-						alias = alias[dotIdx+1:]
-					}
+			// Bare expression / column name
+			alias := item
+			if !strings.Contains(alias, "(") {
+				if dotIdx := strings.LastIndex(alias, "."); dotIdx != -1 {
+					alias = alias[dotIdx+1:]
 				}
-				alias = sqlutil.CleanIdentifier(alias)
-				addField(item, alias)
 			}
+			alias = sqlutil.CleanIdentifier(alias)
+			addField(item, alias)
 		}
 	}
 

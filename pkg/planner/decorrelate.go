@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 )
 
@@ -106,13 +107,18 @@ func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool)
 			jType = "ANTI"
 		}
 
+		var qualifiedConds []string
+		for _, c := range remainingConds {
+			qualifiedConds = append(qualifiedConds, qualifyUnqualifiedCols(c, subAlias))
+		}
+
 		join := &JoinInfo{
 			Type:     jType,
 			Table:    subTbl,
 			Alias:    subAlias,
 			LeftKey:  leftKey,
 			RightKey: rightKey,
-			Filter:   strings.Join(remainingConds, " AND "),
+			Filter:   strings.Join(qualifiedConds, " AND "),
 		}
 		q.Joins = append(q.Joins, join)
 		q.WhereClause = removeClause(q.WhereClause, mStart, mEnd)
@@ -159,18 +165,29 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) err
 			jType = "ANTI"
 		}
 
+		leftKey := outerCol
+		outerPrefix := q.TableAlias
+		if outerPrefix == "" {
+			outerPrefix = q.TableName
+		}
+		if !strings.Contains(leftKey, ".") && outerPrefix != "" {
+			leftKey = outerPrefix + "." + leftKey
+		}
+
 		rightKey := subProj
 		if !strings.Contains(rightKey, ".") && subAlias != "" {
 			rightKey = subAlias + "." + rightKey
 		}
 
+		subFilter := qualifyUnqualifiedCols(subWhere, subAlias)
+
 		join := &JoinInfo{
 			Type:     jType,
 			Table:    subTbl,
 			Alias:    subAlias,
-			LeftKey:  outerCol,
+			LeftKey:  leftKey,
 			RightKey: rightKey,
-			Filter:   subWhere,
+			Filter:   subFilter,
 		}
 		q.Joins = append(q.Joins, join)
 		q.WhereClause = removeClause(q.WhereClause, mStart, mEnd)
@@ -290,6 +307,28 @@ func findInSubqueryParen(s string) (matchStart int, matchEnd int, prefixStr stri
 		}
 	}
 	return 0, 0, "", "", false
+}
+
+func qualifyUnqualifiedCols(whereStr string, alias string) string {
+	whereStr = strings.TrimSpace(whereStr)
+	if whereStr == "" || alias == "" {
+		return whereStr
+	}
+	p := proc.NewParser(proc.NewLexer(whereStr))
+	expr := p.ParseExpr()
+	if expr == nil || len(p.Errors()) > 0 {
+		return whereStr
+	}
+	_ = WalkAST(expr, func(node proc.Expr) error {
+		if colRef, ok := node.(*proc.ColumnRefExpr); ok {
+			clean := strings.TrimSpace(colRef.Name)
+			if !strings.Contains(clean, ".") && !strings.HasPrefix(clean, "@") && !proc.IsBuiltinFunction(clean) && !proc.IsDatePart(clean) {
+				colRef.Name = alias + "." + clean
+			}
+		}
+		return nil
+	})
+	return expr.String()
 }
 
 func parseInnerSelectWithProj(sql string) (projections, table, alias, whereClause string, ok bool) {

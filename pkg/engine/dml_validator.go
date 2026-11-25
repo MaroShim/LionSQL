@@ -52,6 +52,17 @@ func (s *Coordinator) ValidateDMLStatementAST(query string, cs *ClientSession) e
 			}
 		}
 	}
+	// Include updatable views from catalog
+	if s.catalog != nil {
+		for _, v := range s.catalog.ListViews() {
+			if v != nil {
+				if baseSchema, _, _, ok := s.resolveUpdatableView(cs, v.Name); ok && baseSchema != nil {
+					schemas[strings.ToLower(v.Name)] = baseSchema
+					schemas[v.Name] = baseSchema
+				}
+			}
+		}
+	}
 	// Overlay any session-specific / shadow / ephemeral table schemas
 	if cs != nil {
 		for name := range schemas {
@@ -60,6 +71,14 @@ func (s *Coordinator) ValidateDMLStatementAST(query string, cs *ClientSession) e
 				schemas[strings.ToLower(name)] = tbl
 			}
 		}
+		cs.Mu.Lock()
+		for eName, eTab := range cs.EphemeralTables {
+			if eTab != nil && eTab.Schema != nil {
+				schemas[eName] = eTab.Schema
+				schemas[strings.ToLower(eName)] = eTab.Schema
+			}
+		}
+		cs.Mu.Unlock()
 	}
 	return planner.ValidateDMLStmt(parsed, schemas)
 }
@@ -152,13 +171,15 @@ func ValidateInsertArity(schema *storage.TableSchema, rawCols string, rawValues 
 	} else {
 		if identityCol != nil && !identityInsertAllowed {
 			for _, c := range schema.Columns {
-				if !c.Identity {
+				if !c.Identity && !c.Hidden {
 					targetCols = append(targetCols, c.Name)
 				}
 			}
 		} else {
 			for _, c := range schema.Columns {
-				targetCols = append(targetCols, c.Name)
+				if !c.Hidden {
+					targetCols = append(targetCols, c.Name)
+				}
 			}
 		}
 	}
@@ -174,3 +195,42 @@ func ValidateInsertArity(schema *storage.TableSchema, rawCols string, rawValues 
 	}
 	return nil
 }
+
+// resolveUpdatableView checks if name corresponds to an updatable single-table view in the catalog,
+// returning the base table schema, base table name, view filter condition, and true if found.
+func (s *Coordinator) resolveUpdatableView(cs *ClientSession, name string) (*storage.TableSchema, string, string, bool) {
+	if s.catalog == nil {
+		return nil, "", "", false
+	}
+	cleanName := cleanIdentifier(name)
+	v, err := s.catalog.GetView(cleanName)
+	if err != nil || v == nil {
+		return nil, "", "", false
+	}
+	fromIdx := sqlutil.FindTopLevelKeyword(v.Query, "FROM")
+	if fromIdx == -1 {
+		return nil, "", "", false
+	}
+	rest := strings.TrimSpace(v.Query[fromIdx+4:])
+	whereIdx := sqlutil.FindTopLevelKeyword(rest, "WHERE")
+	tblPart := rest
+	viewWhere := ""
+	if whereIdx != -1 {
+		tblPart = strings.TrimSpace(rest[:whereIdx])
+		viewWhere = strings.TrimSpace(rest[whereIdx+5:])
+	}
+	if strings.ContainsAny(tblPart, ",()") || sqlutil.FindTopLevelKeyword(tblPart, "JOIN") != -1 {
+		return nil, "", "", false
+	}
+	fields := strings.Fields(tblPart)
+	if len(fields) == 0 {
+		return nil, "", "", false
+	}
+	baseTbl := cleanIdentifier(fields[0])
+	baseSchema, bErr := s.getTable(cs, baseTbl)
+	if bErr != nil || baseSchema == nil {
+		return nil, "", "", false
+	}
+	return baseSchema, baseTbl, viewWhere, true
+}
+

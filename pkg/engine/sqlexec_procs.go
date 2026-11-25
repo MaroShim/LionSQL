@@ -951,7 +951,11 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	}
 
 	procLower := strings.ToLower(procName)
-	switch procLower {
+	cleanProc := procLower
+	if idx := strings.LastIndex(cleanProc, "."); idx != -1 {
+		cleanProc = cleanProc[idx+1:]
+	}
+	switch cleanProc {
 	case "sp_reset_connection":
 		if cs != nil {
 			_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsAll())
@@ -961,6 +965,15 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			Command:    "RESET",
 			DurationUS: time.Since(start).Microseconds(),
 			Messages:   []string{"Connection reset successfully"},
+		}, nil
+	case "xp_qv":
+		if cs != nil && returnVar != "" {
+			_ = cs.CoerceAndSetVar(returnVar, int64(0))
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "EXEC",
+			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, rawArgs, start, cs, ctx)

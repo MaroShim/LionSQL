@@ -399,6 +399,7 @@ func CloneTuple(t Tuple) Tuple {
 	if t.IsNil() {
 		return Tuple{}
 	}
+	t.Materialize()
 	clonedVals := make([]any, len(t.Values))
 	copy(clonedVals, t.Values)
 	return Tuple{

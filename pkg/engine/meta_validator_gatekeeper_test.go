@@ -182,12 +182,12 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 		{
 			name:        "INSERT more expressions than target columns without col list",
 			sql:         "INSERT INTO t_arity VALUES (2, 'Bob', 200, 'extra');",
-			expectedErr: "INSERT has more expressions than target columns",
+			expectedErr: "column count mismatch: expected 3 columns, got 4 expressions",
 		},
 		{
 			name:        "INSERT fewer expressions than target columns without col list",
 			sql:         "INSERT INTO t_arity VALUES (2, 'Bob');",
-			expectedErr: "column count mismatch: expected 3 values, got 2",
+			expectedErr: "column count mismatch: expected 3 columns, got 2 expressions",
 		},
 		{
 			name:        "INSERT multi-tuple second tuple arity mismatch",
@@ -197,7 +197,7 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 		{
 			name:        "INSERT ... SELECT target columns mismatch",
 			sql:         "INSERT INTO t_arity_dst SELECT id, name, score FROM t_arity;",
-			expectedErr: "column count mismatch: target table \"t_arity_dst\" expects 2 columns, but SELECT produced 3 columns",
+			expectedErr: "column count mismatch: target has 2 columns, but query returns 3 columns",
 		},
 		{
 			name:        "WHERE IN multi-column subquery arity violation",

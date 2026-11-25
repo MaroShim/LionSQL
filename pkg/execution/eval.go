@@ -546,6 +546,18 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 	return evalTupleBinaryExprWithContext(t, e, execSubquery, nil)
 }
 
+func isSQLiteCompat(sessionVars map[string]any) bool {
+	if sessionVars == nil {
+		return false
+	}
+	if v, ok := sessionVars["__sqlite_compat__"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
 // evalTupleBinaryExprWithContext evaluates binary operations with optional SubqueryExecutor and session variables.
 func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) (any, bool) {
 	// Logical AND/OR short-circuiting with SQL 3-Valued Logic (NULL = UNKNOWN)
@@ -707,11 +719,17 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 					return lF * rF, true
 				case proc.TokenSlash:
 					if rF == 0 {
+						if isSQLiteCompat(sessionVars) {
+							return nil, true
+						}
 						return fmt.Errorf("division by zero: divide by zero error encountered"), true
 					}
 					return lF / rF, true
 				case proc.TokenPercent:
 					if int64(rF) == 0 {
+						if isSQLiteCompat(sessionVars) {
+							return nil, true
+						}
 						return fmt.Errorf("division by zero: divide by zero error encountered"), true
 					}
 					return int64(lF) % int64(rF), true
@@ -765,6 +783,9 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				return lInt * rInt, true
 			case proc.TokenSlash, proc.TokenDiv:
 				if rInt == 0 {
+					if isSQLiteCompat(sessionVars) {
+						return nil, true
+					}
 					return fmt.Errorf("division by zero: divide by zero error encountered"), true
 				}
 				if lInt == math.MinInt64 && rInt == -1 {
@@ -773,6 +794,9 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				return lInt / rInt, true
 			case proc.TokenPercent:
 				if rInt == 0 {
+					if isSQLiteCompat(sessionVars) {
+						return nil, true
+					}
 					return fmt.Errorf("division by zero: divide by zero error encountered"), true
 				}
 				if lInt == math.MinInt64 && rInt == -1 {
@@ -796,6 +820,9 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				return lF * rF, true
 			case proc.TokenSlash:
 				if rF == 0 {
+					if isSQLiteCompat(sessionVars) {
+						return nil, true
+					}
 					return fmt.Errorf("division by zero: divide by zero error encountered"), true
 				}
 				return lF / rF, true

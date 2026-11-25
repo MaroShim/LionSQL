@@ -205,6 +205,111 @@ func TestSplitAsAlias(t *testing.T) {
 	}
 }
 
+func TestSplitProjectionAlias(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedExpr  string
+		expectedAlias string
+		expectedHas   bool
+	}{
+		{
+			name:          "explicit AS alias",
+			input:         "col AS my_col",
+			expectedExpr:  "col",
+			expectedAlias: "my_col",
+			expectedHas:   true,
+		},
+		{
+			name:          "aggregate without AS",
+			input:         "COUNT ( * ) col2",
+			expectedExpr:  "COUNT ( * )",
+			expectedAlias: "col2",
+			expectedHas:   true,
+		},
+		{
+			name:          "complex cast arithmetic without AS",
+			input:         "67 * + 85 * - CAST ( - SUM ( - 52 ) AS INTEGER ) col2",
+			expectedExpr:  "67 * + 85 * - CAST ( - SUM ( - 52 ) AS INTEGER )",
+			expectedAlias: "col2",
+			expectedHas:   true,
+		},
+		{
+			name:          "negative literal without AS",
+			input:         "- 32 col2",
+			expectedExpr:  "- 32",
+			expectedAlias: "col2",
+			expectedHas:   true,
+		},
+		{
+			name:          "parenthesized count minus literal without AS",
+			input:         "( + COUNT ( * ) ) - + 32 col0",
+			expectedExpr:  "( + COUNT ( * ) ) - + 32",
+			expectedAlias: "col0",
+			expectedHas:   true,
+		},
+		{
+			name:          "bracketed alias without AS",
+			input:         "col1 [my alias]",
+			expectedExpr:  "col1",
+			expectedAlias: "my alias",
+			expectedHas:   true,
+		},
+		{
+			name:          "quoted alias without AS",
+			input:         `col1 "my alias"`,
+			expectedExpr:  "col1",
+			expectedAlias: "my alias",
+			expectedHas:   true,
+		},
+		{
+			name:          "binary addition operand is not alias",
+			input:         "a + b",
+			expectedExpr:  "a + b",
+			expectedAlias: "",
+			expectedHas:   false,
+		},
+		{
+			name:          "qualified column is not alias",
+			input:         "tab.col",
+			expectedExpr:  "tab.col",
+			expectedAlias: "",
+			expectedHas:   false,
+		},
+		{
+			name:          "bare identifier is not alias",
+			input:         "col1",
+			expectedExpr:  "col1",
+			expectedAlias: "",
+			expectedHas:   false,
+		},
+		{
+			name:          "case when with alias",
+			input:         "CASE WHEN x THEN y ELSE z END res",
+			expectedExpr:  "CASE WHEN x THEN y ELSE z END",
+			expectedAlias: "res",
+			expectedHas:   true,
+		},
+		{
+			name:          "case when ending with END is not alias",
+			input:         "CASE WHEN x THEN y ELSE z END",
+			expectedExpr:  "CASE WHEN x THEN y ELSE z END",
+			expectedAlias: "",
+			expectedHas:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr, alias, has := SplitProjectionAlias(tt.input)
+			if expr != tt.expectedExpr || alias != tt.expectedAlias || has != tt.expectedHas {
+				t.Fatalf("for %q expected (%q, %q, %v), got (%q, %q, %v)",
+					tt.input, tt.expectedExpr, tt.expectedAlias, tt.expectedHas, expr, alias, has)
+			}
+		})
+	}
+}
+
 func TestFindTopLevelKeyword(t *testing.T) {
 	tests := []struct {
 		name     string
