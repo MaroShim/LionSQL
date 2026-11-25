@@ -2297,7 +2297,9 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		var schemas []*storage.TableSchema
-		if tblSch, err := s.getTable(cs, tableName); err == nil && tblSch != nil {
+		var tblSch *storage.TableSchema
+		if sch, err := s.getTable(cs, tableName); err == nil && sch != nil {
+			tblSch = sch
 			schemas = append(schemas, tblSch)
 		}
 		for _, j := range qInfo.Joins {
@@ -2342,6 +2344,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		// If query has joins, table/query hints, or subqueries, execute via Volcano CBO Engine
 		if len(qInfo.Joins) > 0 || qInfo.Join != nil || len(qInfo.TableHints) > 0 || len(qInfo.QueryHints) > 0 {
 			return s.execVolcanoSelect(qInfo, start, cs)
+		}
+
+		// PERF-MIN-MAX-INDEX-SEEK-1: O(1) single-leaf index seek for global MIN / MAX queries
+		if res, err, ok := s.tryMinMaxIndexSeek(qInfo, tblSch, start, cs); ok {
+			return res, err
 		}
 
 		if qInfo.WhereClause != "" {
