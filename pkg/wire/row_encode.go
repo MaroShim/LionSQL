@@ -426,6 +426,10 @@ func writePgDataRows(w io.Writer, colNames []string, colOIDs []int32, formats []
 				writeErr = f.Flush()
 			}
 		}
+	} else {
+		if f, ok := w.(flusher); ok {
+			writeErr = f.Flush()
+		}
 	}
 	*bp = buf
 	putPgChunkBuf(bp)

@@ -1966,6 +1966,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		if res.Next != nil {
 			bw := getBufioWriter(conn)
 			defer putBufioWriter(bw)
+			defer func() { _ = bw.Flush() }()
 
 			var queryForOIDs string
 			if portal.Statement != nil {
@@ -2070,6 +2071,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	bw := getBufioWriter(conn)
 	defer putBufioWriter(bw)
+	defer func() { _ = bw.Flush() }()
 	_ = writePgDataRows(bw, res.Columns, colOIDs, portal.ResultFormats, batchRows, batchVals, s.DevMode())
 
 	// 3. If there are still rows remaining and maxRows > 0, send PortalSuspended ('s')
@@ -2139,6 +2141,7 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 
 		bw := getBufioWriter(conn)
 		defer putBufioWriter(bw)
+		defer func() { _ = bw.Flush() }()
 		_ = writePgDataRows(bw, res.Columns, colOIDs, resultFormats, res.Rows, res.Values, false)
 		cmd := query
 		if strings.HasPrefix(strings.ToUpper(cmd), "FETCH") {
@@ -2274,6 +2277,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 
 	bw := getBufioWriter(conn)
 	defer putBufioWriter(bw)
+	defer func() { _ = bw.Flush() }()
 
 	for cur := res; cur != nil; cur = cur.Next {
 		if len(cur.Columns) > 0 {
