@@ -54,6 +54,7 @@ func (l *LimitIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	for dest.Len() < DefaultChunkSize {
 		// Short-circuit if limit reached
 		if l.limit >= 0 && l.emitted >= l.limit {
+			l.earlyAbortChild()
 			if dest.Len() > 0 {
 				return nil
 			}
@@ -127,7 +128,14 @@ func (l *LimitIterator) Next(ctx context.Context) (Tuple, error) {
 	return t, nil
 }
 
+func (l *LimitIterator) earlyAbortChild() {
+	if a, ok := l.child.(EarlyAbortable); ok {
+		a.EarlyAbort()
+	}
+}
+
 func (l *LimitIterator) Close() error {
+	l.earlyAbortChild()
 	l.inChunk.Reset()
 	l.inIdx = 0
 	l.outChunk.Reset()

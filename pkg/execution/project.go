@@ -336,6 +336,13 @@ func (p *ProjectionIterator) Close() error {
 	return nil
 }
 
+// EarlyAbort propagates the short-circuit termination to its child.
+func (p *ProjectionIterator) EarlyAbort() {
+	if a, ok := p.child.(EarlyAbortable); ok {
+		a.EarlyAbort()
+	}
+}
+
 func (p *ProjectionIterator) Schema() []string {
 	if p.isSelectAll && len(p.fields) == 0 && p.child != nil {
 		return p.child.Schema()

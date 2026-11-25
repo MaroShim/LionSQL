@@ -360,6 +360,15 @@ func (s *SeqScanIterator) Close() error {
 	return nil
 }
 
+// EarlyAbort halts the underlying storage cursor immediately on short-circuit (e.g. LIMIT or EXISTS).
+func (s *SeqScanIterator) EarlyAbort() {
+	s.eof = true
+	if s.cursor != nil {
+		_ = s.cursor.Close()
+		s.cursor = nil
+	}
+}
+
 func (s *SeqScanIterator) Schema() []string {
 	if s.schema == nil {
 		return nil
@@ -498,6 +507,15 @@ func (s *IndexScanIterator) Close() error {
 		return err
 	}
 	return nil
+}
+
+// EarlyAbort halts the underlying storage cursor immediately on short-circuit (e.g. LIMIT or EXISTS).
+func (s *IndexScanIterator) EarlyAbort() {
+	s.eof = true
+	if s.cursor != nil {
+		_ = s.cursor.Close()
+		s.cursor = nil
+	}
 }
 
 func (s *IndexScanIterator) Schema() []string {

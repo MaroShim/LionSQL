@@ -449,6 +449,11 @@ func (g *GatherIterator) Close() error {
 	return nil
 }
 
+// EarlyAbort terminates all background workers and releases channel and pool resources immediately.
+func (g *GatherIterator) EarlyAbort() {
+	_ = g.Close()
+}
+
 // Schema returns the output column names for this operator.
 func (g *GatherIterator) Schema() []string {
 	if g.parallelJoin != nil && g.parallelJoin.JoinColMap != nil {

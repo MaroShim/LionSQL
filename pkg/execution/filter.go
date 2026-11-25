@@ -153,6 +153,13 @@ func (f *FilterIterator) Close() error {
 	return nil
 }
 
+// EarlyAbort propagates the short-circuit termination to its child.
+func (f *FilterIterator) EarlyAbort() {
+	if a, ok := f.child.(EarlyAbortable); ok {
+		a.EarlyAbort()
+	}
+}
+
 func (f *FilterIterator) Schema() []string {
 	if f.child != nil {
 		return f.child.Schema()

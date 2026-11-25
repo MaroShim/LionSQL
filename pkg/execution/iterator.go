@@ -477,6 +477,12 @@ type Iterator interface {
 	ColIndexMap() *ColumnIndexMap
 }
 
+// EarlyAbortable is an optional interface implemented by execution iterators
+// that can immediately terminate underlying scans and release resources upon short-circuit (e.g. LIMIT or EXISTS).
+type EarlyAbortable interface {
+	EarlyAbort()
+}
+
 // EmptyIterator represents an empty dataset producing 0 tuples (io.EOF immediately).
 type EmptyIterator struct {
 	schema []string

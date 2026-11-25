@@ -4,13 +4,16 @@ import (
 	"bufio"
 	"container/heap"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
@@ -96,7 +99,7 @@ type SortIterator struct {
 	limit      int64 // Maximum number of sorted rows needed (Top-N heapsort)
 	runFiles   []string
 	openFiles  []*os.File
-	decoders   []*json.Decoder
+	decoders   []*spillDecoder
 	mHeap      *tupleMergeHeap
 	spillCount int
 	spillBytes int64
@@ -422,19 +425,219 @@ func (s *SortIterator) sortSlice(tuples []Tuple) {
 	})
 }
 
-func (s *SortIterator) alignDecodedTuple(t Tuple) Tuple {
-	if s.childIndexMap == nil {
-		return t
+
+type spillDecoder struct {
+	r *bufio.Reader
+}
+
+func newSpillDecoder(r io.Reader) *spillDecoder {
+	if br, ok := r.(*bufio.Reader); ok {
+		return &spillDecoder{r: br}
 	}
-	cols := s.childIndexMap.Columns()
-	newVals := make([]any, len(cols))
-	for i, col := range cols {
-		newVals[i] = t.Get(col)
+	return &spillDecoder{r: bufio.NewReaderSize(r, 64*1024)}
+}
+
+func encodeSpillTuple(w *bufio.Writer, t Tuple, buf []byte) error {
+	colCount := len(t.Values)
+	binary.LittleEndian.PutUint32(buf[:4], uint32(colCount))
+	if _, err := w.Write(buf[:4]); err != nil {
+		return err
 	}
+
+	for _, v := range t.Values {
+		if v == nil {
+			if err := w.WriteByte(0x00); err != nil {
+				return err
+			}
+			continue
+		}
+		switch val := v.(type) {
+		case int64:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case int:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case int32:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case float64:
+			buf[0] = 0x02
+			binary.LittleEndian.PutUint64(buf[1:9], math.Float64bits(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case float32:
+			buf[0] = 0x02
+			binary.LittleEndian.PutUint64(buf[1:9], math.Float64bits(float64(val)))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case string:
+			buf[0] = 0x03
+			binary.LittleEndian.PutUint32(buf[1:5], uint32(len(val)))
+			if _, err := w.Write(buf[:5]); err != nil {
+				return err
+			}
+			if len(val) > 0 {
+				if _, err := w.WriteString(val); err != nil {
+					return err
+				}
+			}
+		case bool:
+			buf[0] = 0x04
+			if val {
+				buf[1] = 1
+			} else {
+				buf[1] = 0
+			}
+			if _, err := w.Write(buf[:2]); err != nil {
+				return err
+			}
+		case []byte:
+			buf[0] = 0x05
+			binary.LittleEndian.PutUint32(buf[1:5], uint32(len(val)))
+			if _, err := w.Write(buf[:5]); err != nil {
+				return err
+			}
+			if len(val) > 0 {
+				if _, err := w.Write(val); err != nil {
+					return err
+				}
+			}
+		case time.Time:
+			buf[0] = 0x06
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val.UnixNano()))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case json.Number:
+			if i64, err := val.Int64(); err == nil {
+				buf[0] = 0x01
+				binary.LittleEndian.PutUint64(buf[1:9], uint64(i64))
+				if _, err := w.Write(buf[:9]); err != nil {
+					return err
+				}
+			} else if f64, err := val.Float64(); err == nil {
+				buf[0] = 0x02
+				binary.LittleEndian.PutUint64(buf[1:9], math.Float64bits(f64))
+				if _, err := w.Write(buf[:9]); err != nil {
+					return err
+				}
+			} else {
+				s := string(val)
+				buf[0] = 0x03
+				binary.LittleEndian.PutUint32(buf[1:5], uint32(len(s)))
+				if _, err := w.Write(buf[:5]); err != nil {
+					return err
+				}
+				if len(s) > 0 {
+					if _, err := w.WriteString(s); err != nil {
+						return err
+					}
+				}
+			}
+		default:
+			s := fmt.Sprintf("%v", val)
+			buf[0] = 0x03
+			binary.LittleEndian.PutUint32(buf[1:5], uint32(len(s)))
+			if _, err := w.Write(buf[:5]); err != nil {
+				return err
+			}
+			if len(s) > 0 {
+				if _, err := w.WriteString(s); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (d *spillDecoder) Decode(indexMap *ColumnIndexMap) (Tuple, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(d.r, header[:]); err != nil {
+		return Tuple{}, err
+	}
+	colCount := int(binary.LittleEndian.Uint32(header[:]))
+	vals := make([]any, colCount)
+
+	var numBuf [8]byte
+	for i := 0; i < colCount; i++ {
+		tag, err := d.r.ReadByte()
+		if err != nil {
+			return Tuple{}, err
+		}
+		switch tag {
+		case 0x00:
+			vals[i] = nil
+		case 0x01:
+			if _, err := io.ReadFull(d.r, numBuf[:]); err != nil {
+				return Tuple{}, err
+			}
+			vals[i] = int64(binary.LittleEndian.Uint64(numBuf[:]))
+		case 0x02:
+			if _, err := io.ReadFull(d.r, numBuf[:]); err != nil {
+				return Tuple{}, err
+			}
+			vals[i] = math.Float64frombits(binary.LittleEndian.Uint64(numBuf[:]))
+		case 0x03:
+			var lenBuf [4]byte
+			if _, err := io.ReadFull(d.r, lenBuf[:]); err != nil {
+				return Tuple{}, err
+			}
+			strLen := int(binary.LittleEndian.Uint32(lenBuf[:]))
+			if strLen == 0 {
+				vals[i] = ""
+			} else {
+				strBytes := make([]byte, strLen)
+				if _, err := io.ReadFull(d.r, strBytes); err != nil {
+					return Tuple{}, err
+				}
+				vals[i] = string(strBytes)
+			}
+		case 0x04:
+			b, err := d.r.ReadByte()
+			if err != nil {
+				return Tuple{}, err
+			}
+			vals[i] = b != 0
+		case 0x05:
+			var lenBuf [4]byte
+			if _, err := io.ReadFull(d.r, lenBuf[:]); err != nil {
+				return Tuple{}, err
+			}
+			byteLen := int(binary.LittleEndian.Uint32(lenBuf[:]))
+			rawBytes := make([]byte, byteLen)
+			if byteLen > 0 {
+				if _, err := io.ReadFull(d.r, rawBytes); err != nil {
+					return Tuple{}, err
+				}
+			}
+			vals[i] = rawBytes
+		case 0x06:
+			if _, err := io.ReadFull(d.r, numBuf[:]); err != nil {
+				return Tuple{}, err
+			}
+			vals[i] = time.Unix(0, int64(binary.LittleEndian.Uint64(numBuf[:])))
+		default:
+			return Tuple{}, fmt.Errorf("unknown spill codec tag: 0x%02x", tag)
+		}
+	}
+
 	return Tuple{
-		Values: newVals,
-		Index:  s.childIndexMap,
-	}
+		Values: vals,
+		Index:  indexMap,
+	}, nil
 }
 
 func (s *SortIterator) spillRun() error {
@@ -445,10 +648,10 @@ func (s *SortIterator) spillRun() error {
 		return fmt.Errorf("failed to create sort spill file: %w", err)
 	}
 
-	w := bufio.NewWriter(f)
-	enc := json.NewEncoder(w)
+	w := bufio.NewWriterSize(f, 64*1024)
+	var scratch [16]byte
 	for _, t := range s.tuples {
-		if err := enc.Encode(t); err != nil {
+		if err := encodeSpillTuple(w, t, scratch[:]); err != nil {
 			_ = f.Close()
 			_ = os.Remove(f.Name())
 			return fmt.Errorf("failed to encode tuple in sort spill: %w", err)
@@ -706,17 +909,15 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 			return fmt.Errorf("failed to open sort run %q: %w", runPath, err)
 		}
 		s.openFiles = append(s.openFiles, f)
-		dec := json.NewDecoder(bufio.NewReader(f))
-		dec.UseNumber()
+		dec := newSpillDecoder(f)
 		s.decoders = append(s.decoders, dec)
 
-		var firstTuple Tuple
-		if err := dec.Decode(&firstTuple); err != nil {
+		firstTuple, err := dec.Decode(s.childIndexMap)
+		if err != nil {
 			if err != io.EOF {
 				return fmt.Errorf("sort merge decode run file %q failed: %w", runPath, err)
 			}
 		} else {
-			firstTuple = s.alignDecodedTuple(firstTuple)
 			heap.Push(s.mHeap, heapItem{tuple: firstTuple, runIdx: i})
 		}
 	}
@@ -754,13 +955,12 @@ func (s *SortIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 		dest.Tuples = append(dest.Tuples, top.tuple)
 
 		// Advance reader of the stream that just emitted top
-		var nextTuple Tuple
-		if err := s.decoders[top.runIdx].Decode(&nextTuple); err != nil {
+		nextTuple, err := s.decoders[top.runIdx].Decode(s.childIndexMap)
+		if err != nil {
 			if err != io.EOF {
 				return fmt.Errorf("sort merge decode run file failed: %w", err)
 			}
 		} else {
-			nextTuple = s.alignDecodedTuple(nextTuple)
 			heap.Push(s.mHeap, heapItem{tuple: nextTuple, runIdx: top.runIdx})
 		}
 	}
