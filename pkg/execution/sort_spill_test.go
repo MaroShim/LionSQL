@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"lionsql/pkg/execution"
+	"lionsql/pkg/storage"
 )
 
 type mockTupleIterator struct {
@@ -311,6 +312,66 @@ func TestSortIterator_TopNHeapsort(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		if results[i] != allScores[i] {
 			t.Fatalf("mismatch at rank %d: expected %d, got %d", i, allScores[i], results[i])
+		}
+	}
+}
+
+func TestSortIterator_PreboundMultiSlotSorting(t *testing.T) {
+	ctx := context.Background()
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "cat_id", Type: storage.TypeInt},
+			{Name: "score", Type: storage.TypeFloat},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	colMap := execution.NewColumnIndexMap(schema, "items")
+
+	tuples := []execution.Tuple{
+		{Values: []any{int64(2), float64(88.5), "Bravo"}, Index: colMap},
+		{Values: []any{int64(1), float64(95.0), "Charlie"}, Index: colMap},
+		{Values: []any{int64(1), float64(95.0), "Alpha"}, Index: colMap},
+		{Values: []any{int64(2), float64(99.0), "Delta"}, Index: colMap},
+		{Values: []any{int64(1), float64(70.0), "Echo"}, Index: colMap},
+	}
+
+	mock := &mockTupleIterator{tuples: tuples, schema: []string{"cat_id", "score", "name"}}
+	sortIter := execution.NewSortIterator(mock, "cat_id ASC, score DESC, name ASC")
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != 5 {
+		t.Fatalf("expected 5 tuples, got %d", len(results))
+	}
+
+	// Expected order:
+	// 1: cat_id 1, score 95.0, name Alpha
+	// 2: cat_id 1, score 95.0, name Charlie
+	// 3: cat_id 1, score 70.0, name Echo
+	// 4: cat_id 2, score 99.0, name Delta
+	// 5: cat_id 2, score 88.5, name Bravo
+	expectedNames := []string{"Alpha", "Charlie", "Echo", "Delta", "Bravo"}
+	for i, exp := range expectedNames {
+		gotName := results[i].Get("name").(string)
+		if gotName != exp {
+			t.Errorf("row %d: expected name %q, got %q", i, exp, gotName)
 		}
 	}
 }

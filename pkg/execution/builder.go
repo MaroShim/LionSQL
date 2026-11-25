@@ -125,6 +125,7 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		low, high := planner.ParseIndexCond(plan.IndexCond, schema, plan.IndexName)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
+		it.Desc = plan.IndexDesc
 		if len(plan.RequiredCols) > 0 {
 			it.SetRequiredCols(plan.RequiredCols)
 		}

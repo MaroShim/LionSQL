@@ -115,6 +115,7 @@ type PlanNode struct {
 	Alias            string      `json:"alias,omitempty"`
 	IndexName        string      `json:"index_name,omitempty"`
 	IndexCond        string      `json:"index_cond,omitempty"`
+	IndexDesc        bool        `json:"index_desc,omitempty"`
 	FilterCond       string      `json:"filter_cond,omitempty"`
 	SortKey          string      `json:"sort_key,omitempty"`
 	SortOrder        string      `json:"sort_order,omitempty"`
@@ -230,6 +231,55 @@ func NewPlanner() *Planner {
 
 func cleanIdent(s string) string {
 	return proc.CleanSchemaPrefix(s)
+}
+
+func bareCol(s string) string {
+	s = strings.Trim(strings.TrimSpace(s), "\"`[]")
+	if dot := strings.LastIndex(s, "."); dot != -1 {
+		s = s[dot+1:]
+	}
+	return strings.Trim(strings.TrimSpace(s), "\"`[]")
+}
+
+// [PERF-ORDER-BY-INDEX-SCAN-BYPASS-1] checkAndSetOrderBypass checks whether node or its underlying
+// index scan already provides the requested sort order, and sets IndexDesc on the scan node if needed.
+func checkAndSetOrderBypass(node *PlanNode, schema *storage.TableSchema, orderCol string, isDesc bool) bool {
+	if node == nil || orderCol == "" {
+		return false
+	}
+	cleanOrder := strings.ToLower(cleanIdent(bareCol(orderCol)))
+	curr := node
+	for curr != nil {
+		if curr.Type == NodeIndexScan || curr.Type == NodeIndexOnlyScan {
+			matched := false
+			if leadCol := ExtractIndexLeadingColumn(curr.IndexCond); leadCol != "" {
+				if strings.EqualFold(cleanIdent(leadCol), cleanOrder) {
+					matched = true
+				}
+			}
+			if !matched && schema != nil {
+				if idx, _, found := schema.FindIndex(curr.IndexName); found && idx != nil && len(idx.Columns) > 0 {
+					cleanLead := strings.ToLower(cleanIdent(idx.Columns[0]))
+					if cleanLead == cleanOrder {
+						matched = true
+					}
+				}
+			}
+			if matched {
+				curr.IndexDesc = isDesc
+				return true
+			}
+			return false
+		}
+		if curr.Type == NodeFilter || curr.Type == NodeProjection {
+			if len(curr.Children) > 0 {
+				curr = curr.Children[0]
+				continue
+			}
+		}
+		break
+	}
+	return false
 }
 
 func splitASTAndExpr(expr proc.Expr) []proc.Expr {
@@ -1579,6 +1629,27 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	}
 }
 
+	// [PERF-ORDER-BY-INDEX-SCAN-BYPASS-1] Index scan selection for ORDER BY queries without WHERE filter:
+	// If an index exists on the ORDER BY column, choose index scan to enable Order Bypass.
+	if chosenIndex == nil && q.OrderByClause != "" && len(pushdownRes.PrimaryConds) == 0 && schema != nil {
+		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
+		if len(orderItems) == 1 && !strings.ContainsAny(orderItems[0].Column, " +-*/%()") {
+			colClean := strings.ToLower(cleanIdent(bareCol(orderItems[0].Column)))
+			for i := range schema.Indexes {
+				idx := &schema.Indexes[i]
+				if len(idx.Columns) > 0 && strings.EqualFold(cleanIdent(idx.Columns[0]), colClean) {
+					chosenIndex = idx
+					chosenCond = ""
+					chosenCol = idx.Columns[0]
+					chosenEstRows = estimatedTotal
+					chosenCost = 0.25 + float64(estimatedTotal)*CPUIndexTupleCost
+					chosenCovering = false
+					break
+				}
+			}
+		}
+	}
+
 	if chosenIndex != nil {
 		nodeType := NodeIndexScan
 		if chosenCovering {
@@ -1587,7 +1658,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		indexCondStr := chosenCond
 		if chosenVal != "" {
 			indexCondStr = fmt.Sprintf("(%s %s %s)", chosenCol, chosenOp, chosenVal)
-		} else if !strings.HasPrefix(indexCondStr, "(") {
+		} else if indexCondStr != "" && !strings.HasPrefix(indexCondStr, "(") {
 			indexCondStr = fmt.Sprintf("(%s)", indexCondStr)
 		}
 
@@ -1931,39 +2002,46 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 	// Order By -> Sort Node (Pre-projection for table column sorting)
 	if q.OrderByClause != "" && !sortAfterProj {
-		sortKey := q.OrderByClause
-		sortOrder := ""
 		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
-		if len(orderItems) == 1 {
-			sortKey = orderItems[0].Column
-			if orderItems[0].Desc {
-				sortOrder = "DESC"
-			} else {
-				sortOrder = "ASC"
-			}
-			if orderItems[0].NullsFirst != nil {
-				if *orderItems[0].NullsFirst {
-					sortOrder += " NULLS FIRST"
+		bypassed := false
+		if len(orderItems) == 1 && !strings.ContainsAny(orderItems[0].Column, " +-*/%()") {
+			bypassed = checkAndSetOrderBypass(currentNode, schema, orderItems[0].Column, orderItems[0].Desc)
+		}
+
+		if !bypassed {
+			sortKey := q.OrderByClause
+			sortOrder := ""
+			if len(orderItems) == 1 {
+				sortKey = orderItems[0].Column
+				if orderItems[0].Desc {
+					sortOrder = "DESC"
 				} else {
-					sortOrder += " NULLS LAST"
+					sortOrder = "ASC"
+				}
+				if orderItems[0].NullsFirst != nil {
+					if *orderItems[0].NullsFirst {
+						sortOrder += " NULLS FIRST"
+					} else {
+						sortOrder += " NULLS LAST"
+					}
 				}
 			}
-		}
 
-		n := float64(currentNode.EstimatedRows)
-		sortStartup := currentNode.TotalCost + (n * math.Log2(math.Max(2, n)) * 0.01)
-		sortTotal := sortStartup + n*0.01
+			n := float64(currentNode.EstimatedRows)
+			sortStartup := currentNode.TotalCost + (n * math.Log2(math.Max(2, n)) * 0.01)
+			sortTotal := sortStartup + n*0.01
 
-		sortNode := &PlanNode{
-			Type:          NodeSort,
-			SortKey:       sortKey,
-			SortOrder:     sortOrder,
-			StartupCost:   sortStartup,
-			TotalCost:     sortTotal,
-			EstimatedRows: currentNode.EstimatedRows,
-			Children:      []*PlanNode{currentNode},
+			sortNode := &PlanNode{
+				Type:          NodeSort,
+				SortKey:       sortKey,
+				SortOrder:     sortOrder,
+				StartupCost:   sortStartup,
+				TotalCost:     sortTotal,
+				EstimatedRows: currentNode.EstimatedRows,
+				Children:      []*PlanNode{currentNode},
+			}
+			currentNode = sortNode
 		}
-		currentNode = sortNode
 	}
 
 	// Projection Node (only when not already projected by NodeAggregate without window functions)
@@ -1981,39 +2059,50 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 	// Order By -> Sort Node (Post-projection for ordinal e.g. ORDER BY 1, 2)
 	if q.OrderByClause != "" && sortAfterProj {
-		sortKey := q.OrderByClause
-		sortOrder := ""
 		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
-		if len(orderItems) == 1 {
-			sortKey = orderItems[0].Column
-			if orderItems[0].Desc {
-				sortOrder = "DESC"
-			} else {
-				sortOrder = "ASC"
+		bypassed := false
+		if len(orderItems) == 1 && !strings.ContainsAny(orderItems[0].Column, " +-*/%()") {
+			colName := orderItems[0].Column
+			if pos, err := strconv.Atoi(colName); err == nil && pos >= 1 && pos <= len(q.Projections) {
+				colName = q.Projections[pos-1]
 			}
-			if orderItems[0].NullsFirst != nil {
-				if *orderItems[0].NullsFirst {
-					sortOrder += " NULLS FIRST"
+			bypassed = checkAndSetOrderBypass(currentNode, schema, colName, orderItems[0].Desc)
+		}
+
+		if !bypassed {
+			sortKey := q.OrderByClause
+			sortOrder := ""
+			if len(orderItems) == 1 {
+				sortKey = orderItems[0].Column
+				if orderItems[0].Desc {
+					sortOrder = "DESC"
 				} else {
-					sortOrder += " NULLS LAST"
+					sortOrder = "ASC"
+				}
+				if orderItems[0].NullsFirst != nil {
+					if *orderItems[0].NullsFirst {
+						sortOrder += " NULLS FIRST"
+					} else {
+						sortOrder += " NULLS LAST"
+					}
 				}
 			}
-		}
 
-		n := float64(currentNode.EstimatedRows)
-		sortStartup := currentNode.TotalCost + (n * math.Log2(math.Max(2, n)) * 0.01)
-		sortTotal := sortStartup + n*0.01
+			n := float64(currentNode.EstimatedRows)
+			sortStartup := currentNode.TotalCost + (n * math.Log2(math.Max(2, n)) * 0.01)
+			sortTotal := sortStartup + n*0.01
 
-		sortNode := &PlanNode{
-			Type:          NodeSort,
-			SortKey:       sortKey,
-			SortOrder:     sortOrder,
-			StartupCost:   sortStartup,
-			TotalCost:     sortTotal,
-			EstimatedRows: currentNode.EstimatedRows,
-			Children:      []*PlanNode{currentNode},
+			sortNode := &PlanNode{
+				Type:          NodeSort,
+				SortKey:       sortKey,
+				SortOrder:     sortOrder,
+				StartupCost:   sortStartup,
+				TotalCost:     sortTotal,
+				EstimatedRows: currentNode.EstimatedRows,
+				Children:      []*PlanNode{currentNode},
+			}
+			currentNode = sortNode
 		}
-		currentNode = sortNode
 	}
 
 	// Limit Node

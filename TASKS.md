@@ -557,6 +557,8 @@
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
+| `DONE` | **`PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`** | `v0.96.0` | Planner | P1 | B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
+| `DONE` | **`PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`** | `v0.96.0` | Execution | P1 | Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
@@ -5370,6 +5372,20 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
 - **Milestone**: `Post-1.0`
 - **Plan Doc**: [`--prio`](--prio)
+
+---
+
+### [DONE] B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass `PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-25 05:11:19
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md)
+
+---
+
+### [DONE] Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 `PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 05:06:06
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md)
 
 ---
 

@@ -761,5 +761,129 @@ func TestPlanner_HashJoin_SmallTableBuildSide(t *testing.T) {
 	}
 }
 
+func TestPlanner_OrderBypass_IndexScan(t *testing.T) {
+	p := planner.NewPlanner()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt},
+			{Name: "age", Type: storage.TypeInt},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_users_id",
+				Columns: []string{"id"},
+			},
+		},
+	}
+
+	// Case 1: ORDER BY id ASC (Index exists on id) -> Order Bypass (No NodeSort, IndexScan IndexDesc=false)
+	{
+		q, err := p.ParseSelect("SELECT id, name FROM users ORDER BY id ASC")
+		if err != nil {
+			t.Fatalf("ParseSelect failed: %v", err)
+		}
+		plan := p.BuildPlan(q, schema, 1000)
+
+		// Traverse plan to ensure NO NodeSort exists
+		hasSort := false
+		var idxScan *planner.PlanNode
+		var walk func(n *planner.PlanNode)
+		walk = func(n *planner.PlanNode) {
+			if n == nil {
+				return
+			}
+			if n.Type == planner.NodeSort {
+				hasSort = true
+			}
+			if n.Type == planner.NodeIndexScan || n.Type == planner.NodeIndexOnlyScan {
+				idxScan = n
+			}
+			for _, child := range n.Children {
+				walk(child)
+			}
+		}
+		walk(plan)
+
+		if hasSort {
+			t.Errorf("expected NodeSort to be bypassed when index on id exists")
+		}
+		if idxScan == nil {
+			t.Fatalf("expected NodeIndexScan, got none")
+		}
+		if idxScan.IndexDesc {
+			t.Errorf("expected IndexDesc=false for ASC sort")
+		}
+	}
+
+	// Case 2: ORDER BY id DESC LIMIT 10 -> Order Bypass with IndexScanDesc and Limit directly on top
+	{
+		q, err := p.ParseSelect("SELECT id, name FROM users ORDER BY id DESC LIMIT 10")
+		if err != nil {
+			t.Fatalf("ParseSelect failed: %v", err)
+		}
+		plan := p.BuildPlan(q, schema, 1000)
+
+		hasSort := false
+		var idxScan *planner.PlanNode
+		var walk func(n *planner.PlanNode)
+		walk = func(n *planner.PlanNode) {
+			if n == nil {
+				return
+			}
+			if n.Type == planner.NodeSort {
+				hasSort = true
+			}
+			if n.Type == planner.NodeIndexScan || n.Type == planner.NodeIndexOnlyScan {
+				idxScan = n
+			}
+			for _, child := range n.Children {
+				walk(child)
+			}
+		}
+		walk(plan)
+
+		if hasSort {
+			t.Errorf("expected NodeSort to be bypassed for ORDER BY id DESC with index")
+		}
+		if idxScan == nil {
+			t.Fatalf("expected NodeIndexScan, got none")
+		}
+		if !idxScan.IndexDesc {
+			t.Errorf("expected IndexDesc=true for DESC sort")
+		}
+	}
+
+	// Case 3: ORDER BY age ASC (No index on age) -> NodeSort MUST be present
+	{
+		q, err := p.ParseSelect("SELECT id, name FROM users ORDER BY age ASC")
+		if err != nil {
+			t.Fatalf("ParseSelect failed: %v", err)
+		}
+		plan := p.BuildPlan(q, schema, 1000)
+
+		hasSort := false
+		var walk func(n *planner.PlanNode)
+		walk = func(n *planner.PlanNode) {
+			if n == nil {
+				return
+			}
+			if n.Type == planner.NodeSort {
+				hasSort = true
+			}
+			for _, child := range n.Children {
+				walk(child)
+			}
+		}
+		walk(plan)
+
+		if !hasSort {
+			t.Errorf("expected NodeSort to be present when no index exists on age")
+		}
+	}
+}
+
 
 

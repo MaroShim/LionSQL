@@ -18,15 +18,25 @@ import (
 	"lionsql/pkg/storage"
 )
 
+type sortType uint8
+
+const (
+	sortTypeUnknown sortType = iota
+	sortTypeInt
+	sortTypeFloat
+	sortTypeString
+)
+
 type sortItem struct {
 	key        string
 	descending bool
 	nullsFirst *bool
 	parsed     proc.Expr
-	colIdx     int  // Pre-bound 0-based column slot (-1 if parsed expr or position)
-	isPos      bool // True if 1-based position (e.g. ORDER BY 1)
-	posIdx     int  // 0-based position index (pos - 1)
-	fastInt    bool // True if single int64 column fast-path
+	colIdx     int      // Pre-bound 0-based column slot (-1 if parsed expr or position)
+	isPos      bool     // True if 1-based position (e.g. ORDER BY 1)
+	posIdx     int      // 0-based position index (pos - 1)
+	fastInt    bool     // True if single int64 column fast-path
+	sType      sortType // Pre-bound primitive type classification
 }
 
 // tupleMergeHeap implements container/heap.Interface for N-way merge of sorted run files.
@@ -222,25 +232,51 @@ func toInt64Fast(val any) (int64, bool) {
 	return 0, false
 }
 
-func (s *SortIterator) bindSingleIntFastPath(firstTuple Tuple) {
-	if len(s.items) != 1 {
-		return
+// [PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1] bindSortSlots dynamically inspects the first tuple
+// to bind single int64 fast path and multi-column primitive types (Int, Float, String) for reflection-free comparison.
+func (s *SortIterator) bindSortSlots(firstTuple Tuple) {
+	if len(s.items) == 1 {
+		item := &s.items[0]
+		targetIdx := -1
+		if item.colIdx >= 0 {
+			targetIdx = item.colIdx
+		} else if item.isPos {
+			targetIdx = item.posIdx
+		}
+		if targetIdx >= 0 {
+			val, ok := firstTuple.GetIdx(targetIdx)
+			if ok && val != nil {
+				if _, isInt := toInt64Fast(val); isInt {
+					s.singleIntKey = true
+					s.singleIntIdx = targetIdx
+					s.singleIntDesc = item.descending
+					s.singleIntNulls = item.nullsFirst
+					item.sType = sortTypeInt
+					return
+				}
+			}
+		}
 	}
-	item := &s.items[0]
-	targetIdx := -1
-	if item.colIdx >= 0 {
-		targetIdx = item.colIdx
-	} else if item.isPos {
-		targetIdx = item.posIdx
-	}
-	if targetIdx >= 0 {
-		val, ok := firstTuple.GetIdx(targetIdx)
-		if ok && val != nil {
-			if _, isInt := toInt64Fast(val); isInt {
-				s.singleIntKey = true
-				s.singleIntIdx = targetIdx
-				s.singleIntDesc = item.descending
-				s.singleIntNulls = item.nullsFirst
+
+	for i := range s.items {
+		item := &s.items[i]
+		targetIdx := -1
+		if item.colIdx >= 0 {
+			targetIdx = item.colIdx
+		} else if item.isPos {
+			targetIdx = item.posIdx
+		}
+		if targetIdx >= 0 {
+			val, ok := firstTuple.GetIdx(targetIdx)
+			if ok && val != nil {
+				switch val.(type) {
+				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+					item.sType = sortTypeInt
+				case float32, float64:
+					item.sType = sortTypeFloat
+				case string:
+					item.sType = sortTypeString
+				}
 			}
 		}
 	}
@@ -328,7 +364,49 @@ func (s *SortIterator) compareTuples(tA, tB Tuple) int {
 			}
 			return -1
 		}
-		cmp := CompareValues(vA, vB)
+
+		var cmp int
+		switch item.sType {
+		case sortTypeInt:
+			iA, isA := toInt64Fast(vA)
+			iB, isB := toInt64Fast(vB)
+			if isA && isB {
+				if iA < iB {
+					cmp = -1
+				} else if iA > iB {
+					cmp = 1
+				}
+			} else {
+				cmp = CompareValues(vA, vB)
+			}
+		case sortTypeFloat:
+			fA, isA := toFloat64(vA)
+			fB, isB := toFloat64(vB)
+			if isA && isB {
+				if fA < fB {
+					cmp = -1
+				} else if fA > fB {
+					cmp = 1
+				}
+			} else {
+				cmp = CompareValues(vA, vB)
+			}
+		case sortTypeString:
+			sA, isA := vA.(string)
+			sB, isB := vB.(string)
+			if isA && isB {
+				if sA < sB {
+					cmp = -1
+				} else if sA > sB {
+					cmp = 1
+				}
+			} else {
+				cmp = CompareValues(vA, vB)
+			}
+		default:
+			cmp = CompareValues(vA, vB)
+		}
+
 		if cmp != 0 {
 			if item.descending {
 				return -cmp
@@ -530,7 +608,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 
 			for _, tuple := range inChunk.Tuples {
 				if !firstBound {
-					s.bindSingleIntFastPath(tuple)
+					s.bindSortSlots(tuple)
 					firstBound = true
 				}
 				tSize := EstimateTupleSize(tuple)
@@ -578,7 +656,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 
 		for _, tuple := range inChunk.Tuples {
 			if !firstBound {
-				s.bindSingleIntFastPath(tuple)
+				s.bindSortSlots(tuple)
 				firstBound = true
 			}
 			tSize := EstimateTupleSize(tuple)
@@ -604,7 +682,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	// Case 1: In-Memory Fast Path (all data fits in workMem)
 	if len(s.runFiles) == 0 {
 		if len(s.tuples) > 0 {
-			s.bindSingleIntFastPath(s.tuples[0])
+			s.bindSortSlots(s.tuples[0])
 		}
 		s.sortSlice(s.tuples)
 		s.sortMethod = "quicksort"
