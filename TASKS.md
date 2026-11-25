@@ -31,7 +31,7 @@
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v0.95.0` | Engine | P1 | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.10.0` | Planner | P2 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.99.0` | Planner | P3 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.98.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
@@ -651,7 +651,7 @@
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
 | `DONE` | **`TX-RIGOR-PHASE-1`** | `v0.95.0` | 1 | P1 | Engine | [`세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)`](세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)) |  |
 | `DONE` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
-| `PENDING` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
+| `DONE` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-4`** | `v0.95.0` | 1 | P1 | Engine | [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)) |  |
 | `DONE` | **`TX-RIGOR-STAGE-2`** | `v0.95.0` | 1 | P2 | 트랜잭셔널 DDL 및 임시 객체(#temp vs @var) 차등 롤백 TDD 검증 | [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md) |  |
 | `DONE` | **`WAL-DELTA-1`** | `Spec-Out` | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
@@ -832,8 +832,8 @@
 ---
 
 ### [PENDING] 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) `ARCH-PLAN-CACHE-PARAMETERIZATION-1`
-- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-24 08:17:07
-- **Milestone**: `v1.10.0`
+- **Domain**: Planner | **Priority**: P3 | **Updated**: 2026-11-24 08:17:07
+- **Milestone**: `v1.99.0`
 - **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
@@ -6135,8 +6135,8 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 
 ---
 
-### [PENDING] Engine `TX-RIGOR-PHASE-3`
-- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 01:00:19
+### [DONE] Engine `TX-RIGOR-PHASE-3`
+- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 02:45:00
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃))
 

@@ -77,11 +77,17 @@ flowchart TD
   - `OpRowDelete [cur]`: 현재 커서 위치 레코드 삭제.
 
 ### 3.2 쿼리 플랜 캐시(Plan Cache)의 $O(1)$ 불변 바이트코드 재사용
-- 동일한 쿼리 지문(`SELECT balance FROM accounts WHERE id = @p1`)이 유입되면:
-  1. SQL 파싱과 플래닝을 완전히 건너뜀 (0ns).
+- **v1.1.0 적용 대상 (Strict OLTP Hot-Path)**:
+  - **명시적 매개변수화 쿼리 (Explicit Parameterized Queries)**: `PREPARE / EXECUTE`, PGWire Extended Query (`$1, $2`), TDS `sp_executesql / sp_prepare` (`@p1, @p2`).
+  - **저장 프로시저 (Stored Procedures)**: `EXEC sp_name @arg1 = $1`의 사전 컴파일 바이트코드.
+- **실행 흐름 ($O(1)$ 직결)**:
+  1. 명시적 파라미터화 쿼리 또는 프로시저 식별 시 SQL 파싱과 플래닝을 완전히 건너뜀 (0ns).
   2. 사전 컴파일된 불변 바이트코드 슬라이스(`[]Instruction`)를 캐시에서 획득.
-  3. 파라미터 레지스터(`f.registers[param_reg]`)에 `@p1` 값만 할당.
+  3. 파라미터 레지스터(`f.registers[param_reg]`)에 바인딩 값만 할당.
   4. VDBE 실행 루프 직결.
+- **장기 유예 방침 (Ad-hoc 쿼리 지문 자동 정규화 `ARCH-PLAN-CACHE-PARAMETERIZATION-1`)**:
+  - 날것의 애드혹 쿼리(`WHERE id = 100`, `WHERE id = 200`)를 엔진이 가로채서 쿼리 지문으로 자동 치환(Simple Parameterization)하는 기능은 전역 캐시 락 경합, 파라미터 스니핑(Parameter Sniffing) 부작용 방지 및 `[RULE:RadicalKISS]` 준수를 위해 **`v1.99.0` (P3) 장기 후보군으로 유예**함.
+  - v1.x 계열에서는 앱/드라이버의 표준적 매개변수화 쿼리와 저장 프로시저에만 집중하여 초경량성과 300,000+ TPS 포화를 달성함.
 
 ---
 
