@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"lionsql/pkg/storage"
 )
@@ -467,3 +468,92 @@ func BenchmarkHashJoin_10k_x_500(b *testing.B) {
 		}
 	})
 }
+
+func TestHashJoin_ZeroAllocChunkMergePool(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Build table (10 categories)
+	buildSchema := &storage.TableSchema{
+		Name: "categories",
+		Columns: []storage.Column{
+			{Name: "cat_id", Type: storage.TypeInt},
+			{Name: "cat_name", Type: storage.TypeVarChar},
+		},
+	}
+	buildColMap := NewColumnIndexMap(buildSchema, "c")
+	buildTuples := make([]Tuple, 10)
+	for i := 0; i < 10; i++ {
+		buildTuples[i] = Tuple{
+			Values: []any{int64(i + 1), fmt.Sprintf("category_%d", i+1)},
+			Index:  buildColMap,
+		}
+	}
+
+	// 2. Probe table (20,000 products: spans multiple slabs since 20,000 * 5 cols = 100,000 elements)
+	probeSchema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "prod_id", Type: storage.TypeInt},
+			{Name: "cat_id", Type: storage.TypeInt},
+			{Name: "price", Type: storage.TypeInt},
+		},
+	}
+	probeColMap := NewColumnIndexMap(probeSchema, "p")
+	const numProbe = 20000
+	probeTuples := make([]Tuple, numProbe)
+	for i := 0; i < numProbe; i++ {
+		probeTuples[i] = Tuple{
+			Values: []any{int64(i + 1), int64((i % 10) + 1), int64(100 + i)},
+			Index:  probeColMap,
+		}
+	}
+
+	leftIter := &mockSliceIterator{tuples: probeTuples, schema: []string{"p.prod_id", "p.cat_id", "p.price"}, colMap: probeColMap}
+	rightIter := &mockSliceIterator{tuples: buildTuples, schema: []string{"c.cat_id", "c.cat_name"}, colMap: buildColMap}
+	hj := NewHashJoinIterator(leftIter, rightIter, "INNER", "p.cat_id", "c.cat_id")
+	hj.SetBuildSide("RIGHT")
+
+	if err := hj.Open(ctx); err != nil {
+		t.Fatalf("hj.Open failed: %v", err)
+	}
+
+	destChunk := GetChunk()
+	defer PutChunk(destChunk)
+
+	totalJoined := 0
+	for {
+		err := hj.NextChunk(ctx, destChunk)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("NextChunk failed: %v", err)
+		}
+		for _, tuple := range destChunk.Tuples {
+			catId := tuple.Get("c.cat_id").(int64)
+			pCatId := tuple.Get("p.cat_id").(int64)
+			if catId != pCatId {
+				t.Fatalf("mismatched join keys: %d != %d", catId, pCatId)
+			}
+			totalJoined++
+		}
+	}
+
+	if totalJoined != numProbe {
+		t.Fatalf("expected %d joined rows, got %d", numProbe, totalJoined)
+	}
+
+	if len(hj.valSlabs) == 0 {
+		t.Fatalf("expected valSlabs to be allocated from pool, got 0")
+	}
+
+	// Verify clean teardown returns slabs to pool
+	if err := hj.Close(); err != nil {
+		t.Fatalf("hj.Close failed: %v", err)
+	}
+	if len(hj.valSlabs) != 0 || hj.valSlab != nil {
+		t.Fatalf("expected valSlabs to be cleaned up after Close")
+	}
+}
+
+

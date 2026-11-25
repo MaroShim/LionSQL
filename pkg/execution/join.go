@@ -99,6 +99,9 @@ type HashJoinIterator struct {
 	outIdx           int
 	arena               *storage.Arena
 	ownedArena          *storage.Arena
+	valSlab             []any
+	valSlabOffset       int
+	valSlabs            []*[]any
 	joinFilter          string
 	parsedJoinFilter    proc.Expr
 	hasJoinFilter       bool
@@ -305,6 +308,13 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	h.inIdx = 0
 	h.outChunk.Reset()
 	h.outIdx = 0
+	for _, slabPtr := range h.valSlabs {
+		clear(*slabPtr)
+		joinValSlabPool.Put(slabPtr)
+	}
+	h.valSlabs = nil
+	h.valSlab = nil
+	h.valSlabOffset = 0
 
 	var flatItems []flatIntMatch
 
@@ -535,11 +545,98 @@ func (h *HashJoinIterator) pullProbe(ctx context.Context) (Tuple, error) {
 	return t, nil
 }
 
-func (h *HashJoinIterator) mergeProbeAndMatch(probe, match Tuple) Tuple {
-	if h.buildSide == "LEFT" {
-		return mergeTuplesWithArena(match, probe, h.colIndexMap, h.arena)
+const joinValSlabSize = 8192
+
+var joinValSlabPool = sync.Pool{
+	New: func() any {
+		s := make([]any, joinValSlabSize)
+		return &s
+	},
+}
+
+// [PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1] allocMergedValues allocates a contiguous slice of n any values
+// from a pre-allocated slab buffer pool. Completely eliminates heap allocations on join probe hot-path.
+func (h *HashJoinIterator) allocMergedValues(n int) []any {
+	if n <= 0 {
+		return nil
 	}
-	return mergeTuplesWithArena(probe, match, h.colIndexMap, h.arena)
+	if n > joinValSlabSize/2 {
+		return make([]any, n)
+	}
+	if h.valSlab == nil || h.valSlabOffset+n > len(h.valSlab) {
+		slabPtr := joinValSlabPool.Get().(*[]any)
+		h.valSlabs = append(h.valSlabs, slabPtr)
+		h.valSlab = *slabPtr
+		h.valSlabOffset = 0
+	}
+	res := h.valSlab[h.valSlabOffset : h.valSlabOffset+n : h.valSlabOffset+n]
+	h.valSlabOffset += n
+	return res
+}
+
+func (h *HashJoinIterator) mergeProbeAndMatch(probe, match Tuple) Tuple {
+	if probe.Lazy != nil {
+		probe.Materialize()
+	}
+	if match.Lazy != nil {
+		match.Materialize()
+	}
+	var left, right Tuple
+	if h.buildSide == "LEFT" {
+		left, right = match, probe
+	} else {
+		left, right = probe, match
+	}
+	leftLen := len(left.Values)
+	if left.Index != nil && len(left.Index.cols) > leftLen {
+		leftLen = len(left.Index.cols)
+	}
+	rightLen := len(right.Values)
+	if right.Index != nil && len(right.Index.cols) > rightLen {
+		rightLen = len(right.Index.cols)
+	}
+	totalLen := leftLen + rightLen
+	vals := h.allocMergedValues(totalLen)
+	copy(vals, left.Values)
+	copy(vals[leftLen:], right.Values)
+	return Tuple{
+		Values: vals,
+		Index:  h.colIndexMap,
+	}
+}
+
+func (h *HashJoinIterator) mergeProbeWithNulls(probe Tuple, rightColsCount int) Tuple {
+	if probe.Lazy != nil {
+		probe.Materialize()
+	}
+	leftLen := len(probe.Values)
+	if probe.Index != nil && len(probe.Index.cols) > leftLen {
+		leftLen = len(probe.Index.cols)
+	}
+	totalLen := leftLen + rightColsCount
+	vals := h.allocMergedValues(totalLen)
+	copy(vals, probe.Values)
+	return Tuple{
+		Values: vals,
+		Index:  h.colIndexMap,
+	}
+}
+
+func (h *HashJoinIterator) mergeNullsWithBuild(leftColsCount int, build Tuple) Tuple {
+	if build.Lazy != nil {
+		build.Materialize()
+	}
+	rightLen := len(build.Values)
+	if build.Index != nil && len(build.Index.cols) > rightLen {
+		rightLen = len(build.Index.cols)
+	}
+	totalLen := leftColsCount + rightLen
+	vals := h.allocMergedValues(totalLen)
+	copy(vals[leftColsCount:], build.Values)
+	return Tuple{
+		Values: vals,
+		Index:  h.colIndexMap,
+	}
 }
 
 func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
@@ -596,7 +693,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 						} else {
 							leftColsCount = len(h.left.Schema())
 						}
-						return mergeNullsWithTupleAndArena(leftColsCount, rTuple, h.colIndexMap, h.arena), nil
+						return h.mergeNullsWithBuild(leftColsCount, rTuple), nil
 					}
 				}
 			}
@@ -751,7 +848,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			} else {
 				rightColsCount = len(h.right.Schema())
 			}
-			return mergeTuplesWithNullsAndArena(probeTuple, rightColsCount, h.colIndexMap, h.arena), nil
+			return h.mergeProbeWithNulls(probeTuple, rightColsCount), nil
 		}
 	}
 }
@@ -869,6 +966,13 @@ func (h *HashJoinIterator) Close() error {
 	h.inIdx = 0
 	h.outChunk.Reset()
 	h.outIdx = 0
+	for _, slabPtr := range h.valSlabs {
+		clear(*slabPtr)
+		joinValSlabPool.Put(slabPtr)
+	}
+	h.valSlabs = nil
+	h.valSlab = nil
+	h.valSlabOffset = 0
 	if h.ownedArena != nil {
 		storage.PutArena(h.ownedArena)
 		h.ownedArena = nil
