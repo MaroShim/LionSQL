@@ -300,9 +300,10 @@ else
     fi
 fi
 
-# Gate 0.5: Zero-Tampering Oracle Test Invariant Gate
-echo -e "[Gate 0.5/6] Verifying Zero-Tampering Oracle Test Invariant..."
+# Gate 0.2: Zero-Tampering Oracle Test Invariant Gate
+echo -e "[Gate 0.2] Verifying Zero-Tampering Oracle Test Invariant..."
 "${ROOT_DIR}/scripts/verify_no_slt_mutation.sh"
+echo -e "${CLR_GREEN}Gate 0.2 OK: Zero .slt or oracle corpora modifications verified${CLR_RESET}"
 
 # Prepare release build metadata ldflags
 RELEASE_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "dev")"
@@ -357,22 +358,15 @@ else
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/crashtest ./cmd/crashtest
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/soaktest ./cmd/soaktest
 
-    echo -e "[Gate 0/6] Verifying Zero-Tampering Oracle Invariant (Invariant 16)..."
-    bash scripts/verify_no_slt_mutation.sh
-    echo -e "${CLR_GREEN}Gate 0 OK: Zero .slt or oracle corpora modifications verified${CLR_RESET}"
-
-    echo -e "[Gate 1/6] Running core unit, regression, E2E parity & spec defect tests across all packages..."
+    echo -e "[Gate 1/5] Running core unit, regression, E2E parity & spec defect tests across all packages..."
     echo -e "  -> [Gate 1.1] Verifying Dedicated Semantic Binder & Arity Invariants (-race)..."
     go test -tags wiredtiger -race -count=1 -run "TestMetaValidatorAndBinder|TestBinder_Phase1" ./pkg/engine/...
     echo -e "${CLR_GREEN}Gate 1.1 OK: Dedicated Semantic Binder 100% Fail-Closed Entrance Guard Verified${CLR_RESET}"
-    echo -e "  -> [Gate 1.2] Verifying 32-Worker Chaos Stress & 6-Stage Transaction Rigor (-race)..."
-    go test -tags wiredtiger -race -count=1 -run "TestTxRigor_" ./pkg/engine/...
-    echo -e "${CLR_GREEN}Gate 1.2 OK: 32-Worker Chaos Stress 10,240 ops & 6-Stage ACID Invariants 100% PASS (Zero Races)${CLR_RESET}"
     go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/... ./test/spec_defects/...
     go test -tags wiredtiger -race -count=1 ./test/spec_defects/...
     echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across core packages, E2E parity, and race-free spec defect suites${CLR_RESET}"
 
-    echo -e "[Gate 2/6] Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
+    echo -e "[Gate 2/5] Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
     bash scripts/verify_report.sh --engine=memory
     bash scripts/verify_report.sh --engine=wiredtiger
     if command -v psql >/dev/null 2>&1; then
@@ -404,24 +398,28 @@ else
     fi
     echo -e "${CLR_GREEN}Gate 2 OK: 100% PASS across 13 domains and live psql CLI smoke${CLR_RESET}"
 
-    echo -e "[Gate 3/6] Running TPC-C OLTP Benchmark Verification (In-Memory OCC & WiredTiger)..."
-    ./bin/tpcc-runtime -engine memory -warehouses 2 -workers 10 -duration 5s
-    ./bin/tpcc-runtime -engine wiredtiger -warehouses 2 -workers 10 -duration 5s
-    echo -e "${CLR_GREEN}Gate 3 OK: High-throughput OLTP verified (>600k tpmC)${CLR_RESET}"
-
-    echo -e "[Gate 4/6] Running SQLLogicTest Relational Conformance Suite (400k+ queries)..."
+    echo -e "[Gate 3/5] Running SQLLogicTest & T-SQL Procedural Conformance (Correctness)..."
+    echo -e "  -> Running SQLLogicTest Relational Conformance Suite (400k+ queries)..."
     ./bin/sqllogictest -dir test/slt -parallel 16
-    echo -e "${CLR_GREEN}Gate 4 OK: 100% PASS (Zero relational mismatches)${CLR_RESET}"
-
-    echo -e "[Gate 5/6] Running T-SQL Stored Procedure, Babelfish & External Corpora Oracle 1,289-Suite Hermetic Conformance..."
+    echo -e "${CLR_GREEN}SQLLogicTest OK: 100% PASS (Zero relational mismatches)${CLR_RESET}"
+    echo -e "  -> Running T-SQL Stored Procedure, Babelfish & External Corpora Oracle 1,289-Suite Hermetic Conformance..."
     go test -count=1 ./test/slt_proc/...
-    echo -e "${CLR_GREEN}Gate 5 OK: 100% PASS across 1,289 authentic procedural, Babelfish & external corpora suites (37,178 records)${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 3 OK: 100% PASS across 400k+ relational queries and 1,289 authentic procedural suites${CLR_RESET}"
 
-    echo -e "[Gate 6/6] Running Crash Durability & Resource Leakage Sentinels..."
+    echo -e "[Gate 4/5] Running Concurrency Chaos & Crash Durability Sentinels (Durability)..."
+    echo -e "  -> Running 32-Worker Chaos Stress & 6-Stage Transaction Rigor (-race)..."
+    go test -tags wiredtiger -race -count=1 -run "TestTxRigor_" ./pkg/engine/...
+    echo -e "${CLR_GREEN}32-Worker Chaos Stress OK: 10,240 ops & 6-Stage ACID Invariants 100% PASS (Zero Races)${CLR_RESET}"
+    echo -e "  -> Running Kill -9 Crash Recovery & Soak Resource Leakage Sentinels..."
     ./bin/crashtest -rounds 3 -workers 4 -engine memory
     ./bin/crashtest -rounds 3 -workers 4 -engine wiredtiger
     ./bin/soaktest -duration 5s -engine memory -workers 4 -sample 1s
-    echo -e "${CLR_GREEN}Gate 6 OK: Zero-loss crash recovery & resource invariants verified${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 4 OK: Zero-loss crash recovery, resource leak-freedom, and race-free chaos verified${CLR_RESET}"
+
+    echo -e "[Gate 5/5] Running TPC-C OLTP Benchmark Verification (Performance)..."
+    ./bin/tpcc-runtime -engine memory -warehouses 2 -workers 10 -duration 5s
+    ./bin/tpcc-runtime -engine wiredtiger -warehouses 2 -workers 10 -duration 5s
+    echo -e "${CLR_GREEN}Gate 5 OK: High-throughput OLTP verified (>600k tpmC)${CLR_RESET}"
 fi
 
 # ------------------------------------------------------------------------------
