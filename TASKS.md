@@ -647,7 +647,6 @@
 | `DONE` | **`TUNE-DOC-SYNC-1`** |  | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** |  | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
-| `PENDING` | **`TX-DDL-DEFERRED-TAIL-DROP-1`** | `v0.95.0` | 1 | P2 | 트랜잭셔널 Tail-Only DROP COLUMN 지연 물리 절단(Deferred Truncation) 및 JIT Flush 구현 | [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md) |  |
 | `DONE` | **`TX-RIGOR-PHASE-1`** | `v0.95.0` | 1 | P1 | Engine | [`세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)`](세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
@@ -6103,13 +6102,6 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 **Details & Resolution**:
 - 설계 계획서: [`notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)
 - 목표: PGWire/TDS Prepared Statement에서 `EXEC <proc>` 구문의 정적 분석 및 파라미터 직결 바인딩을 구현하여 초당 29만 회의 문자열 직렬화/재파싱/메모리 할당을 제거하고 고동시성(100 워커) 처리량을 극대화합니다.
-
----
-
-### [PENDING] 트랜잭셔널 Tail-Only DROP COLUMN 지연 물리 절단(Deferred Truncation) 및 JIT Flush 구현 `TX-DDL-DEFERRED-TAIL-DROP-1`
-- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-25 01:45:42
-- **Milestone**: `v0.95.0`
-- **Plan Doc**: [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)
 
 ---
 
