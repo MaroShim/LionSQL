@@ -443,3 +443,87 @@ func TestBinder_Phase3_JoinScopeAndAmbiguity(t *testing.T) {
 		}
 	}
 }
+
+func TestBinder_Phase4_DMLContract(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sess := "test_sess_binder_p4"
+	_, _ = coord.GetOrCreateSession(sess)
+	defer coord.CloseSession(sess)
+
+	setupSQLs := []string{
+		"CREATE TABLE t_dml (id INT NOT NULL PRIMARY KEY, name VARCHAR(50) NOT NULL, val INT);",
+	}
+	for _, sql := range setupSQLs {
+		if _, err := coord.ExecuteSessionSQL(sess, sql); err != nil {
+			t.Fatalf("setup failed for %q: %v", sql, err)
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		sql         string
+		expectedErr string
+	}{
+		{
+			name:        "INSERT missing NOT NULL column without default rejected",
+			sql:         "INSERT INTO t_dml (id) VALUES (1);",
+			expectedErr: "violates not-null constraint",
+		},
+		{
+			name:        "INSERT target non-existent column rejected",
+			sql:         "INSERT INTO t_dml (id, name, ghost_col) VALUES (1, 'Alice', 10);",
+			expectedErr: "does not exist",
+		},
+		{
+			name:        "UPDATE SET target non-existent column rejected",
+			sql:         "UPDATE t_dml SET ghost_col = 10 WHERE id = 1;",
+			expectedErr: "does not exist",
+		},
+		{
+			name:        "UPDATE SET right-hand expression non-existent column rejected",
+			sql:         "UPDATE t_dml SET val = val + ghost_col WHERE id = 1;",
+			expectedErr: "does not exist",
+		},
+		{
+			name:        "UPDATE SET aggregate function disallowed",
+			sql:         "UPDATE t_dml SET val = SUM(val) WHERE id = 1;",
+			expectedErr: "aggregate functions are not allowed",
+		},
+		{
+			name:        "DELETE non-existent column in WHERE rejected",
+			sql:         "DELETE FROM t_dml WHERE ghost_col = 1;",
+			expectedErr: "does not exist",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := coord.ExecuteSessionSQL(sess, tc.sql)
+			if err == nil {
+				t.Fatalf("[%s] expected error containing %q, got nil", tc.name, tc.expectedErr)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.expectedErr)) {
+				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
+			}
+		})
+	}
+
+	// Positive tests
+	positiveSQLs := []string{
+		"INSERT INTO t_dml (id, name, val) VALUES (1, 'Alice', 100);",
+		"INSERT INTO t_dml (id, name) VALUES (2, 'Bob');",
+		"UPDATE t_dml SET val = val + 10 WHERE id = 1;",
+		"DELETE FROM t_dml WHERE id = 2;",
+	}
+	for _, sql := range positiveSQLs {
+		res, err := coord.ExecuteSessionSQL(sess, sql)
+		if err != nil {
+			t.Fatalf("valid SQL %q failed: %v", sql, err)
+		}
+		if res == nil {
+			t.Fatalf("expected non-nil result for %q", sql)
+		}
+	}
+}

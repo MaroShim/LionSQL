@@ -794,8 +794,9 @@ func ValidateGroupByClause(groupStr string) error {
 	return ValidateGroupByClauseWithSchemas(groupStr)
 }
 
-// ValidateSetClause verifies that setStr in UPDATE or MERGE is non-empty and all assignment pairs are syntactically valid.
-func ValidateSetClause(setStr string) error {
+// ValidateSetClauseWithScope verifies that setStr in UPDATE or MERGE is non-empty, all assignment pairs are syntactically valid,
+// target columns exist on targetSchema, and expressions only reference in-scope columns.
+func ValidateSetClauseWithScope(setStr string, targetSchema *storage.TableSchema, scope *planner.TableScope) error {
 	setStr = strings.TrimSpace(setStr)
 	if setStr == "" {
 		return fmt.Errorf("syntax error: empty or invalid SET clause")
@@ -821,6 +822,17 @@ func ValidateSetClause(setStr string) error {
 		if val == "" {
 			return fmt.Errorf("syntax error: empty expression in SET assignment for column %q", col)
 		}
+
+		if targetSchema != nil {
+			cleanCol := cleanIdentifier(col)
+			if dotIdx := strings.LastIndex(cleanCol, "."); dotIdx != -1 {
+				cleanCol = cleanCol[dotIdx+1:]
+			}
+			if _, _, ok := targetSchema.FindColumn(cleanCol); !ok {
+				return fmt.Errorf("column %q of relation %q does not exist", cleanCol, targetSchema.Name)
+			}
+		}
+
 		parser := proc.NewParser(proc.NewLexer(val))
 		expr := parser.ParseExpr()
 		if len(parser.Errors()) > 0 {
@@ -835,8 +847,23 @@ func ValidateSetClause(setStr string) error {
 		if parser.CurrentToken().Type != proc.TokenEOF {
 			return fmt.Errorf("syntax error: unexpected trailing token %q in SET assignment for column %q", parser.CurrentToken().Literal, col)
 		}
+
+		if err := planner.CheckDisallowedExprs(expr, planner.ScopeWhere); err != nil {
+			return err
+		}
+
+		if scope != nil && scope.HasSchemas() {
+			if err := scope.ValidateExpr(expr); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+// ValidateSetClause verifies that setStr in UPDATE or MERGE is non-empty and all assignment pairs are syntactically valid.
+func ValidateSetClause(setStr string) error {
+	return ValidateSetClauseWithScope(setStr, nil, nil)
 }
 
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {

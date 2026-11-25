@@ -362,6 +362,25 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 				cs.Mu.Unlock()
 			}
 
+			if dml.Columns != "" {
+				colNames := sqlutil.SplitTopLevel(dml.Columns, ',')
+				targetColsSet := make(map[string]bool)
+				for _, c := range colNames {
+					cName := cleanIdentifier(c)
+					if _, _, ok := tblSch.FindColumn(cName); !ok {
+						return nil, fmt.Errorf("column %q of relation %q does not exist", cName, tblSch.Name)
+					}
+					targetColsSet[strings.ToLower(cName)] = true
+				}
+				for _, col := range tblSch.Columns {
+					if !col.Nullable && col.Default == "" && !col.Identity {
+						if !targetColsSet[strings.ToLower(col.Name)] {
+							return nil, fmt.Errorf("null value in column %q violates not-null constraint", col.Name)
+						}
+					}
+				}
+			}
+
 			if dml.Output != "" {
 				if err := ValidateOutputClause(dml.Output, tblSch); err != nil {
 					return nil, err
@@ -1541,7 +1560,20 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return nil, err
 	}
 
-	if err := ValidateSetClause(dml.Set); err != nil {
+	var updateSchemas []*storage.TableSchema
+	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
+		updateSchemas = append(updateSchemas, tblSch)
+	}
+	var targetSchema *storage.TableSchema
+	if len(updateSchemas) > 0 {
+		targetSchema = updateSchemas[0]
+	}
+	updateScope := planner.NewTableScope()
+	if targetSchema != nil {
+		updateScope.Register(dml.Table, "", targetSchema)
+	}
+
+	if err := ValidateSetClauseWithScope(dml.Set, targetSchema, updateScope); err != nil {
 		return nil, err
 	}
 
@@ -1556,10 +1588,6 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return s.execUpdateFromJoin(dml, start, cs)
 	}
 
-	var updateSchemas []*storage.TableSchema
-	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
-		updateSchemas = append(updateSchemas, tblSch)
-	}
 	if dml.Output != "" && len(updateSchemas) > 0 {
 		if err := ValidateOutputClause(dml.Output, updateSchemas[0]); err != nil {
 			return nil, err

@@ -95,7 +95,7 @@
 | `DONE` | **`BINDER-EVOL-PHASE-1`** | `v0.95.0` | Architecture | P1 | WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `PENDING` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-6`** | `v0.97.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-7`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
@@ -1419,8 +1419,8 @@
 
 ---
 
-### [PENDING] DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) `BINDER-EVOL-PHASE-4`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+### [DONE] DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) `BINDER-EVOL-PHASE-4`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-25 00:17:50
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
