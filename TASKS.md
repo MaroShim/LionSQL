@@ -14,7 +14,6 @@
 
 | Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |
 | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
-| `PENDING` | **`--id`** | `Architecture` | --milestone | P2 | FEAT-HTAP-ALL-IN-ONE-1 | [`--domain`](--domain) |  |
 | `DONE` | **`1.8`** | `1.0-GA` | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
@@ -293,6 +292,7 @@
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-FROM-DERIVED-TABLE-ALIAS-REQUIRED-1`** | `--priority` | FROM 파생 테이블(Subquery) 필수 별칭(Alias) 강제 (SQLSTATE 42601) | P2 | --title | [`Engine`](Engine) |  |
+| `PENDING` | **`FEAT-HTAP-ALL-IN-ONE-1`** | `v1.20.0` | Architecture | P2 | LionSQL + DuckDB Arrow 기반 올인원 HTAP 솔루션 (스마트 쿼리 라우터, DDL 자동 전파, 서브프로세스 슈퍼바이저) | [`notes/UNIFIED_HTAP_ALL_IN_ONE_SOLUTION_PLAN.ko.md`](notes/UNIFIED_HTAP_ALL_IN_ONE_SOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | `v1.20.0` | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-OPENJSON-TVF-1`** | `v0.94.0` | Engine | P2 | T-SQL OPENJSON Table-Valued Function (TVF) 파싱 및 가상 테이블 스캔 엔진 구현 | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-AGG-FILTER-CLAUSE-1`** | `v1.1.0` | Engine | P2 | 집계 함수 FILTER (WHERE ...) 구문 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
@@ -573,6 +573,7 @@
 | `DONE` | **`PERF-TOP-N-SORT-FUSION-1`** | `v0.95.0` | Execution | P2 | Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) | [`notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md`](notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-VDBE-HOTPATH-EXPANSION-1`** | `v1.1.0` | Execution | P1 | 단일 테이블 포인트 룩업 및 단일 행 DML 핫패스 VDBE 바이트코드 직결 (300ns & 0-Alloc) | [`notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md`](notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
@@ -661,13 +662,6 @@
 ---
 
 ## 2. Detailed Task Specifications & Execution Records
-
-### [PENDING] FEAT-HTAP-ALL-IN-ONE-1 `--id`
-- **Domain**: --milestone | **Priority**: P2 | **Updated**: 2026-11-25 02:25:50
-- **Milestone**: `Architecture`
-- **Plan Doc**: [`--domain`](--domain)
-
----
 
 ### [DONE] 1.0 GA 검증 및 잔여 정리 `1.8`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
@@ -3443,6 +3437,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] LionSQL + DuckDB Arrow 기반 올인원 HTAP 솔루션 (스마트 쿼리 라우터, DDL 자동 전파, 서브프로세스 슈퍼바이저) `FEAT-HTAP-ALL-IN-ONE-1`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-25 02:42:38
+- **Milestone**: `v1.20.0`
+- **Plan Doc**: [`notes/UNIFIED_HTAP_ALL_IN_ONE_SOLUTION_PLAN.ko.md`](notes/UNIFIED_HTAP_ALL_IN_ONE_SOLUTION_PLAN.ko.md)
+
+---
+
 ### [PENDING] Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) `FEAT-MATVIEW-ALIAS-1`
 - **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `v1.20.0`
@@ -5494,6 +5495,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
+
+---
+
+### [PENDING] 단일 테이블 포인트 룩업 및 단일 행 DML 핫패스 VDBE 바이트코드 직결 (300ns & 0-Alloc) `PERF-VDBE-HOTPATH-EXPANSION-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 02:42:38
+- **Milestone**: `v1.1.0`
+- **Plan Doc**: [`notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md`](notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md)
 
 ---
 
