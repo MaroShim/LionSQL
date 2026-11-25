@@ -17,6 +17,12 @@
   * 통합 물리 스토리지 포맷 공식 규격서 (테이블 튜플 V2 포맷 & 보조 인덱스 B-Tree 키/값 포맷).
   * 4바이트 정렬 고정 헤더, `NullBitmap`, 1,024개 컬럼 상한(`storage.MaxColumnsPerTable = 1024`), $O(1)$ Instant Tail DDL 불변식.
   * 2계층 레코드 크기 상한 규약: Layer 1 인라인 8,060 Bytes (`storage.MaxInlineRowSize`) & Layer 2 논리 레코드 16 MB (`storage.MaxRowSize`).
+* **[`WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING.ko.md`](WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING.ko.md)**
+  * WiredTiger 물리 파일 레이아웃 및 세컨더리 인덱스 단일 B-Tree 파일 멀티플렉싱(`_idx_<Table>.wt`) 아키텍처 규격 (`Invariant 15`, `ARCH-WT-FILE-LAYOUT-1`).
+  * File-per-Table 레이아웃, 인덱스 접두사(`lower(IndexName)\x00`), 단일 트랜잭션 B-Tree 결합 및 레거시 파일 마이그레이션.
+* **[`LOGICAL_NAMESPACE_DATABASE_PREFIX.ko.md`](LOGICAL_NAMESPACE_DATABASE_PREFIX.ko.md)**
+  * Model B(논리 3단 복합 키 `__db_<dbname>_<schema>_<tablename>`) 아키텍처 공식 사양서 (`Invariant 2`, `ARCH-LOGICAL-NAMESPACE-1`).
+  * 물리 파티셔닝 배제(Single Kernel Primacy), 동명 테이블 공존 및 서브마이크로초 로컬 크로스 DB 조인.
 * **[`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)**
   * 스키마 인식형 콤팩트 바이너리 튜플 직렬화 명세 (`pkg/storage/tuple.go`).
   * 비트 단위 레이아웃: `0x01` 버전 헤더, $\lceil N/8 \rceil$ NULL 비트맵, 고밀도 ZigZag Varint 페이로드.
@@ -26,6 +32,11 @@
 * **[`UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`](UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md)**
   * LionSQL 4대 코어 컴포넌트 아키텍처 (The Four Pillars) 및 DDL+DML 통합 트랜잭션 매니저(`pkg/tx`) 공식 규격서.
   * 4대 트랜잭션 경계(명시적, 묵시적 오토커밋, 오류 격리 'E', 세션 단절 자동 롤백) 및 계층형 세이브포인트 스택.
+* **[`SESSION_TX_CURSOR_LIFECYCLE.ko.md`](SESSION_TX_CURSOR_LIFECYCLE.ko.md)**
+  * 세션-트랜잭션-커서 삼각 연동 및 커밋/롤백 시 커서 수명주기 전이 명세서.
+* **[`TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)**
+  * 세션-트랜잭션-커서 상태 머신 & 6단계 엄밀성 테스트 명세서 (`TX-MODULE-RIGOROUS-TEST-PLAN-V2`).
+  * 중첩 `@@TRANCOUNT`, T-SQL/ANSI 세이브포인트, 트랜잭셔널 DDL, `#temp` 롤백 참여 vs `@var` 롤백 비참여, `XACT_STATE()`, `sp_reset_connection`, 32워커 카오스 스트레스 검증.
 * **[`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)**
   * 양대 스토리지 백엔드 전반의 트랜잭션 격리 및 동시성 제어 모델 명세.
   * 논블로킹 스냅샷 읽기 및 세션 프라이빗 워크스페이스 격리.
@@ -33,6 +44,13 @@
   * VDBE 트랜잭션 결합(`exec.RunInTx`) 및 벤치마크 원자적 트랜잭션 무결성.
 
 ### 2. 고성능 실행 & 메모리 최적화 (Execution & Memory)
+* **[`BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md`](BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md)**
+  * Bound AST 기반 전용 바인더(Dedicated Binder) 진화 아키텍처 명세서.
+  * 파서 ➔ 바인더 ➔ 바운드 AST ➔ CBO ➔ 실행기 5단계 파이프라인.
+  * 카탈로그/식별자/별칭 완전 해석, 100% 컴파일 타임 Fail-Closed (`42703`, `42702`, `42803`, `23502`), 플랫/조인 $O(1)$ 정수 물리 슬롯 바인딩 (`BoundColumnRef`).
+* **[`BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md`](BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md)**
+  * 전용 바인더(BoundAST) 및 트랜잭션(Tx) 모듈 엄밀성 완성 시 시스템 To-Be 상태 아키텍처 명세서.
+  * 단일 관문 컴파일러 계약, 무검증 $O(1)$ 실행 계층, 엔터프라이즈 트랜잭션/세션 상태 머신, 성능 3종 신기(Top-N 힙, 스캔-필터 직결, MIN/MAX Seek) 시너지 및 v1.0-GA 프로덕션 준비 상태 총괄.
 * **[`ZERO_ALLOCATION_ARCHITECTURE.md`](ZERO_ALLOCATION_ARCHITECTURE.md)**
   * 20,000+ TPS를 견인하는 제로 할당 메모리 아키텍처 및 버퍼 재사용/GC 완화 전략.
   * 계층별 분석: TDS 단일 프레임 풀링, PGWire 바이너리 바인드 직접 디코딩, 무할당 카탈로그 사전 필터링(`containsFold`), VDBE 레지스터 재활용, Volcano 청크 스트리밍(`TupleChunk` sync.Pool), WiredTiger `WT_CURSOR` 풀링/리셋.

@@ -1,0 +1,1 @@
+../../doc/internal/BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md

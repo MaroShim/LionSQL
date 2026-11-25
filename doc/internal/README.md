@@ -13,10 +13,21 @@ This directory contains low-level architectural blueprints, binary format specif
   * Deep dive into the `storage.Engine` interface contract.
   * In-Memory OCC (monotonically increasing integer versions) vs WiredTiger lock-free B+Tree page structures.
   * Checkpoints, AOF log compaction, physical storage directory layout, and metadata persistence (`catalog.json`, `cbo_stats.json`).
+* **[`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)**
+  * Unified Physical Table Format Specification (V2 Tuple Binary Codec & Multiplexed Index B-Tree Layout).
+  * 4-byte aligned header, `NullBitmap`, 1,024 column ceiling (`storage.MaxColumnsPerTable = 1024`), $O(1)$ Instant Tail DDL invariant.
+* **[`WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING.ko.md`](WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING.ko.md)**
+  * WiredTiger physical file layout and secondary index multiplexing specification (`_idx_<Table>.wt`, `Invariant 15`, `ARCH-WT-FILE-LAYOUT-1`).
+* **[`LOGICAL_NAMESPACE_DATABASE_PREFIX.ko.md`](LOGICAL_NAMESPACE_DATABASE_PREFIX.ko.md)**
+  * Model B: Logical 3-Tier Composite Key Architecture Specification (`Invariant 2`, `ARCH-LOGICAL-NAMESPACE-1`).
 * **[`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)**
   * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
+* **[`SESSION_TX_CURSOR_LIFECYCLE.ko.md`](SESSION_TX_CURSOR_LIFECYCLE.ko.md)**
+  * Session, Transaction, and Server-Side Cursor lifecycle transition specification.
+* **[`TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)**
+  * Session-Transaction-Cursor state machine & 6-stage rigor testing specification (`TX-MODULE-RIGOROUS-TEST-PLAN-V2`).
 * **[`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)**
   * Transaction isolation and concurrency model specification across both storage backends.
   * Non-blocking snapshot reads and private workspace isolation.
@@ -24,6 +35,10 @@ This directory contains low-level architectural blueprints, binary format specif
   * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
 
 ### 2. High-Performance Execution & Memory
+* **[`BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md`](BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md)**
+  * Bound AST-Driven Dedicated Binder Evolution Specification (5-stage pipeline, catalog binding, $O(1)$ positional integer slot indexing).
+* **[`BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md`](BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md)**
+  * Dedicated Binder (BoundAST) & Transaction Module Rigor Integration To-Be System Architecture Specification.
 * **[`ZERO_ALLOCATION_ARCHITECTURE.md`](ZERO_ALLOCATION_ARCHITECTURE.md)**
   * Zero-allocation memory architecture, buffer reuse strategies, and GC mitigation enabling 20,000+ TPS.
   * Layer-by-layer breakdown: TDS single-frame pooling, PGWire binary bind direct decoding, zero-alloc ASCII catalog pre-filtering (`containsFold`), VDBE register recycling, Volcano chunk streaming (`TupleChunk` sync.Pool), and WiredTiger `WT_CURSOR` pooling/reset.
