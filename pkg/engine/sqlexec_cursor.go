@@ -216,11 +216,35 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 		cs.Vars["fetch_status"] = int64(-1)
 	}
 
+	if len(stmt.IntoVars) > 0 {
+		if len(stmt.IntoVars) != len(cur.Columns) {
+			return nil, fmt.Errorf("Msg 16924, Level 16, State 1: Cursor fetch error: number of variables declared in the INTO list (%d) does not match the number of columns in cursor (%d)", len(stmt.IntoVars), len(cur.Columns))
+		}
+		if len(fetched) > 0 {
+			firstRow := fetched[0]
+			for i, varName := range stmt.IntoVars {
+				colName := cur.Columns[i]
+				val, ok := firstRow[colName]
+				if !ok {
+					val = firstRow[strings.ToLower(colName)]
+				}
+				_ = cs.CoerceAndSetVarLocked(varName, val)
+			}
+		}
+	}
+
+	cols := cur.Columns
+	rows := fetched
+	if len(stmt.IntoVars) > 0 {
+		cols = nil
+		rows = nil
+	}
+
 	return &QueryResult{
 		Success:      true,
 		Command:      fmt.Sprintf("FETCH %d", len(fetched)),
-		Columns:      cur.Columns,
-		Rows:         fetched,
+		Columns:      cols,
+		Rows:         rows,
 		RowsAffected: int64(len(fetched)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
@@ -235,6 +259,9 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 	stmt, err := proc.ParseServerCursorFetchOrMove(query)
 	if err != nil {
 		return nil, err
+	}
+	if len(stmt.IntoVars) > 0 {
+		return nil, fmt.Errorf("syntax error: MOVE does not accept INTO variable list")
 	}
 
 	cs.Mu.Lock()

@@ -1503,12 +1503,13 @@ type ServerCursorDeclareStmt struct {
 	Query    string
 }
 
-// ServerCursorFetchStmt represents FETCH or MOVE [direction] [count] [FROM|IN] <cursor_name>.
+// ServerCursorFetchStmt represents FETCH or MOVE [direction] [count] [FROM|IN] <cursor_name> [INTO @var1, @var2...].
 type ServerCursorFetchStmt struct {
 	Direction  string
 	Count      int
 	IsAll      bool
 	CursorName string
+	IntoVars   []string
 }
 
 // ExistsExpr represents [NOT] EXISTS (SELECT ...)

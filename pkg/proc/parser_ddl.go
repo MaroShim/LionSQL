@@ -2561,12 +2561,41 @@ func ParseServerCursorFetchOrMove(query string) (*ServerCursorFetchStmt, error) 
 		p.nextToken()
 	}
 
+	var intoVars []string
+	intoIdx := -1
+	for i, tok := range tokens {
+		if strings.EqualFold(tok, "INTO") {
+			intoIdx = i
+			break
+		}
+	}
+	if intoIdx >= 0 {
+		for _, tok := range tokens[intoIdx+1:] {
+			trimmedTok := strings.TrimSpace(tok)
+			if trimmedTok == "" || trimmedTok == "," {
+				continue
+			}
+			intoVars = append(intoVars, trimmedTok)
+		}
+		if len(intoVars) == 0 {
+			return nil, fmt.Errorf("syntax error: target variable required after INTO")
+		}
+		tokens = tokens[:intoIdx]
+	}
+
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("syntax error: cursor name required")
 	}
 
 	cursorName := cleanSchemaPrefix(tokens[len(tokens)-1])
 	tokens = tokens[:len(tokens)-1]
+
+	if len(tokens) > 0 {
+		lastTok := strings.ToUpper(tokens[len(tokens)-1])
+		if lastTok == "GLOBAL" || lastTok == "LOCAL" {
+			tokens = tokens[:len(tokens)-1]
+		}
+	}
 
 	if len(tokens) > 0 {
 		lastTok := strings.ToUpper(tokens[len(tokens)-1])
@@ -2579,6 +2608,7 @@ func ParseServerCursorFetchOrMove(query string) (*ServerCursorFetchStmt, error) 
 		Direction:  "FORWARD",
 		Count:      1,
 		CursorName: cursorName,
+		IntoVars:   intoVars,
 	}
 
 	if len(tokens) == 0 {
@@ -2647,13 +2677,16 @@ func ParseServerCursorFetchOrMove(query string) (*ServerCursorFetchStmt, error) 
 	}
 }
 
-// ParseServerCursorOpenOrClose parses OPEN <name> or CLOSE <name|ALL>.
+// ParseServerCursorOpenOrClose parses OPEN [GLOBAL|LOCAL] <name> or CLOSE [GLOBAL|LOCAL] <name|ALL>.
 func ParseServerCursorOpenOrClose(query string, expectedVerb string) (string, error) {
 	p := NewParser(NewLexer(query))
 	if !strings.EqualFold(p.curToken.Literal, expectedVerb) {
 		return "", fmt.Errorf("syntax error: expected %s", expectedVerb)
 	}
 	p.nextToken()
+	if strings.EqualFold(p.curToken.Literal, "GLOBAL") || strings.EqualFold(p.curToken.Literal, "LOCAL") {
+		p.nextToken()
+	}
 	if p.curTokenIs(TokenSemicolon) || p.curTokenIs(TokenEOF) || p.curToken.Literal == "" {
 		return "", fmt.Errorf("syntax error: cursor name required for %s", expectedVerb)
 	}

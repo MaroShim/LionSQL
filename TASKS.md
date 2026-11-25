@@ -648,7 +648,7 @@
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** |  | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
 | `DONE` | **`TX-RIGOR-PHASE-1`** | `v0.95.0` | 1 | P1 | Engine | [`세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)`](세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)) |  |
-| `PENDING` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
+| `DONE` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-4`** | `v0.95.0` | 1 | P1 | Engine | [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)) |  |
 | `DONE` | **`TX-RIGOR-STAGE-2`** | `v0.95.0` | 1 | P2 | 트랜잭셔널 DDL 및 임시 객체(#temp vs @var) 차등 롤백 TDD 검증 | [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md) |  |
@@ -6112,8 +6112,8 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 
 ---
 
-### [PENDING] Engine `TX-RIGOR-PHASE-2`
-- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 01:00:19
+### [DONE] Engine `TX-RIGOR-PHASE-2`
+- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 02:01:26
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지))
 
