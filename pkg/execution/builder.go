@@ -53,27 +53,68 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		}
 		op = NewEmptyIterator(cols, colMap)
 
+	case planner.NodeGather:
+		child := plan
+		if len(plan.Children) > 0 && plan.Children[0] != nil {
+			child = plan.Children[0]
+		}
+		schema, sErr := getTable(child.Relation)
+		if sErr != nil {
+			return nil, fmt.Errorf("gather table scan schema lookup failed for %q: %w", child.Relation, sErr)
+		}
+		gIter := NewGatherIterator(tx, child.Relation, child.Alias, schema)
+		if plan.Workers > 0 {
+			gIter.SetDOP(plan.Workers)
+		} else if child.Workers > 0 {
+			gIter.SetDOP(child.Workers)
+		}
+		if len(child.RequiredCols) > 0 {
+			gIter.SetRequiredCols(child.RequiredCols)
+		}
+		if child.FilterCond != "" {
+			gIter.SetFilterCond(child.FilterCond)
+		}
+		if opts.Arena != nil {
+			gIter.SetArena(opts.Arena)
+		}
+		op = gIter
+
 	case planner.NodeTableScan:
 		schema, sErr := getTable(plan.Relation)
 		if sErr != nil {
 			return nil, fmt.Errorf("table scan schema lookup failed for %q: %w", plan.Relation, sErr)
 		}
-		var sIter *SeqScanIterator
-		if len(plan.Partitions) > 0 {
-			sIter = NewSeqScanIteratorWithPartitions(tx, plan.Relation, plan.Alias, schema, plan.Partitions)
+		if plan.Workers > 1 {
+			gIter := NewGatherIterator(tx, plan.Relation, plan.Alias, schema)
+			gIter.SetDOP(plan.Workers)
+			if len(plan.RequiredCols) > 0 {
+				gIter.SetRequiredCols(plan.RequiredCols)
+			}
+			if plan.FilterCond != "" {
+				gIter.SetFilterCond(plan.FilterCond)
+			}
+			if opts.Arena != nil {
+				gIter.SetArena(opts.Arena)
+			}
+			op = gIter
 		} else {
-			sIter = NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema)
+			var sIter *SeqScanIterator
+			if len(plan.Partitions) > 0 {
+				sIter = NewSeqScanIteratorWithPartitions(tx, plan.Relation, plan.Alias, schema, plan.Partitions)
+			} else {
+				sIter = NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema)
+			}
+			if len(plan.RequiredCols) > 0 {
+				sIter.SetRequiredCols(plan.RequiredCols)
+			}
+			if plan.FilterCond != "" {
+				sIter.SetFilterCond(plan.FilterCond)
+			}
+			if opts.Arena != nil {
+				sIter.SetArena(opts.Arena)
+			}
+			op = sIter
 		}
-		if len(plan.RequiredCols) > 0 {
-			sIter.SetRequiredCols(plan.RequiredCols)
-		}
-		if plan.FilterCond != "" {
-			sIter.SetFilterCond(plan.FilterCond)
-		}
-		if opts.Arena != nil {
-			sIter.SetArena(opts.Arena)
-		}
-		op = sIter
 
 	case planner.NodeIndexScan, planner.NodeIndexOnlyScan:
 		schema, sErr := getTable(plan.Relation)

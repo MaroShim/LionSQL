@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,7 @@ const (
 	NodeCTE         NodeType = "CTE Scan"
 	NodeMaterialize NodeType = "Materialize"
 	NodeWindow      NodeType = "Window"
+	NodeGather      NodeType = "Gather"
 	NodeSetOp       NodeType = "SetOp"
 	NodeModifyTable NodeType = "ModifyTable"
 )
@@ -140,6 +142,7 @@ type PlanNode struct {
 	ActualLoops      int64                `json:"actual_loops,omitempty"`
 	Partitions       []string             `json:"partitions,omitempty"`
 	RequiredCols     []int                `json:"required_cols,omitempty"`
+	Workers          int                  `json:"workers,omitempty"`
 	Children         []*PlanNode          `json:"children,omitempty"`
 }
 
@@ -958,6 +961,22 @@ func hasQueryHint(hints []string, target string) bool {
 	return false
 }
 
+// ExtractMaxDOP parses MAXDOP query hints (e.g. OPTION (MAXDOP 4), MAXDOP=4, MAXDOP(4)).
+// Returns -1 if not specified, 0 for unlimited/auto default, or n >= 1 for explicit worker count.
+func ExtractMaxDOP(hints []string) int {
+	for _, h := range hints {
+		upper := strings.ToUpper(strings.TrimSpace(h))
+		if strings.HasPrefix(upper, "MAXDOP") {
+			rem := strings.TrimSpace(strings.TrimPrefix(upper, "MAXDOP"))
+			rem = strings.Trim(rem, "=() ")
+			if n, err := strconv.Atoi(rem); err == nil && n >= 0 {
+				return n
+			}
+		}
+	}
+	return -1
+}
+
 // optimizeRootTable performs Dynamic Root Selection (OPT-LARGE-JOIN-1):
 // If the current base table has no equality filter, but one of the commutative
 // joined tables has a single-table equality filter (or significantly lower cardinality),
@@ -1644,6 +1663,38 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			prunedParts = PrunePartitions(schema, pushdownRes.PrimaryConds, avail)
 		}
 
+		var scanWorkers int
+		maxDOP := ExtractMaxDOP(q.QueryHints)
+		if maxDOP == 0 {
+			scanWorkers = runtime.NumCPU() / 2
+			if scanWorkers > 8 {
+				scanWorkers = 8
+			}
+			if scanWorkers < 1 {
+				scanWorkers = 1
+			}
+		} else if maxDOP > 1 {
+			scanWorkers = maxDOP
+			if scanWorkers > 16 {
+				scanWorkers = 16
+			}
+		} else if maxDOP == 1 {
+			scanWorkers = 1
+		} else if estimatedTotal >= 1000 {
+			// Auto-parallelize large table scans across available CPU cores (NumCPU/2)
+			scanWorkers = runtime.NumCPU() / 2
+			if scanWorkers > 8 {
+				scanWorkers = 8
+			}
+			if scanWorkers < 1 {
+				scanWorkers = 1
+			}
+		}
+
+		if scanWorkers > 1 {
+			tableScanTotalCost = (tableScanTotalCost / float64(scanWorkers)) + 0.1
+		}
+
 		scanNode = &PlanNode{
 			Type:          NodeTableScan,
 			Relation:      q.TableName,
@@ -1653,6 +1704,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			EstimatedRows: estimatedTotal,
 			Partitions:    prunedParts,
 			RequiredCols:  CollectReferencedColumns(schema, q.TableName, q.TableAlias, q),
+			Workers:       scanWorkers,
 		}
 
 		if len(pushdownRes.PrimaryConds) > 0 {
@@ -2101,6 +2153,9 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	case NodeHash:
 		// Hash intermediate node
 	case NodeTableScan:
+		if node.Workers > 1 {
+			sb.WriteString(fmt.Sprintf(" (Parallel, Workers: %d)", node.Workers))
+		}
 		sb.WriteString(fmt.Sprintf(" on %s", node.Relation))
 		if node.Alias != "" && node.Alias != node.Relation {
 			sb.WriteString(fmt.Sprintf(" %s", node.Alias))

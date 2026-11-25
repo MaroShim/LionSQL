@@ -30,7 +30,7 @@
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v0.95.0` | Engine | P1 | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-PARALLEL-SCAN-1`** | `v0.95.0` | Engine | P1 | Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.99.0` | Planner | P3 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
@@ -824,8 +824,8 @@
 
 ---
 
-### [PENDING] Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) `ARCH-PARALLEL-SCAN-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 10:39:39
+### [DONE] Intra-Query 멀티코어 병렬 쿼리 실행기 (ParallelSeqScan & Gather Merge) `ARCH-PARALLEL-SCAN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-25 03:35:36
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
