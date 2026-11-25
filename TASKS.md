@@ -99,7 +99,7 @@
 | `DONE` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-6`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-7`** | `v0.96.0` | Planner | P1 | Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `PENDING` | **`BINDER-EVOL-PHASE-8`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`--domain`](--domain) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-8`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`--domain`](--domain) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** |  | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -549,7 +549,7 @@
 | `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.96.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.96.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
@@ -566,7 +566,7 @@
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
+| `DONE` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`** |  | Wire | P1 | v0.96.0 | [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
@@ -1471,8 +1471,8 @@
 
 ---
 
-### [PENDING] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-8`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-25 06:46:04
+### [DONE] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-8`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-25 09:55:56
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`--domain`](--domain)
 
@@ -5327,8 +5327,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [DONE] MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) `PERF-MIN-MAX-INDEX-SEEK-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 00:53:39
+### [PENDING] MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) `PERF-MIN-MAX-INDEX-SEEK-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 09:56:07
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
@@ -5444,8 +5444,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 06:26:43
+### [DONE] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 09:55:56
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md)
 
