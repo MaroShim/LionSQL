@@ -651,6 +651,7 @@
 | `PENDING` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
 | `PENDING` | **`TX-RIGOR-PHASE-4`** | `v0.95.0` | 1 | P1 | Engine | [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)) |  |
+| `DONE` | **`TX-RIGOR-STAGE-2`** | `v0.95.0` | 1 | P2 | 트랜잭셔널 DDL 및 임시 객체(#temp vs @var) 차등 롤백 TDD 검증 | [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md) |  |
 | `DONE` | **`WAL-DELTA-1`** | `Spec-Out` | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
 | `DONE` | **`WEB-SPA-1`** |  | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
 | `PENDING` | **`WIRE-FLATBUFFERS-BINARY-RPC-1`** |  | --priority | P3 | FlatBuffers Zero-Copy Binary RPC Protocol for Game Servers (LionSQL & Lioness Shared) |  |  |
@@ -6129,6 +6130,13 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 - **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 01:00:19
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스))
+
+---
+
+### [DONE] 트랜잭셔널 DDL 및 임시 객체(#temp vs @var) 차등 롤백 TDD 검증 `TX-RIGOR-STAGE-2`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-25 01:32:40
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)
 
 ---
 
