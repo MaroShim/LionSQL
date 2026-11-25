@@ -24,6 +24,8 @@ This directory contains low-level architectural blueprints, binary format specif
   * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
+* **[`ACID_CORE_INTEGRITY_SPEC.ko.md`](ACID_CORE_INTEGRITY_SPEC.ko.md)**
+  * ACID core transaction integrity, WAL crash recovery (Fail-Closed Zero-Truncate Invariant 9), and storage checkpoint specification.
 * **[`SESSION_TX_CURSOR_LIFECYCLE.ko.md`](SESSION_TX_CURSOR_LIFECYCLE.ko.md)**
   * Session, Transaction, and Server-Side Cursor lifecycle transition specification.
 * **[`TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)**
@@ -35,6 +37,10 @@ This directory contains low-level architectural blueprints, binary format specif
   * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
 
 ### 2. High-Performance Execution & Memory
+* **[`SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md`](SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md)**
+  * Single semantic validation gateway (Scope Gatekeeper & DML Contract) architecture specification.
+* **[`SQL_SEMANTIC_INTEGRITY_SPEC.ko.md`](SQL_SEMANTIC_INTEGRITY_SPEC.ko.md)**
+  * SQL standard and T-SQL semantic integrity rules and Fail-Closed SQLSTATE mapping specification.
 * **[`BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md`](BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md)**
   * Bound AST-Driven Dedicated Binder Evolution Specification (5-stage pipeline, catalog binding, $O(1)$ positional integer slot indexing).
 * **[`BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md`](BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md)**

@@ -32,6 +32,8 @@
 * **[`UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`](UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md)**
   * LionSQL 4대 코어 컴포넌트 아키텍처 (The Four Pillars) 및 DDL+DML 통합 트랜잭션 매니저(`pkg/tx`) 공식 규격서.
   * 4대 트랜잭션 경계(명시적, 묵시적 오토커밋, 오류 격리 'E', 세션 단절 자동 롤백) 및 계층형 세이브포인트 스택.
+* **[`ACID_CORE_INTEGRITY_SPEC.ko.md`](ACID_CORE_INTEGRITY_SPEC.ko.md)**
+  * ACID 트랜잭션 무결성, WAL 충돌 복구(Fail-Closed Zero-Truncate Invariant 9) 및 스토리지 체크포인트 종합 기술 명세서.
 * **[`SESSION_TX_CURSOR_LIFECYCLE.ko.md`](SESSION_TX_CURSOR_LIFECYCLE.ko.md)**
   * 세션-트랜잭션-커서 삼각 연동 및 커밋/롤백 시 커서 수명주기 전이 명세서.
 * **[`TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](TX_MODULE_RIGOROUS_TEST_SPEC.ko.md)**
@@ -44,6 +46,10 @@
   * VDBE 트랜잭션 결합(`exec.RunInTx`) 및 벤치마크 원자적 트랜잭션 무결성.
 
 ### 2. 고성능 실행 & 메모리 최적화 (Execution & Memory)
+* **[`SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md`](SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md)**
+  * 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 명세서.
+* **[`SQL_SEMANTIC_INTEGRITY_SPEC.ko.md`](SQL_SEMANTIC_INTEGRITY_SPEC.ko.md)**
+  * SQL 표준 및 T-SQL 시맨틱 무결성 규칙 총괄 명세서 (서브쿼리 에러 전파, DML 우변 유령 컬럼 차단, Fail-Closed SQLSTATE 매핑).
 * **[`BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md`](BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md)**
   * Bound AST 기반 전용 바인더(Dedicated Binder) 진화 아키텍처 명세서.
   * 파서 ➔ 바인더 ➔ 바운드 AST ➔ CBO ➔ 실행기 5단계 파이프라인.
