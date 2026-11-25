@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement hybrid binding model and Phase 7 semantic gatekeeper invariants in Dedicated Binder (`BINDER-EVOL-PHASE-7`):
+  - implement compile-time Scope Shadowing preventing access to original table names when aliased (`SQLSTATE 42P01`)
+  - enforce compile-time ambiguity detection on self-joins and unqualified column collisions (`SQLSTATE 42702`)
+  - enforce single-column return on scalar subqueries and IN predicates (`SQLSTATE 42601`)
+  - reject nested aggregate function calls such as `SUM(COUNT(*))` (`SQLSTATE 42803`)
+  - enforce Table Column Primacy over projection aliases in GROUP BY clause binding
+  - support projection alias references in HAVING clause with aggregate validation
+  - enforce type compatibility on arithmetic operators rejecting non-numeric operands (`SQLSTATE 42883`)
+  - enforce fail-closed rejection on unregistered and unknown function calls (`SQLSTATE 42883`)
+  - adopt hybrid binding model: direct TupleSlot indexing on hot paths and `BoundGenericExpr` wrapping for complex/compound expressions, delegating execution to mature interpreter evaluation in `eval.go`
 - document official Docker container image specifications and GHCR release automation in `notes/OFFICIAL_DOCKER_RELEASE_PIPELINE.ko.md` (`DOC-OFFICIAL-DOCKER-RELEASE-PIPELINE-1`)
 - document PGWire and TDS mandatory buffer flush guarantees and deterministic stream lifecycle in `notes/WIRE_TDS_MANDATORY_FLUSH_GUARANTEE.ko.md` (`DOC-WIRE-TDS-MANDATORY-FLUSH-GUARANTEE-1`)
 - implement hierarchical scope binding and outer level resolution for correlated subqueries in dedicated Semantic Binder (`BINDER-EVOL-PHASE-6`)

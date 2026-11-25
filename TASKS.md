@@ -98,7 +98,8 @@
 | `DONE` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-6`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `PENDING` | **`BINDER-EVOL-PHASE-7`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-7`** | `v0.96.0` | Planner | P1 | Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-8`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`--domain`](--domain) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** |  | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -1462,10 +1463,17 @@
 
 ---
 
-### [PENDING] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-7`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 23:25:02
-- **Milestone**: `v0.97.0`
+### [DONE] Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper `BINDER-EVOL-PHASE-7`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-25 07:31:27
+- **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-8`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-25 06:46:04
+- **Milestone**: `v0.97.0`
+- **Plan Doc**: [`--domain`](--domain)
 
 ---
 

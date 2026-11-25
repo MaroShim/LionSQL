@@ -410,34 +410,49 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		}
 		if resolvedCol == "" {
 			gStr := g.String()
-			for _, p := range stmt.Projections {
-				if p.Alias != "" && strings.EqualFold(p.Alias, gStr) {
-					if _, isLit := p.Expr.(*proc.LiteralExpr); isLit {
-						continue
-					}
-					if hasTopLevelAggregateExpr(p.Expr) {
-						qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
-						break
-					}
-					isExistingColRef := false
-					for _, otherP := range stmt.Projections {
-						if otherP.Expr != nil {
-							for _, ref := range ExtractColumnRefs(otherP.Expr.String()) {
-								if strings.EqualFold(ref.Column, gStr) {
-									isExistingColRef = true
+			isColRef := false
+			if colRef, ok := g.(*proc.ColumnRefExpr); ok {
+				isColRef = true
+				if strings.Contains(colRef.Name, ".") {
+					// Qualified column reference always resolves to table column
+					resolvedCol = gStr
+				}
+			}
+			if resolvedCol == "" {
+				for _, p := range stmt.Projections {
+					if p.Alias != "" && strings.EqualFold(p.Alias, gStr) {
+						if _, isLit := p.Expr.(*proc.LiteralExpr); isLit {
+							continue
+						}
+						if hasTopLevelAggregateExpr(p.Expr) {
+							qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
+							break
+						}
+						// Table column strictly takes precedence over projection alias:
+						// If g is an existing column reference, bind to the table column name.
+						isExistingColRef := false
+						if isColRef {
+							for _, otherP := range stmt.Projections {
+								if otherP.Expr != nil {
+									for _, ref := range ExtractColumnRefs(otherP.Expr.String()) {
+										if strings.EqualFold(ref.Column, gStr) {
+											isExistingColRef = true
+											break
+										}
+									}
+								}
+								if isExistingColRef {
 									break
 								}
 							}
 						}
 						if isExistingColRef {
+							resolvedCol = gStr
 							break
 						}
+						resolvedCol = p.Expr.String()
+						break
 					}
-					if isExistingColRef {
-						continue
-					}
-					resolvedCol = p.Expr.String()
-					break
 				}
 			}
 		}

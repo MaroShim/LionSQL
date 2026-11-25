@@ -2298,7 +2298,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 
 		var schemas []*storage.TableSchema
 		var tblSch *storage.TableSchema
-		if sch, err := s.getTable(cs, tableName); err == nil && sch != nil {
+		if tableName != "" {
+			sch, err := s.getTable(cs, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+			}
 			tblSch = sch
 			schemas = append(schemas, tblSch)
 		}
@@ -2306,9 +2310,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") {
 				continue
 			}
-			if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
-				schemas = append(schemas, jSch)
+			jSch, err := s.getTable(cs, cleanIdentifier(j.Table))
+			if err != nil {
+				return nil, fmt.Errorf("table %q not found: %w", j.Table, err)
 			}
+			schemas = append(schemas, jSch)
 		}
 		if qInfo.Join != nil && !strings.EqualFold(qInfo.Join.Type, "SEMI") && !strings.EqualFold(qInfo.Join.Type, "ANTI") {
 			found := false
@@ -2319,9 +2325,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 				}
 			}
 			if !found {
-				if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
-					schemas = append(schemas, jSch)
+				jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table))
+				if err != nil {
+					return nil, fmt.Errorf("table %q not found: %w", qInfo.Join.Table, err)
 				}
+				schemas = append(schemas, jSch)
 			}
 		}
 

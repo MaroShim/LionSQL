@@ -130,7 +130,10 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 						Schema: schema,
 						Index:  colMap,
 					}
-					matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					if evalErr != nil {
+						return evalErr
+					}
 					if !matched {
 						continue // Filter mismatch: 0 heap allocations, drop immediately
 					}
@@ -170,7 +173,10 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 						Schema: schema,
 						Index:  colMap,
 					}
-					matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					if evalErr != nil {
+						return evalErr
+					}
 					if !matched {
 						continue
 					}
@@ -207,7 +213,10 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 					t = FormatRowWithArena(row, schema, alias, colMap, arena)
 				}
 				if filterExpr != nil {
-					matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+					if evalErr != nil {
+						return evalErr
+					}
 					if !matched {
 						continue
 					}
@@ -225,7 +234,10 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 				t = FormatRowWithArena(row, schema, alias, colMap, arena)
 			}
 			if filterExpr != nil {
-				matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+				matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+				if evalErr != nil {
+					return evalErr
+				}
 				if !matched {
 					continue
 				}
@@ -243,7 +255,10 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 		}
 		t := FormatRecord(rec, schema, alias, colMap)
 		if filterExpr != nil {
-			matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+			matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+			if evalErr != nil {
+				return evalErr
+			}
 			if !matched {
 				continue
 			}

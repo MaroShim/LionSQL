@@ -77,6 +77,10 @@ type SQLCoordinator interface {
 	// ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
 	ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error)
 
+	// ExecutePointLookup executes a direct primary key point lookup bypassing Volcano CBO,
+	// planner AST allocation, and iterator state machines.
+	ExecutePointLookup(sessID string, tableName string, pkVal storage.Value, projections []string) (*QueryResult, error)
+
 	// BeginSessionTx starts an interactive transaction on the specified session directly without query parsing overhead.
 	BeginSessionTx(sessionID string, opts storage.TxOptions) error
 

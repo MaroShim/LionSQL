@@ -408,3 +408,303 @@ func TestBinder_CorrelatedSubquery_GhostColumnFailClosed(t *testing.T) {
 		t.Errorf("expected 'does not exist' error, got: %v", err)
 	}
 }
+
+func TestBinder_Phase7_ScopeShadowing(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. users.id with alias 'u' must fail because 'users' is shadowed
+	sqlFail := "SELECT users.id FROM users u;"
+	parsed, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for shadowed table name 'users', got nil")
+	} else if !strings.Contains(err.Error(), "does not exist in query scope") {
+		t.Errorf("expected 'does not exist in query scope' error, got: %v", err)
+	}
+
+	// 2. u.id with alias 'u' must succeed
+	sqlPass := "SELECT u.id FROM users u;"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	selPass := parsedPass.(*proc.GeneralSelectStmt)
+	if _, err := binder.BindSelect(selPass); err != nil {
+		t.Errorf("expected u.id to succeed, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_SelfJoin_Ambiguity(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Unqualified 'id' in self-join of 'users' must be rejected as ambiguous
+	sqlFail := "SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id;"
+	parsed, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for ambiguous unqualified 'id' in self join, got nil")
+	} else if !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("expected 'ambiguous' error, got: %v", err)
+	}
+
+	// 2. Qualified 'u1.id' and 'u2.name' must succeed
+	sqlPass := "SELECT u1.id, u2.name FROM users u1 JOIN users u2 ON u1.id = u2.id;"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	selPass := parsedPass.(*proc.GeneralSelectStmt)
+	bound, err := binder.BindSelect(selPass)
+	if err != nil {
+		t.Fatalf("expected qualified self join to succeed, got: %v", err)
+	}
+	if len(bound.Projections) != 2 {
+		t.Fatalf("expected 2 projections, got %d", len(bound.Projections))
+	}
+	p0 := bound.Projections[0].Expr.(*planner.BoundColumnRef)
+	p1 := bound.Projections[1].Expr.(*planner.BoundColumnRef)
+	if p0.TableID != 0 || p0.TupleSlot != 0 {
+		t.Errorf("expected u1.id at TableID 0, TupleSlot 0, got TableID %d Slot %d", p0.TableID, p0.TupleSlot)
+	}
+	// u2 is TableID 1, offset by len(users.Columns) = 3 -> TupleSlot = 3 + 1 = 4
+	if p1.TableID != 1 || p1.TupleSlot != 4 {
+		t.Errorf("expected u2.name at TableID 1, TupleSlot 4, got TableID %d Slot %d", p1.TableID, p1.TupleSlot)
+	}
+}
+
+func TestBinder_Phase7_SelfJoin_DuplicateUnAliased(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// Duplicate un-aliased 'users JOIN users' must be rejected
+	sql := "SELECT * FROM users JOIN users ON users.id = users.id;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for duplicate un-aliased 'users' join, got nil")
+	} else if !strings.Contains(err.Error(), "specified more than once") {
+		t.Errorf("expected 'specified more than once' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_WildcardExpansion(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Global wildcard: SELECT * FROM users (expands to id, name, age)
+	sqlGlobal := "SELECT * FROM users;"
+	parsed, err := proc.ParseSQL(sqlGlobal)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+	if len(bound.Projections) != 3 {
+		t.Fatalf("expected 3 expanded projections, got %d", len(bound.Projections))
+	}
+	expectedSlots := []int{0, 1, 2}
+	expectedNames := []string{"id", "name", "age"}
+	for i, bp := range bound.Projections {
+		if bp.TupleSlot != expectedSlots[i] {
+			t.Errorf("proj[%d] TupleSlot mismatch: expected %d, got %d", i, expectedSlots[i], bp.TupleSlot)
+		}
+		if bp.Alias != expectedNames[i] {
+			t.Errorf("proj[%d] Alias mismatch: expected %s, got %s", i, expectedNames[i], bp.Alias)
+		}
+	}
+
+	// 2. Table-qualified wildcard: SELECT u.* FROM users u JOIN orders o ON u.id = o.user_id
+	sqlQual := "SELECT u.* FROM users u JOIN orders o ON u.id = o.user_id;"
+	parsedQual, err := proc.ParseSQL(sqlQual)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	selQual := parsedQual.(*proc.GeneralSelectStmt)
+	boundQual, err := binder.BindSelect(selQual)
+	if err != nil {
+		t.Fatalf("BindSelect for u.* failed: %v", err)
+	}
+	if len(boundQual.Projections) != 3 {
+		t.Fatalf("expected 3 expanded projections for u.*, got %d", len(boundQual.Projections))
+	}
+	for i, bp := range boundQual.Projections {
+		if bp.TupleSlot != expectedSlots[i] {
+			t.Errorf("u.* proj[%d] TupleSlot mismatch: expected %d, got %d", i, expectedSlots[i], bp.TupleSlot)
+		}
+		if bp.Alias != expectedNames[i] {
+			t.Errorf("u.* proj[%d] Alias mismatch: expected %s, got %s", i, expectedNames[i], bp.Alias)
+		}
+	}
+}
+
+func TestBinder_Phase7_GroupBy_UnaggregatedColumnRejection(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. SELECT id, name, COUNT(*) FROM users GROUP BY id -> 'name' must be rejected (SQLSTATE 42803)
+	sqlFail := "SELECT id, name, COUNT(*) FROM users GROUP BY id;"
+	parsed, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for unaggregated column 'name' without GROUP BY, got nil")
+	} else if !strings.Contains(err.Error(), "must appear in the GROUP BY clause") {
+		t.Errorf("expected 'must appear in the GROUP BY clause' error, got: %v", err)
+	}
+
+	// 2. SELECT id, COUNT(name) FROM users GROUP BY id -> Must succeed
+	sqlPass := "SELECT id, COUNT(name) FROM users GROUP BY id;"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	selPass := parsedPass.(*proc.GeneralSelectStmt)
+	if _, err := binder.BindSelect(selPass); err != nil {
+		t.Errorf("expected aggregate query to succeed, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_Subquery_RecursiveIllegalWhereAggregate(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// Aggregate inside subquery WHERE must fail closed
+	sql := "SELECT id FROM users WHERE id IN (SELECT user_id FROM orders WHERE COUNT(*) > 1);"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for aggregate in subquery WHERE, got nil")
+	} else if !strings.Contains(err.Error(), "aggregate functions are not allowed in WHERE") {
+		t.Errorf("expected 'aggregate functions are not allowed in WHERE' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_ArithmeticTypeIncompatibility(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT name - name FROM users;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for varchar arithmetic subtraction, got nil")
+	} else if !strings.Contains(err.Error(), "operator does not exist") || !strings.Contains(err.Error(), "42883") {
+		t.Errorf("expected 42883 'operator does not exist' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_ScalarSubquery_MultiColumnRejection(t *testing.T) {
+	schemas := setupTestCatalog()
+	// Test IN subquery with multiple columns
+	sql := "SELECT id FROM users WHERE id IN (SELECT order_id, user_id FROM orders);"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for multi-column subquery, got nil")
+	} else if !strings.Contains(err.Error(), "subquery must return only one column") || !strings.Contains(err.Error(), "42601") {
+		t.Errorf("expected 42601 'subquery must return only one column' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_UnknownFunctionRejection(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT nonexistent_calc_fn(id) FROM users;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for unknown function, got nil")
+	} else if !strings.Contains(err.Error(), "does not exist") || !strings.Contains(err.Error(), "42883") {
+		t.Errorf("expected 42883 'function does not exist' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_HavingProjectionAlias(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT user_id, COUNT(*) AS total_orders FROM orders GROUP BY user_id HAVING total_orders > 10;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("expected HAVING projection alias query to succeed, got: %v", err)
+	}
+	if bound.Having == nil {
+		t.Fatalf("expected bound Having expression, got nil")
+	}
+}
+
+func TestBinder_Phase7_NestedAggregateRejection(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT SUM(COUNT(*)) FROM users;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	if _, err := binder.BindSelect(sel); err == nil {
+		t.Errorf("expected error for nested aggregates, got nil")
+	} else if !strings.Contains(err.Error(), "aggregate function calls cannot be nested") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'aggregate function calls cannot be nested' error, got: %v", err)
+	}
+}
+
+func TestBinder_Phase7_GroupBy_TableColumnPrimacy(t *testing.T) {
+	schemas := setupTestCatalog()
+	// Projection has alias 'name' for 'COUNT(*)', but table also has column 'name'.
+	// GROUP BY name must resolve to users.name (column 1, slot 1), NOT COUNT(*)!
+	sql := "SELECT COUNT(*) AS name, name FROM users GROUP BY name;"
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("expected query to succeed, got: %v", err)
+	}
+	if len(bound.GroupBy) != 1 {
+		t.Fatalf("expected 1 group by expr, got %d", len(bound.GroupBy))
+	}
+	colRef, ok := bound.GroupBy[0].(*planner.BoundColumnRef)
+	if !ok {
+		t.Fatalf("expected BoundColumnRef in GROUP BY, got: %T", bound.GroupBy[0])
+	}
+	if colRef.ColumnIdx != 1 || colRef.TupleSlot != 1 {
+		t.Errorf("expected GROUP BY to bind to table column users.name (col 1, slot 1), got col %d slot %d",
+			colRef.ColumnIdx, colRef.TupleSlot)
+	}
+}

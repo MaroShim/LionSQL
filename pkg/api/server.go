@@ -454,6 +454,12 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	return s.coordinator.ExecuteSessionSQLContext(ctx, sessionID, query)
 }
 
+// ExecutePointLookup executes a direct primary key point lookup bypassing Volcano CBO,
+// planner AST allocation, and iterator state machines.
+func (s *Server) ExecutePointLookup(sessID string, tableName string, pkVal storage.Value, projections []string) (*QueryResult, error) {
+	return s.coordinator.ExecutePointLookup(sessID, tableName, pkVal, projections)
+}
+
 // BeginSessionTx starts an interactive transaction on the specified session directly without query parsing overhead.
 func (s *Server) BeginSessionTx(sessionID string, opts storage.TxOptions) error {
 	return s.coordinator.BeginSessionTx(sessionID, opts)

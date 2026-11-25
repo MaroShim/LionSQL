@@ -38,8 +38,10 @@ func newScopeContext(parent *ScopeContext) *ScopeContext {
 // resolving all identifiers to physical table offsets, column indices, and data types,
 // and producing a typed BoundSelectStmt with support for hierarchical correlated subquery scopes.
 type Binder struct {
-	schemas map[string]*storage.TableSchema
-	current *ScopeContext
+	schemas           map[string]*storage.TableSchema
+	current           *ScopeContext
+	inAggregate       bool
+	havingProjections []BoundProjection
 }
 
 // NewBinder creates a dedicated Binder instance with the given catalog schemas.
@@ -94,16 +96,25 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 		cur.Tables = append(cur.Tables, tRef)
 		cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
 
-		if cleanTbl != "" {
-			cur.TableLookup[cleanTbl] = tableID
-		}
-		if bareTbl != "" {
-			cur.TableLookup[bareTbl] = tableID
-		}
 		if cleanAlias != "" {
+			if _, exists := cur.TableLookup[cleanAlias]; exists {
+				return nil, fmt.Errorf("table name or alias %q specified more than once", stmt.From.Alias)
+			}
 			cur.TableLookup[cleanAlias] = tableID
+		} else {
+			if cleanTbl != "" {
+				if _, exists := cur.TableLookup[cleanTbl]; exists {
+					return nil, fmt.Errorf("table name %q specified more than once", stmt.From.Name)
+				}
+				cur.TableLookup[cleanTbl] = tableID
+			}
+			if bareTbl != "" && bareTbl != cleanTbl {
+				cur.TableLookup[bareTbl] = tableID
+			}
 		}
-		cur.Scope.Register(stmt.From.Name, stmt.From.Alias, sch)
+		if err := cur.Scope.Register(stmt.From.Name, stmt.From.Alias, sch); err != nil {
+			return nil, err
+		}
 	}
 
 	// 3. Register joined relations (JOINs)
@@ -137,16 +148,25 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 			cur.Tables = append(cur.Tables, tRef)
 			cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
 
-			if cleanTbl != "" {
-				cur.TableLookup[cleanTbl] = tableID
-			}
-			if bareTbl != "" {
-				cur.TableLookup[bareTbl] = tableID
-			}
 			if cleanAlias != "" {
+				if _, exists := cur.TableLookup[cleanAlias]; exists {
+					return nil, fmt.Errorf("table name or alias %q specified more than once", j.Table.Alias)
+				}
 				cur.TableLookup[cleanAlias] = tableID
+			} else {
+				if cleanTbl != "" {
+					if _, exists := cur.TableLookup[cleanTbl]; exists {
+						return nil, fmt.Errorf("table name %q specified more than once", j.Table.Name)
+					}
+					cur.TableLookup[cleanTbl] = tableID
+				}
+				if bareTbl != "" && bareTbl != cleanTbl {
+					cur.TableLookup[bareTbl] = tableID
+				}
 			}
-			cur.Scope.Register(j.Table.Name, j.Table.Alias, sch)
+			if err := cur.Scope.Register(j.Table.Name, j.Table.Alias, sch); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -157,9 +177,69 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 		}
 	}
 
-	// 5. Bind Projections
+	// 5. Bind Projections (with full wildcard expansion for * and tbl.*)
 	var boundProjections []BoundProjection
 	for _, p := range stmt.Projections {
+		if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+			trimmedName := strings.TrimSpace(colRef.Name)
+			if trimmedName == "*" {
+				// Global wildcard: expand all columns across all registered tables in current scope
+				for tableID, tRef := range cur.Tables {
+					if tRef.Schema != nil {
+						slotBase := cur.SlotOffsets[tableID]
+						for colIdx, col := range tRef.Schema.Columns {
+							bCol := &BoundColumnRef{
+								Name:       col.Name,
+								TableName:  tRef.Name,
+								TableID:    tableID,
+								ColumnIdx:  colIdx,
+								TupleSlot:  slotBase + colIdx,
+								DataType:   col.Type,
+								OuterLevel: 0,
+							}
+							boundProjections = append(boundProjections, BoundProjection{
+								Expr:      bCol,
+								Alias:     col.Name,
+								Type:      col.Type,
+								TupleSlot: slotBase + colIdx,
+							})
+						}
+					}
+				}
+				continue
+			} else if strings.HasSuffix(trimmedName, ".*") {
+				// Table-qualified wildcard: e.g. "u.*" or "users.*"
+				tblPrefix := strings.TrimSuffix(trimmedName, ".*")
+				cleanTblPrefix := strings.ToLower(sqlutil.CleanIdentifier(tblPrefix))
+				tableID, ok := cur.TableLookup[cleanTblPrefix]
+				if !ok {
+					return nil, fmt.Errorf("table or alias %q does not exist in query scope", tblPrefix)
+				}
+				tRef := cur.Tables[tableID]
+				if tRef.Schema != nil {
+					slotBase := cur.SlotOffsets[tableID]
+					for colIdx, col := range tRef.Schema.Columns {
+						bCol := &BoundColumnRef{
+							Name:       col.Name,
+							TableName:  tRef.Name,
+							TableID:    tableID,
+							ColumnIdx:  colIdx,
+							TupleSlot:  slotBase + colIdx,
+							DataType:   col.Type,
+							OuterLevel: 0,
+						}
+						boundProjections = append(boundProjections, BoundProjection{
+							Expr:      bCol,
+							Alias:     col.Name,
+							Type:      col.Type,
+							TupleSlot: slotBase + colIdx,
+						})
+					}
+				}
+				continue
+			}
+		}
+
 		bExpr, err := b.bindExpr(p.Expr)
 		if err != nil {
 			return nil, err
@@ -215,7 +295,7 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 	// 8. Bind GROUP BY clauses
 	var boundGroupBy []BoundExpr
 	for _, g := range stmt.GroupBy {
-		bg, err := b.bindExpr(g)
+		bg, err := b.bindGroupBy(g, boundProjections)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +306,7 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 	var boundHaving BoundExpr
 	if stmt.Having != nil {
 		var err error
-		boundHaving, err = b.bindExpr(stmt.Having)
+		boundHaving, err = b.bindHaving(stmt.Having, boundProjections)
 		if err != nil {
 			return nil, err
 		}
@@ -416,6 +496,42 @@ func (b *Binder) bindOrderBy(expr proc.Expr) (BoundExpr, error) {
 	return b.bindExpr(expr)
 }
 
+func (b *Binder) bindGroupBy(expr proc.Expr, projections []BoundProjection) (BoundExpr, error) {
+	if expr == nil {
+		return nil, nil
+	}
+	// 1. Table column primacy: try resolving as normal table expression first
+	bound, err := b.bindExpr(expr)
+	if err == nil {
+		return bound, nil
+	}
+
+	// 2. If not found in tables, check if it matches a projection alias
+	if col, ok := expr.(*proc.ColumnRefExpr); ok {
+		clean := strings.ToLower(sqlutil.CleanIdentifier(col.Name))
+		for _, p := range projections {
+			if strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), clean) {
+				if bp, ok := p.Expr.(*BoundFunctionCall); ok && bp.IsAggregate {
+					return nil, fmt.Errorf("aggregate functions are not allowed in GROUP BY (SQLSTATE 42803)")
+				}
+				return p.Expr, nil
+			}
+		}
+	}
+	return nil, err
+}
+
+func (b *Binder) bindHaving(expr proc.Expr, projections []BoundProjection) (BoundExpr, error) {
+	if expr == nil {
+		return nil, nil
+	}
+	b.havingProjections = projections
+	defer func() {
+		b.havingProjections = nil
+	}()
+	return b.bindExpr(expr)
+}
+
 func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 	if expr == nil {
 		return nil, nil
@@ -423,6 +539,23 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 
 	switch e := expr.(type) {
 	case *proc.ColumnRefExpr:
+		if b.havingProjections != nil {
+			raw := strings.TrimSpace(e.Name)
+			parts := strings.Split(raw, ".")
+			if len(parts) == 1 {
+				// Try resolving from table scope first (table column primacy)
+				if bCol, err := b.ResolveColumn(e.Name); err == nil {
+					return bCol, nil
+				}
+				// If not in table, check projection aliases
+				clean := strings.ToLower(sqlutil.CleanIdentifier(raw))
+				for _, p := range b.havingProjections {
+					if strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), clean) {
+						return p.Expr, nil
+					}
+				}
+			}
+		}
 		return b.ResolveColumn(e.Name)
 
 	case *proc.LiteralExpr:
@@ -437,7 +570,10 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 		if err != nil {
 			return nil, err
 		}
-		resType := inferBinaryOpType(e.Op, left.BoundType(), right.BoundType())
+		resType, err := inferBinaryOpType(e.Op, left.BoundType(), right.BoundType())
+		if err != nil {
+			return nil, err
+		}
 		return &BoundBinaryExpr{
 			Left:       left,
 			Op:         e.Op,
@@ -461,20 +597,33 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 		}, nil
 
 	case *proc.FunctionCallExpr:
+		isAgg := proc.IsAggregateFunctionName(e.Name)
+		if isAgg && b.inAggregate {
+			return nil, fmt.Errorf("aggregate function calls cannot be nested (SQLSTATE 42803)")
+		}
+		prevInAgg := b.inAggregate
+		if isAgg {
+			b.inAggregate = true
+		}
 		var boundArgs []BoundExpr
 		for _, arg := range e.Args {
 			ba, err := b.bindExpr(arg)
 			if err != nil {
+				b.inAggregate = prevInAgg
 				return nil, err
 			}
 			boundArgs = append(boundArgs, ba)
 		}
-		retType := inferFunctionReturnType(e.Name, boundArgs)
+		b.inAggregate = prevInAgg
+		retType, err := inferFunctionReturnType(e.Name, boundArgs)
+		if err != nil {
+			return nil, err
+		}
 		return &BoundFunctionCall{
 			Name:        e.Name,
 			Args:        boundArgs,
 			ReturnType:  retType,
-			IsAggregate: proc.IsAggregateFunctionName(e.Name),
+			IsAggregate: isAgg,
 			HasOver:     e.HasOver,
 		}, nil
 
@@ -486,6 +635,9 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 			b.current = childScope.Parent
 			if err != nil {
 				return nil, err
+			}
+			if len(boundSubquery.Projections) > 1 {
+				return nil, fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", len(boundSubquery.Projections))
 			}
 			retType := storage.TypeUnknown
 			if len(boundSubquery.Projections) > 0 {
@@ -526,6 +678,9 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 			b.current = childScope.Parent
 			if err != nil {
 				return nil, err
+			}
+			if len(boundSubquery.Projections) > 1 {
+				return nil, fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", len(boundSubquery.Projections))
 			}
 			return &BoundInSubqueryExpr{
 				Expr:       left,
@@ -581,54 +736,99 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 	}
 }
 
-func inferBinaryOpType(op proc.TokenType, left, right storage.DataType) storage.DataType {
+func isNumericType(t storage.DataType) bool {
+	switch t {
+	case storage.TypeInt, storage.TypeFloat, storage.TypeDecimal, storage.TypeReal:
+		return true
+	default:
+		return false
+	}
+}
+
+func inferBinaryOpType(op proc.TokenType, left, right storage.DataType) (storage.DataType, error) {
 	switch op {
 	case proc.TokenEq, proc.TokenNeq, proc.TokenLt, proc.TokenLte, proc.TokenGt, proc.TokenGte,
 		proc.TokenLike, proc.TokenIn, proc.TokenAnd, proc.TokenOr, proc.TokenNot:
-		return storage.TypeBool
+		return storage.TypeBool, nil
 
-	case proc.TokenPlus, proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenPercent:
-		if left == storage.TypeVarChar || right == storage.TypeVarChar {
-			if op == proc.TokenPlus {
-				return storage.TypeVarChar
+	case proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenPercent:
+		if left != storage.TypeUnknown && right != storage.TypeUnknown {
+			if !isNumericType(left) || !isNumericType(right) {
+				return storage.TypeUnknown, fmt.Errorf("operator does not exist: %v %s %v (SQLSTATE 42883)", left, op.String(), right)
 			}
 		}
 		if left == storage.TypeFloat || right == storage.TypeFloat ||
 			left == storage.TypeReal || right == storage.TypeReal {
-			return storage.TypeFloat
+			return storage.TypeFloat, nil
 		}
 		if left == storage.TypeDecimal || right == storage.TypeDecimal {
-			return storage.TypeDecimal
+			return storage.TypeDecimal, nil
 		}
-		return storage.TypeInt
+		return storage.TypeInt, nil
+
+	case proc.TokenPlus:
+		if left == storage.TypeVarChar || right == storage.TypeVarChar {
+			return storage.TypeVarChar, nil
+		}
+		if left != storage.TypeUnknown && right != storage.TypeUnknown {
+			if !isNumericType(left) || !isNumericType(right) {
+				return storage.TypeUnknown, fmt.Errorf("operator does not exist: %v + %v (SQLSTATE 42883)", left, right)
+			}
+		}
+		if left == storage.TypeFloat || right == storage.TypeFloat ||
+			left == storage.TypeReal || right == storage.TypeReal {
+			return storage.TypeFloat, nil
+		}
+		if left == storage.TypeDecimal || right == storage.TypeDecimal {
+			return storage.TypeDecimal, nil
+		}
+		return storage.TypeInt, nil
 
 	default:
-		return storage.TypeUnknown
+		return storage.TypeUnknown, nil
 	}
 }
 
-func inferFunctionReturnType(name string, args []BoundExpr) storage.DataType {
+func inferFunctionReturnType(name string, args []BoundExpr) (storage.DataType, error) {
 	uName := strings.ToUpper(strings.TrimSpace(name))
 	switch uName {
 	case "COUNT":
-		return storage.TypeInt
+		return storage.TypeInt, nil
 	case "AVG":
-		return storage.TypeFloat
+		return storage.TypeFloat, nil
 	case "SUM", "MIN", "MAX":
-		if len(args) > 0 && args[0] != nil {
-			return args[0].BoundType()
+		if len(args) > 0 && args[0] != nil && args[0].BoundType() != storage.TypeUnknown {
+			return args[0].BoundType(), nil
 		}
-		return storage.TypeDecimal
+		return storage.TypeDecimal, nil
 	case "CONCAT", "SUBSTRING", "LOWER", "UPPER", "TRIM", "LEFT", "RIGHT", "REPLACE":
-		return storage.TypeVarChar
+		return storage.TypeVarChar, nil
 	case "ABS", "ROUND", "FLOOR", "CEILING":
-		if len(args) > 0 && args[0] != nil {
-			return args[0].BoundType()
+		if len(args) > 0 && args[0] != nil && args[0].BoundType() != storage.TypeUnknown {
+			return args[0].BoundType(), nil
 		}
-		return storage.TypeFloat
+		return storage.TypeFloat, nil
 	case "NOW", "GETDATE", "CURRENT_TIMESTAMP":
-		return storage.TypeDateTime
+		return storage.TypeDateTime, nil
+	case "COALESCE", "ISNULL", "NULLIF", "IIF":
+		if len(args) > 0 && args[0] != nil {
+			return args[0].BoundType(), nil
+		}
+		return storage.TypeUnknown, nil
+	case "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE":
+		return storage.TypeInt, nil
+	case "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE":
+		if len(args) > 0 && args[0] != nil {
+			return args[0].BoundType(), nil
+		}
+		return storage.TypeUnknown, nil
 	default:
-		return storage.TypeUnknown
+		if proc.IsBuiltinFunction(name) {
+			return storage.TypeUnknown, nil
+		}
+		if proc.IsAggregateFunctionName(name) {
+			return storage.TypeUnknown, nil
+		}
+		return storage.TypeUnknown, fmt.Errorf("function %q does not exist (SQLSTATE 42883)", name)
 	}
 }

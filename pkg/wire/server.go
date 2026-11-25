@@ -374,15 +374,24 @@ func (s *Server) acceptLoop() {
 	}
 }
 
+type PointLookupPlan struct {
+	TableName   string
+	Schema      *storage.TableSchema
+	PKColumn    string
+	ParamIndex  int
+	Projections []string
+}
+
 type PreparedStatement struct {
-	Name           string
-	Query          string
-	ParamTypes     []int32
-	Program        *proc.Program
-	ProcParamNames []string
-	ColumnNames    []string
-	ColumnOIDs     []int32
-	NoData         bool
+	Name            string
+	Query           string
+	ParamTypes      []int32
+	Program         *proc.Program
+	ProcParamNames  []string
+	PointLookupPlan *PointLookupPlan
+	ColumnNames     []string
+	ColumnOIDs      []int32
+	NoData          bool
 }
 
 type Portal struct {
@@ -1002,6 +1011,32 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 		ParamTypes: paramTypes,
 	}
 
+	// Fast-path Point Lookup pre-binding for single-table PK lookups
+	if s.engine != nil {
+		if cand := engine.ParsePointLookupCandidate(queryStr); cand != nil && cand.ParamMarker != "" {
+			if sch, err := s.engine.GetTable(cand.TableName); err == nil && sch != nil && sch.HasPrimaryKey() && !sch.IsCompositePK() {
+				if pkCol, _ := sch.PrimaryKeyColumn(); pkCol != nil && strings.EqualFold(pkCol.Name, cand.PKColumn) {
+					paramIdx := 0
+					if strings.HasPrefix(cand.ParamMarker, "$") {
+						if pNum, err := strconv.Atoi(cand.ParamMarker[1:]); err == nil && pNum >= 1 {
+							paramIdx = pNum - 1
+						}
+					}
+					prep.PointLookupPlan = &PointLookupPlan{
+						TableName:   sch.Name,
+						Schema:      sch,
+						PKColumn:    pkCol.Name,
+						ParamIndex:  paramIdx,
+						Projections: cand.Projections,
+					}
+					if paramIdx < len(prep.ParamTypes) && prep.ParamTypes[paramIdx] == 0 {
+						prep.ParamTypes[paramIdx] = typeToPgOID(pkCol.Type)
+					}
+				}
+			}
+		}
+	}
+
 	qc := proc.ExtractQueryCharacteristics(queryStr)
 	if canCompileToVDBE(queryStr, qc) && !s.referencesCatalogView(qc) {
 		if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
@@ -1390,6 +1425,40 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	if stmt != nil && stmt.NoData {
 		_ = WriteNoData(conn)
 		return
+	}
+
+	if stmt != nil && stmt.PointLookupPlan != nil {
+		plan := stmt.PointLookupPlan
+		tbl := plan.Schema
+		var cols []ColumnMeta
+		isWildcard := len(plan.Projections) == 0 || (len(plan.Projections) == 1 && strings.TrimSpace(plan.Projections[0]) == "*")
+		if isWildcard {
+			cols = make([]ColumnMeta, len(tbl.Columns))
+			for i, col := range tbl.Columns {
+				cols[i] = ColumnMeta{Name: col.Name, DataType: typeToPgOID(col.Type)}
+			}
+		} else {
+			for _, p := range plan.Projections {
+				expr, alias, hasAs := sqlutil.SplitAsAlias(p)
+				var colTarget, aliasTarget string
+				if hasAs {
+					colTarget = cleanColumnIdentifier(expr)
+					aliasTarget = cleanColumnIdentifier(alias)
+				} else {
+					colTarget = cleanColumnIdentifier(p)
+					aliasTarget = colTarget
+				}
+				if col, _, ok := tbl.FindColumn(colTarget); ok {
+					cols = append(cols, ColumnMeta{Name: aliasTarget, DataType: typeToPgOID(col.Type)})
+				}
+			}
+		}
+		if len(cols) > 0 {
+			recordCols(cols)
+			applyFormats(cols)
+			_ = WriteRowDescription(conn, cols)
+			return
+		}
 	}
 
 	if stmt != nil && len(stmt.ColumnOIDs) > 0 {
@@ -1789,6 +1858,34 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	// 1. If not yet executed, execute the query and cache the result in the portal
 	if !portal.Executed {
+		// Fast-Path: Point Lookup directly to storage engine bypassing VDBE VM and Volcano CBO
+		if portal.Statement != nil && portal.Statement.PointLookupPlan != nil {
+			plan := portal.Statement.PointLookupPlan
+			var pkVal storage.Value
+			if plan.ParamIndex < len(portal.ParamValues) && portal.ParamValues[plan.ParamIndex].Type != storage.TypeUnknown {
+				pkVal = portal.ParamValues[plan.ParamIndex]
+			} else if plan.ParamIndex < len(portal.Params) {
+				paramStr := portal.Params[plan.ParamIndex]
+				pkCol, _ := plan.Schema.PrimaryKeyColumn()
+				if pkCol != nil && pkCol.Type == storage.TypeInt {
+					if iv, err := strconv.ParseInt(paramStr, 10, 64); err == nil {
+						pkVal = storage.IntValue(iv)
+					}
+				}
+				if pkVal.Type == storage.TypeUnknown {
+					pkVal = storage.StringValue(paramStr)
+				}
+			}
+			res, err := s.coordinator.ExecutePointLookup(sessID, plan.TableName, pkVal, plan.Projections)
+			if err != nil {
+				_ = WriteError(conn, err.Error())
+				return
+			}
+			portal.Result = res
+			portal.Pos = 0
+			portal.Executed = true
+		}
+
 		// Fast-Path: Execute via precompiled VDBE bytecode Program if available.
 		// Supports both active session transaction (RunInTx) and autocommit session execution,
 		// eliminating parameter string substitution and SQL re-parsing overhead (PERF-PGWIRE-PREP-TX).
@@ -2265,6 +2362,36 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	if sessID == "" {
 		sessID = "default"
 	}
+
+	// Fast-Path: Direct Point Lookup on single PK with literal value (Simple Query Protocol)
+	if s.coordinator != nil && s.engine != nil {
+		if cand := engine.ParsePointLookupCandidate(trimmed); cand != nil && cand.LiteralValue != "" {
+			if s.coordinator.GetSessionTxStatus(sessID) == 'E' {
+				_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+				return
+			}
+			var pkVal storage.Value
+			valPart := cand.LiteralValue
+			if strings.HasPrefix(valPart, "'") && strings.HasSuffix(valPart, "'") && len(valPart) >= 2 {
+				sVal := valPart[1 : len(valPart)-1]
+				sVal = strings.ReplaceAll(sVal, "''", "'")
+				pkVal = storage.StringValue(sVal)
+			} else if iVal, err := strconv.ParseInt(valPart, 10, 64); err == nil {
+				pkVal = storage.IntValue(iVal)
+			}
+			if pkVal.Type != storage.TypeUnknown {
+				if sch, err := s.engine.GetTable(cand.TableName); err == nil && sch != nil && sch.HasPrimaryKey() && !sch.IsCompositePK() {
+					if pkCol, _ := sch.PrimaryKeyColumn(); pkCol != nil && strings.EqualFold(pkCol.Name, cand.PKColumn) {
+						if res, err := s.coordinator.ExecutePointLookup(sessID, cand.TableName, pkVal, cand.Projections); err == nil && res != nil {
+							s.writeQueryResult(conn, res, trimmed, writeRowDesc, resultFormats)
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+
 	res, err := s.coordinator.ExecuteSessionSQL(sessID, trimmed)
 	if err != nil {
 		log.Printf("[DEV][PGWire][Error] query=%s err=%v", trimmed, err)
@@ -2275,6 +2402,10 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		log.Printf("[DEV][PGWire][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
+	s.writeQueryResult(conn, res, trimmed, writeRowDesc, resultFormats)
+}
+
+func (s *Server) writeQueryResult(conn io.Writer, res *engine.QueryResult, query string, writeRowDesc bool, resultFormats []int16) {
 	bw := getBufioWriter(conn)
 	defer putBufioWriter(bw)
 	defer func() { _ = bw.Flush() }()
@@ -2316,7 +2447,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		} else {
 			cmd := cur.Command
 			if cmd == "" {
-				cmd = trimmed
+				cmd = query
 			}
 			_ = WriteCommandComplete(bw, formatPgCommandComplete(cmd, cur.RowsAffected, len(cur.Rows)))
 		}
