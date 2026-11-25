@@ -540,7 +540,7 @@
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
 | `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.95.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.96.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
@@ -652,7 +652,7 @@
 | `DONE` | **`TX-RIGOR-PHASE-1`** | `v0.95.0` | 1 | P1 | Engine | [`세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)`](세션-트랜잭션 상태 머신 및 오토커밋 엄밀성 TDD 검증 (오토커밋 전이, @@TRANCOUNT, 중첩 롤백, 세이브포인트 스택)) |  |
 | `DONE` | **`TX-RIGOR-PHASE-2`** | `v0.95.0` | 1 | P1 | Engine | [`커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)`](커서-트랜잭션 생명주기 및 폐기 정합성 TDD 검증 (WITH HOLD 커밋 생존, ROLLBACK 전체 파괴, 저수준 커서 누수 방지)) |  |
 | `DONE` | **`TX-RIGOR-PHASE-3`** | `v0.95.0` | 1 | P1 | Engine | [`트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)`](트랜잭션 에러 격리 및 비정상 연결 단절 TDD 검증 (SQLSTATE 25P02, Disconnect 강제 롤백, 유휴 타임아웃)) |  |
-| `PENDING` | **`TX-RIGOR-PHASE-4`** | `v0.95.0` | 1 | P1 | Engine | [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)) |  |
+| `DONE` | **`TX-RIGOR-PHASE-4`** | `v0.95.0` | 1 | P1 | Engine | [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)) |  |
 | `DONE` | **`TX-RIGOR-STAGE-2`** | `v0.95.0` | 1 | P2 | 트랜잭셔널 DDL 및 임시 객체(#temp vs @var) 차등 롤백 TDD 검증 | [`doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md`](doc/internal/TX_MODULE_RIGOROUS_TEST_SPEC.ko.md) |  |
 | `DONE` | **`WAL-DELTA-1`** | `Spec-Out` | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
 | `DONE` | **`WEB-SPA-1`** |  | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
@@ -5251,8 +5251,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) `PERF-JOIN-AGG-OPERATOR-FUSION-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 00:32:32
-- **Milestone**: `v0.95.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 02:57:59
+- **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -6142,8 +6142,8 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 
 ---
 
-### [PENDING] Engine `TX-RIGOR-PHASE-4`
-- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 01:00:19
+### [DONE] Engine `TX-RIGOR-PHASE-4`
+- **Domain**: 1 | **Priority**: P1 | **Updated**: 2026-11-25 03:01:28
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스)`](다중 세션 동시성 격리 및 카오스 스트레스 TDD 검증 (비차단 읽기, Write-Write 충돌, 32워커 카오스 레이스))
 

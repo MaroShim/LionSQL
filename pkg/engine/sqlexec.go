@@ -1124,12 +1124,20 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	if sqlutil.HasPrefixKeyword(trimmed, "ROLLBACK") {
 		var spName string
-		if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK WORK TO SAVEPOINT", "ROLLBACK TO SAVEPOINT", "ROLLBACK TO"); ok {
+		if rest, ok := trimAnyPrefix(upper, trimmed,
+			"ROLLBACK TRANSACTION TO SAVEPOINT", "ROLLBACK TRAN TO SAVEPOINT", "ROLLBACK WORK TO SAVEPOINT", "ROLLBACK TO SAVEPOINT",
+			"ROLLBACK TRANSACTION TO", "ROLLBACK TRAN TO", "ROLLBACK WORK TO", "ROLLBACK TO"); ok {
 			spName = cleanSavepointName(rest)
 		} else if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK TRANSACTION", "ROLLBACK TRAN"); ok {
 			rem := cleanSavepointName(rest)
 			if rem != "" && !strings.EqualFold(rem, "WORK") {
-				spName = rem
+				if stripped, hasTo := sqlutil.TrimPrefixKeyword(rem, "TO SAVEPOINT"); hasTo {
+					spName = cleanSavepointName(stripped)
+				} else if stripped, hasTo := sqlutil.TrimPrefixKeyword(rem, "TO"); hasTo {
+					spName = cleanSavepointName(stripped)
+				} else {
+					spName = rem
+				}
 			}
 		}
 
