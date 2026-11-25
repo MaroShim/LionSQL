@@ -68,16 +68,16 @@ START_TS=$(date +%s)
 log_stage "[Stage 1/4] Building Production Binaries (-tags wiredtiger)"
 mkdir -p bin
 
-go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
+go build -tags wiredtiger -ldflags="-s -w" -buildvcs=false -o bin/lionsql ./cmd/lionsql
 echo -e "  [${CLR_GREEN}BUILT${CLR_RESET}] bin/lionsql"
 
-go build -tags wiredtiger -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
+go build -tags wiredtiger -ldflags="-s -w" -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
 echo -e "  [${CLR_GREEN}BUILT${CLR_RESET}] bin/sqllogictest"
 
-go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+go build -tags wiredtiger -ldflags="-s -w" -buildvcs=false -o bin/bench ./cmd/bench
 echo -e "  [${CLR_GREEN}BUILT${CLR_RESET}] bin/bench"
 
-go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
+go build -tags wiredtiger -ldflags="-s -w" -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 echo -e "  [${CLR_GREEN}BUILT${CLR_RESET}] bin/tpcc-runtime"
 
 # ------------------------------------------------------------------------------

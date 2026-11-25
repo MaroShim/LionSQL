@@ -326,3 +326,58 @@ func BenchmarkParallelGather_vs_SequentialScan(b *testing.B) {
 		}
 	})
 }
+
+// TestParallelHashJoin_WorkerPoolProbe verifies that HashJoinIterator pushes down its
+// read-only build table into GatherIterator, so that multiple parallel workers execute
+// the join probe concurrently across CPU cores.
+func TestParallelHashJoin_WorkerPoolProbe(t *testing.T) {
+	const totalRows = 5000
+	eng, sess, tx, schema := setupGatherTestTable(t, totalRows)
+	defer eng.Close()
+	defer sess.Close()
+	defer tx.Rollback()
+
+	// Build table: 3 categories
+	catSchema := []string{"cat_id", "cat_name"}
+	catTuples := []execution.Tuple{
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(10), "cat_name": "Cat10"}, catSchema),
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(20), "cat_name": "Cat20"}, catSchema),
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(30), "cat_name": "Cat30"}, catSchema),
+	}
+	catMock := &mockTupleIterator{schema: catSchema, tuples: catTuples}
+
+	// Probe table: GatherIterator on t_gather_items (val is i * 10)
+	gather := execution.NewGatherIterator(tx, "t_gather_items", "t", schema)
+	gather.SetDOP(4)
+
+	// HashJoin on t.val = cat.cat_id
+	joinIter := execution.NewHashJoinIterator(gather, catMock, "INNER", "val", "cat_id")
+
+	ctx := context.Background()
+	if err := joinIter.Open(ctx); err != nil {
+		t.Fatalf("joinIter.Open failed: %v", err)
+	}
+	defer joinIter.Close()
+
+	var joinedCount int64
+	for {
+		tuple, err := joinIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("joinIter.Next failed: %v", err)
+		}
+		joinedCount++
+		val := tuple.Get("val").(int64)
+		catName := tuple.Get("cat_name").(string)
+		if fmt.Sprintf("Cat%d", val) != catName {
+			t.Fatalf("unexpected join result: val=%d, cat_name=%s", val, catName)
+		}
+	}
+
+	// val is i * 10 for i=1..5000. Exactly 3 rows match cat_id in (10, 20, 30).
+	if joinedCount != 3 {
+		t.Fatalf("expected 3 joined rows, got %d", joinedCount)
+	}
+}

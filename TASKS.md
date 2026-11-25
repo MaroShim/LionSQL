@@ -559,7 +559,7 @@
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
@@ -5387,8 +5387,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) `PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:01:06
+### [DONE] Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) `PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:35:10
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
 

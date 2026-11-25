@@ -97,11 +97,12 @@ type HashJoinIterator struct {
 	inIdx            int
 	outChunk         Chunk
 	outIdx           int
-	arena            *storage.Arena
-	ownedArena       *storage.Arena
-	joinFilter       string
-	parsedJoinFilter proc.Expr
-	hasJoinFilter    bool
+	arena               *storage.Arena
+	ownedArena          *storage.Arena
+	joinFilter          string
+	parsedJoinFilter    proc.Expr
+	hasJoinFilter       bool
+	parallelProbeActive bool
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -412,20 +413,79 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		h.intHashTable = nil // Free map memory; flatIntTable handles 100% of probes
 	}
 
-	// 2. Probe phase: open probe child
-	if err := probeIter.Open(ctx); err != nil {
-		return fmt.Errorf("hash join probe open error: %w", err)
-	}
-
 	if h.joinType == "SEMI" || h.joinType == "ANTI" {
 		h.colIndexMap = h.left.ColIndexMap()
 	} else {
 		h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
 	}
+
+	// [PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1] Parallel Hash Join Activation:
+	// If probe child is GatherIterator (parallel scan worker pool) and build table is materialized,
+	// push down read-only build table into GatherIterator so 8 workers probe and merge in parallel.
+	if (h.joinType == "INNER" || h.joinType == "LEFT") && (h.isFlatIntTable || len(h.intHashTable) > 0) {
+		if gather := findGatherIterator(probeIter); gather != nil {
+			var probeKeyIdx int
+			var probeKey string
+			if h.buildSide == "LEFT" {
+				probeKeyIdx = h.rightKeyIdx
+				probeKey = h.rightKey
+			} else {
+				probeKeyIdx = h.leftKeyIdx
+				probeKey = h.leftKey
+			}
+			if probeKeyIdx >= 0 {
+				var buildColsCount int
+				if h.buildSide == "LEFT" {
+					if h.left.ColIndexMap() != nil {
+						buildColsCount = len(h.left.ColIndexMap().Columns())
+					}
+				} else {
+					if h.right.ColIndexMap() != nil {
+						buildColsCount = len(h.right.ColIndexMap().Columns())
+					}
+				}
+				gather.SetParallelJoin(&ParallelJoinConfig{
+					IsFlatIntTable:   h.isFlatIntTable,
+					FlatIntTable:     h.flatIntTable,
+					FlatIntMask:      h.flatIntMask,
+					IntHashTable:     h.intHashTable,
+					ProbeKeyIdx:      probeKeyIdx,
+					ProbeKey:         probeKey,
+					JoinColMap:       h.colIndexMap,
+					JoinType:         h.joinType,
+					BuildRight:       h.buildSide != "LEFT",
+					BuildColsCount:   buildColsCount,
+					ParsedJoinFilter: h.parsedJoinFilter,
+				})
+				h.parallelProbeActive = true
+			}
+		}
+	}
+
+	// 2. Probe phase: open probe child
+	if err := probeIter.Open(ctx); err != nil {
+		return fmt.Errorf("hash join probe open error: %w", err)
+	}
+
 	h.currentProbe = Tuple{}
 	h.currentMatches = nil
 	h.matchIdx = 0
 	h.emittedAny = false
+	return nil
+}
+
+func findGatherIterator(it Iterator) *GatherIterator {
+	curr := it
+	for curr != nil {
+		if g, ok := curr.(*GatherIterator); ok {
+			return g
+		}
+		if inst, ok := curr.(*InstrumentedIterator); ok {
+			curr = inst.child
+			continue
+		}
+		break
+	}
 	return nil
 }
 
@@ -695,8 +755,29 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 	}
 }
 
+func (h *HashJoinIterator) getProbeIter() Iterator {
+	if h.buildSide == "LEFT" {
+		return h.right
+	}
+	return h.left
+}
+
 func (h *HashJoinIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	dest.Reset()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	if h.parallelProbeActive {
+		pIter := h.getProbeIter()
+		if ci, ok := pIter.(ChunkedIterator); ok {
+			return ci.NextChunk(ctx, dest)
+		}
+		return PullChunk(ctx, pIter, dest, DefaultChunkSize)
+	}
+
 	for dest.Len() < DefaultChunkSize {
 		t, err := h.nextTuple(ctx)
 		if err != nil {
@@ -730,6 +811,7 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 }
 
 func (h *HashJoinIterator) Close() error {
+	h.parallelProbeActive = false
 	h.hashTable = nil
 	h.intHashTable = nil
 	h.flatIntTable = nil

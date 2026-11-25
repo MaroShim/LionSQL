@@ -212,7 +212,7 @@ if [ "$SKIP_BUILD" = false ]; then
         name="${item%%:*}"
         pkg="${item##*:}"
         log_sub "Building ${name} (from ./${pkg})..."
-        if go build -tags wiredtiger -buildvcs=false -o "${BIN_DIR}/${name}" "./${pkg}" >>"$LOG_FILE" 2>&1; then
+        if go build -tags wiredtiger -ldflags="-s -w" -buildvcs=false -o "${BIN_DIR}/${name}" "./${pkg}" >>"$LOG_FILE" 2>&1; then
             echo -e "    [${CLR_GREEN}BUILT${CLR_RESET}] ${BIN_DIR}/${name}"
         else
             echo -e "    [${CLR_RED}FAIL${CLR_RESET}] Failed to build ${name}. Check ${LOG_FILE}"

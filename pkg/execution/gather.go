@@ -53,6 +53,7 @@ type GatherIterator struct {
 	filterExpr   proc.Expr
 	arena        *storage.Arena
 	dop          int
+	parallelJoin *ParallelJoinConfig
 
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -86,6 +87,31 @@ func (g *GatherIterator) SetDOP(dop int) {
 // SetArena configures an optional memory arena for zero-GC tuple allocation.
 func (g *GatherIterator) SetArena(a *storage.Arena) {
 	g.arena = a
+}
+
+// ParallelJoinConfig holds read-only build table and metadata for multi-worker parallel hash join.
+type ParallelJoinConfig struct {
+	IsFlatIntTable   bool
+	FlatIntTable     []flatHashSlot
+	FlatIntMask      int
+	IntHashTable     map[int64][]hashMatch
+	ProbeKeyIdx      int
+	ProbeKey         string
+	JoinColMap       *ColumnIndexMap
+	JoinType         string // "INNER" or "LEFT"
+	BuildRight       bool   // true if left is probe and right is build
+	BuildColsCount   int
+	ParsedJoinFilter proc.Expr
+}
+
+// SetParallelJoin configures parallel hash join probe pushdown for worker goroutines.
+func (g *GatherIterator) SetParallelJoin(cfg *ParallelJoinConfig) {
+	g.parallelJoin = cfg
+}
+
+// ParallelJoin returns the active parallel join configuration, if any.
+func (g *GatherIterator) ParallelJoin() *ParallelJoinConfig {
+	return g.parallelJoin
 }
 
 // SetRequiredCols configures selective column decoding for projection pushdown.
@@ -244,25 +270,43 @@ func (g *GatherIterator) Open(ctx context.Context) error {
 							}
 						}
 
+						var t Tuple
 						if hasSelection {
 							if row, dErr := storage.DecodeTupleSelectedWithArena(g.schema, rawData, g.requiredCols, g.arena); dErr == nil {
-								chunk.Tuples = append(chunk.Tuples, FormatRowWithSelectedCols(row, g.schema, g.alias, g.colIndexMap, g.requiredCols, g.arena))
-								continue
+								t = FormatRowWithSelectedCols(row, g.schema, g.alias, g.colIndexMap, g.requiredCols, g.arena)
+							}
+						}
+						if t.IsNil() {
+							if lazy, lErr := storage.NewLazyTuple(g.schema, rawData); lErr == nil {
+								var vals []any
+								if g.arena != nil {
+									vals = g.arena.AllocAnySlice(len(g.schema.Columns))
+								} else {
+									vals = make([]any, len(g.schema.Columns))
+								}
+								t = Tuple{
+									Values: vals,
+									Index:  g.colIndexMap,
+									Lazy:   lazy,
+								}
 							}
 						}
 
-						if lazy, lErr := storage.NewLazyTuple(g.schema, rawData); lErr == nil {
-							var vals []any
-							if g.arena != nil {
-								vals = g.arena.AllocAnySlice(len(g.schema.Columns))
+						if !t.IsNil() {
+							if g.parallelJoin != nil {
+								g.probeAndAppendJoinTuple(chunk, t)
 							} else {
-								vals = make([]any, len(g.schema.Columns))
+								chunk.Tuples = append(chunk.Tuples, t)
 							}
-							chunk.Tuples = append(chunk.Tuples, Tuple{
-								Values: vals,
-								Index:  g.colIndexMap,
-								Lazy:   lazy,
-							})
+							if chunk.Len() >= DefaultChunkSize {
+								select {
+								case g.chunkCh <- chunk:
+									chunk = GetChunk()
+								case <-workerCtx.Done():
+									PutChunk(chunk)
+									return
+								}
+							}
 						}
 					}
 				} else {
@@ -279,7 +323,20 @@ func (g *GatherIterator) Open(ctx context.Context) error {
 								continue
 							}
 						}
-						chunk.Tuples = append(chunk.Tuples, t)
+						if g.parallelJoin != nil {
+							g.probeAndAppendJoinTuple(chunk, t)
+						} else {
+							chunk.Tuples = append(chunk.Tuples, t)
+						}
+						if chunk.Len() >= DefaultChunkSize {
+							select {
+							case g.chunkCh <- chunk:
+								chunk = GetChunk()
+							case <-workerCtx.Done():
+								PutChunk(chunk)
+								return
+							}
+						}
 					}
 				}
 
@@ -388,6 +445,9 @@ func (g *GatherIterator) Close() error {
 
 // Schema returns the output column names for this operator.
 func (g *GatherIterator) Schema() []string {
+	if g.parallelJoin != nil && g.parallelJoin.JoinColMap != nil {
+		return g.parallelJoin.JoinColMap.Columns()
+	}
 	if g.colIndexMap != nil {
 		return g.colIndexMap.cols
 	}
@@ -403,5 +463,98 @@ func (g *GatherIterator) Schema() []string {
 
 // ColIndexMap returns the column index map for O(1) resolution and join composition.
 func (g *GatherIterator) ColIndexMap() *ColumnIndexMap {
+	if g.parallelJoin != nil && g.parallelJoin.JoinColMap != nil {
+		return g.parallelJoin.JoinColMap
+	}
 	return g.colIndexMap
+}
+
+func (g *GatherIterator) probeAndAppendJoinTuple(chunk *Chunk, t Tuple) {
+	cfg := g.parallelJoin
+	if cfg == nil {
+		chunk.Tuples = append(chunk.Tuples, t)
+		return
+	}
+	val, ok := t.GetIdx(cfg.ProbeKeyIdx)
+	if !ok || val == nil {
+		if cfg.JoinType == "LEFT" && cfg.BuildRight {
+			merged := mergeTuplesWithNullsAndArena(t, cfg.BuildColsCount, cfg.JoinColMap, g.arena)
+			chunk.Tuples = append(chunk.Tuples, merged)
+		}
+		return
+	}
+	iKey, isInt := toInt64Fast(val)
+	if !isInt {
+		if cfg.JoinType == "LEFT" && cfg.BuildRight {
+			merged := mergeTuplesWithNullsAndArena(t, cfg.BuildColsCount, cfg.JoinColMap, g.arena)
+			chunk.Tuples = append(chunk.Tuples, merged)
+		}
+		return
+	}
+
+	found := false
+	if cfg.IsFlatIntTable {
+		slot := int(splitmix64(uint64(iKey)) & uint64(cfg.FlatIntMask))
+		for cfg.FlatIntTable[slot].used {
+			if cfg.FlatIntTable[slot].key == iKey {
+				found = true
+				buildTuple := cfg.FlatIntTable[slot].tuple
+				merged := mergeTuplesDirect(t, buildTuple, cfg.BuildRight, cfg.JoinColMap, g.arena)
+				if cfg.ParsedJoinFilter == nil || g.evalJoinFilter(merged, cfg.ParsedJoinFilter) {
+					chunk.Tuples = append(chunk.Tuples, merged)
+				}
+			}
+			slot = (slot + 1) & cfg.FlatIntMask
+		}
+	} else if len(cfg.IntHashTable) > 0 {
+		if matches, exists := cfg.IntHashTable[iKey]; exists {
+			for _, m := range matches {
+				found = true
+				merged := mergeTuplesDirect(t, m.tuple, cfg.BuildRight, cfg.JoinColMap, g.arena)
+				if cfg.ParsedJoinFilter == nil || g.evalJoinFilter(merged, cfg.ParsedJoinFilter) {
+					chunk.Tuples = append(chunk.Tuples, merged)
+				}
+			}
+		}
+	}
+
+	if !found && cfg.JoinType == "LEFT" && cfg.BuildRight {
+		merged := mergeTuplesWithNullsAndArena(t, cfg.BuildColsCount, cfg.JoinColMap, g.arena)
+		chunk.Tuples = append(chunk.Tuples, merged)
+	}
+}
+
+func (g *GatherIterator) evalJoinFilter(t Tuple, filter proc.Expr) bool {
+	matched, _ := EvalTupleBoolExprWithContextErr(t, filter, nil, nil)
+	return matched
+}
+
+func mergeTuplesDirect(probeTuple, buildTuple Tuple, buildRight bool, colMap *ColumnIndexMap, arena *storage.Arena) Tuple {
+	if probeTuple.Lazy != nil {
+		probeTuple.Materialize()
+	}
+	if buildTuple.Lazy != nil {
+		buildTuple.Materialize()
+	}
+	var leftVals, rightVals []any
+	if buildRight {
+		leftVals = probeTuple.Values
+		rightVals = buildTuple.Values
+	} else {
+		leftVals = buildTuple.Values
+		rightVals = probeTuple.Values
+	}
+	totalLen := len(leftVals) + len(rightVals)
+	var vals []any
+	if arena != nil {
+		vals = arena.AllocAnySlice(totalLen)
+	} else {
+		vals = make([]any, totalLen)
+	}
+	copy(vals, leftVals)
+	copy(vals[len(leftVals):], rightVals)
+	return Tuple{
+		Values: vals,
+		Index:  colMap,
+	}
 }
