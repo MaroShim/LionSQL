@@ -558,6 +558,12 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 	var accumulatedMessages []string
 	var headRes *QueryResult
 	var tailRes *QueryResult
+
+	initialTranCount := 0
+	if cs != nil {
+		initialTranCount = cs.TranCount()
+	}
+
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
@@ -595,6 +601,18 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 				s.Metrics().RecordTransaction("conflict")
 			}
 			if cs != nil {
+				// [RULE:CleanTeardown] Semicolon batch atomicity:
+				// If a multi-statement batch initiated an explicit transaction (initialTranCount == 0 && cs.TranCount() > 0)
+				// and failed mid-batch, cleanly rollback the abandoned transaction to prevent dangling transaction leaks and uncommitted mutations.
+				if len(stmts) > 1 && initialTranCount == 0 && cs.TranCount() > 0 {
+					if cs.TxMgr != nil {
+						_ = cs.TxMgr.Rollback(context.Background())
+					} else if cs.Tx() != nil {
+						_ = cs.Tx().Rollback()
+					}
+					cs.ResetTranCount()
+					cs.ClearTxFailed()
+				}
 				cs.Mu.Lock()
 				errNum := int64(50000)
 				type tdsErrorDescriber interface {
