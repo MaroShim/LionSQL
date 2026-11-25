@@ -326,3 +326,28 @@ func TestContract_DML_PositiveValidStatements(t *testing.T) {
 		})
 	}
 }
+
+// -----------------------------------------------------------------------------
+// 6. VALUES Scope Validation Contract Tests
+// -----------------------------------------------------------------------------
+func TestContract_DML_ValuesScopeValidation(t *testing.T) {
+	schemas := setupDMLContractCatalog()
+
+	// 1. Aggregate in VALUES tuple -> rejected
+	err := parseAndValidateDML(t, "INSERT INTO users (id, name, age) VALUES (1, 'Alice', COUNT(*))", schemas)
+	if err == nil || !strings.Contains(err.Error(), "aggregate functions are not allowed in VALUES") {
+		t.Errorf("expected aggregate in VALUES to be rejected, got: %v", err)
+	}
+
+	// 2. Window function in VALUES tuple -> rejected
+	err = parseAndValidateDML(t, "INSERT INTO users (id, name, age) VALUES (1, 'Alice', ROW_NUMBER() OVER ())", schemas)
+	if err == nil || !strings.Contains(err.Error(), "window functions are not allowed in VALUES") {
+		t.Errorf("expected window function in VALUES to be rejected, got: %v", err)
+	}
+
+	// 3. Normal scalar functions in VALUES tuple -> permitted (PASS)
+	if err := parseAndValidateDML(t, "INSERT INTO users (id, name, age) VALUES (1, UPPER('Alice'), ABS(-30))", schemas); err != nil {
+		t.Errorf("expected scalar functions in VALUES to pass, got: %v", err)
+	}
+}
+

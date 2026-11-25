@@ -505,3 +505,62 @@ func TestContract_CommonFilterExpression(t *testing.T) {
 	}
 }
 
+// -----------------------------------------------------------------------------
+// 12. ORDER BY & GROUP BY Subquery Arity Contract Tests
+// -----------------------------------------------------------------------------
+func TestContract_OrderByAndGroupBySubqueryArity(t *testing.T) {
+	schemas := setupContractCatalog()
+
+	// 1. ORDER BY with multi-column scalar subquery -> 42601
+	err := parseAndValidate(t, "SELECT id FROM users ORDER BY (SELECT order_id, amount FROM orders);", schemas)
+	if err == nil || !strings.Contains(err.Error(), "42601") || !strings.Contains(err.Error(), "must return only one column") {
+		t.Errorf("expected 42601 for multi-column subquery in ORDER BY, got: %v", err)
+	}
+
+	// 2. ORDER BY with single-column scalar subquery -> PASS
+	if err := parseAndValidate(t, "SELECT id FROM users ORDER BY (SELECT order_id FROM orders LIMIT 1);", schemas); err != nil {
+		t.Errorf("expected single-column subquery in ORDER BY to pass, got: %v", err)
+	}
+
+	// 3. GROUP BY with multi-column scalar subquery -> 42601
+	err = parseAndValidate(t, "SELECT count(*) FROM users GROUP BY (SELECT order_id, amount FROM orders);", schemas)
+	if err == nil || !strings.Contains(err.Error(), "42601") || !strings.Contains(err.Error(), "must return only one column") {
+		t.Errorf("expected 42601 for multi-column subquery in GROUP BY, got: %v", err)
+	}
+
+	// 4. GROUP BY with single-column scalar subquery -> PASS
+	if err := parseAndValidate(t, "SELECT count(*) FROM users GROUP BY (SELECT order_id FROM orders LIMIT 1);", schemas); err != nil {
+		t.Errorf("expected single-column subquery in GROUP BY to pass, got: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// 13. Derived Table (FROM Subquery) Schema & Nil Schema Column Validation
+// -----------------------------------------------------------------------------
+func TestContract_DerivedTableSubqueryColumnValidation(t *testing.T) {
+	schemas := setupContractCatalog()
+
+	// 1. Valid column reference from derived table -> PASS
+	if err := parseAndValidate(t, "SELECT id FROM (SELECT id FROM users) AS sub;", schemas); err != nil {
+		t.Errorf("expected valid column from derived table to pass, got: %v", err)
+	}
+
+	// 2. Valid qualified column reference from derived table -> PASS
+	if err := parseAndValidate(t, "SELECT sub.id FROM (SELECT id FROM users) AS sub;", schemas); err != nil {
+		t.Errorf("expected valid qualified column from derived table to pass, got: %v", err)
+	}
+
+	// 3. Non-existent unqualified column from derived table -> FAIL
+	err := parseAndValidate(t, "SELECT ghost_col FROM (SELECT id FROM users) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected non-existent column in derived table to fail, got: %v", err)
+	}
+
+	// 4. Non-existent qualified column from derived table -> FAIL
+	err = parseAndValidate(t, "SELECT sub.ghost_col FROM (SELECT id FROM users) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected non-existent qualified column in derived table to fail, got: %v", err)
+	}
+}
+
+

@@ -179,13 +179,13 @@ func CheckDisallowedExprs(expr proc.Expr, scope ClauseScope) error {
 		switch n := node.(type) {
 		case *proc.FunctionCallExpr:
 			if n.HasOver {
-				// Window functions are disallowed in WHERE, HAVING, GROUP BY, JOIN ON, and UPDATE SET
-				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy|ScopeJoinOn|ScopeUpdateSet) != 0 {
+				// Window functions are disallowed in WHERE, HAVING, GROUP BY, JOIN ON, UPDATE SET, and VALUES
+				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy|ScopeJoinOn|ScopeUpdateSet|ScopeValues) != 0 {
 					return fmt.Errorf("window functions are not allowed in %s", scopeName(scope))
 				}
 			} else if proc.IsAggregateFunctionName(n.Name) {
-				// Aggregate functions are disallowed in WHERE, JOIN ON, GROUP BY, and UPDATE SET
-				if scope&(ScopeWhere|ScopeJoinOn|ScopeGroupBy|ScopeUpdateSet) != 0 {
+				// Aggregate functions are disallowed in WHERE, JOIN ON, GROUP BY, UPDATE SET, and VALUES
+				if scope&(ScopeWhere|ScopeJoinOn|ScopeGroupBy|ScopeUpdateSet|ScopeValues) != 0 {
 					return fmt.Errorf("aggregate functions are not allowed in %s", scopeName(scope))
 				}
 			}
@@ -277,6 +277,40 @@ func validateLimitOffset(limit, offset proc.Expr) error {
 	return nil
 }
 
+func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) *storage.TableSchema {
+	if subquery == nil {
+		return nil
+	}
+	var cols []storage.Column
+	for i, p := range subquery.Projections {
+		colName := p.Alias
+		if colName == "" {
+			if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+				colName = proc.CleanSchemaPrefix(colRef.Name)
+			}
+		}
+		if colName == "*" {
+			if subquery.From.Name != "" {
+				if tSch := findSchemaFromMap(schemas, subquery.From.Name); tSch != nil {
+					cols = append(cols, tSch.Columns...)
+					continue
+				}
+			}
+		}
+		if colName == "" {
+			colName = fmt.Sprintf("col%d", i)
+		}
+		cols = append(cols, storage.Column{
+			Name: colName,
+			Type: storage.TypeUnknown,
+		})
+	}
+	return &storage.TableSchema{
+		Name:    alias,
+		Columns: cols,
+	}
+}
+
 func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema, parentScope *TableScope) (*TableScope, error) {
 	// Base Structural Invariant: Subqueries in FROM or JOIN must have an alias (SQLSTATE 42601)
 	if stmt.From.Subquery != nil && strings.TrimSpace(stmt.From.Alias) == "" {
@@ -291,7 +325,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 	scope := NewTableScopeWithParent(parentScope)
 	if len(schemas) > 0 {
 		if stmt.From.Subquery != nil {
-			if err := scope.Register("", stmt.From.Alias, nil); err != nil {
+			subSch := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
+			if err := scope.Register("", stmt.From.Alias, subSch); err != nil {
 				return nil, err
 			}
 		} else if stmt.From.Name != "" {
@@ -306,7 +341,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 
 		for _, j := range stmt.Joins {
 			if j.Table.Subquery != nil {
-				if err := scope.Register("", j.Table.Alias, nil); err != nil {
+				subSch := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+				if err := scope.Register("", j.Table.Alias, subSch); err != nil {
 					return nil, err
 				}
 			} else if j.Table.Name != "" {
@@ -329,7 +365,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 		// Incremental JOIN ON Scope validation: each join ON condition can only see tables declared up to that join
 		joinScope := NewTableScopeWithParent(parentScope)
 		if stmt.From.Subquery != nil {
-			if err := joinScope.Register("", stmt.From.Alias, nil); err != nil {
+			subSch := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
+			if err := joinScope.Register("", stmt.From.Alias, subSch); err != nil {
 				return nil, err
 			}
 		} else if stmt.From.Name != "" {
@@ -339,7 +376,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 		}
 		for _, j := range stmt.Joins {
 			if j.Table.Subquery != nil {
-				if err := joinScope.Register("", j.Table.Alias, nil); err != nil {
+				subSch := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+				if err := joinScope.Register("", j.Table.Alias, subSch); err != nil {
 					return nil, err
 				}
 			} else if j.Table.Name != "" {
@@ -398,6 +436,9 @@ func validateGroupByClause(stmt *proc.GeneralSelectStmt, scope *TableScope) ([]p
 			return nil, err
 		}
 		if err := ValidateNoNestedAggregates(g); err != nil {
+			return nil, err
+		}
+		if err := ValidateSubqueryColumnCount(g); err != nil {
 			return nil, err
 		}
 		// Negative integer position check (e.g. GROUP BY -1)
@@ -558,6 +599,9 @@ func validateOrderByClause(orderBy []proc.OrderByItem, projections []proc.Projec
 			return err
 		}
 		if err := ValidateNoNestedWindowFunctions(ob.Expr); err != nil {
+			return err
+		}
+		if err := ValidateSubqueryColumnCount(ob.Expr); err != nil {
 			return err
 		}
 
@@ -827,8 +871,10 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 
 		if len(s.instances) > 0 {
 			matchCount := 0
+			hasNilSchemaInstance := false
 			for _, inst := range s.instances {
 				if inst.Schema == nil {
+					hasNilSchemaInstance = true
 					continue
 				}
 				if _, _, ok := inst.Schema.FindColumn(cleanCol); ok {
@@ -850,11 +896,14 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 				foundInParent := false
 				for p := s.parent; p != nil; p = p.parent {
 					pmatchCount := 0
+					phasNil := false
 					for _, pinst := range p.instances {
-						if pinst.Schema != nil {
-							if _, _, ok := pinst.Schema.FindColumn(cleanCol); ok {
-								pmatchCount++
-							}
+						if pinst.Schema == nil {
+							phasNil = true
+							continue
+						}
+						if _, _, ok := pinst.Schema.FindColumn(cleanCol); ok {
+							pmatchCount++
 						}
 					}
 					if pmatchCount > 1 {
@@ -864,8 +913,12 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 						foundInParent = true
 						break
 					}
+					if phasNil {
+						foundInParent = true
+						break
+					}
 				}
-				if !foundInParent {
+				if !foundInParent && !hasNilSchemaInstance {
 					return fmt.Errorf("column %q does not exist", raw)
 				}
 			}
@@ -1968,6 +2021,9 @@ func validateDMLWhereExpr(whereExpr proc.Expr, schema *storage.TableSchema, sche
 }
 
 func validateDMLValueExpr(expr proc.Expr) error {
+	if err := CheckDisallowedExprs(expr, ScopeValues); err != nil {
+		return err
+	}
 	return WalkAST(expr, func(node proc.Expr) error {
 		col, ok := node.(*proc.ColumnRefExpr)
 		if !ok {

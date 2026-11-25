@@ -119,6 +119,9 @@ func ValidateInsertValueExpr(valStr string) error {
 	if expr == nil {
 		return nil
 	}
+	if err := planner.CheckDisallowedExprs(expr, planner.ScopeValues); err != nil {
+		return err
+	}
 	return planner.WalkAST(expr, func(node proc.Expr) error {
 		col, ok := node.(*proc.ColumnRefExpr)
 		if !ok {
