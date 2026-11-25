@@ -407,6 +407,18 @@ func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
 	}
+	if v := os.Getenv("LIONSQL_DATA_DIR"); v != "" {
+		cfg.Server.DataDir = v
+	}
+	if v := os.Getenv("LIONSQL_HTTP"); v != "" {
+		cfg.Network.HTTPAddr = v
+	}
+	if v := os.Getenv("LIONSQL_PG"); v != "" {
+		cfg.Network.PGAddr = v
+	}
+	if v := os.Getenv("LIONSQL_TDS"); v != "" {
+		cfg.Network.TDSAddr = v
+	}
 	if v := os.Getenv("LIONSQL_WORK_MEM"); v != "" {
 		cfg.Resources.WorkMem = v
 	}

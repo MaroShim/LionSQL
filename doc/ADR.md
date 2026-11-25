@@ -39,6 +39,8 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-027: Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant](#adr-027-deterministic-wal-tail-recovery--fail-closed-durability-invariant)
 - [ADR-028: Pointer-Free Flat Record (`compact`) as Default In-Memory Layout and Deprecation of Raw Slice Mode (`performance`)](#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)
 - [ADR-029: Arena-Scoped Cursor Row Decoding (`ArenaRowCursor`) vs. Single-Buffer Reuse and Lazy FlatTuple](#adr-029-arena-scoped-cursor-row-decoding-arenarowcursor-vs-single-buffer-reuse-and-lazy-flattuple)
+- [ADR-031: Single Canonical V2 Binary Tuple Codec (4-Byte Aligned Header, Flags, Instant Tail DDL)](#adr-031-single-canonical-v2-binary-tuple-codec-4-byte-aligned-header-flags-instant-tail-ddl)
+- [ADR-032: Complex Relational Physical Plan Cache Spec-Out & Parameter Sniffing Immunity](#adr-032-complex-relational-physical-plan-cache-spec-out--parameter-sniffing-immunity)
 
 ---
 
@@ -857,6 +859,35 @@ Adopt the **Single Canonical V2 Binary Tuple Codec** (`0x02`) across both storag
 - **Positive**: Guarantees 100% deterministic, zero-guess decoding across all query paths. Header loads in a single 32-bit CPU register read. Extensible flags eliminate future format breakages for compression and TOAST. Codebase complexity reduced by eliminating heuristic fallback layers.
 - **Negative**: Pre-1.0 development database folders created under legacy V1 must be re-initialized.
 - **Compliance**: Adheres to `[RULE:ExplicitError]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:SafeDefaults]`, and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 13.
+
+---
+
+## ADR-032: Complex Relational Physical Plan Cache Spec-Out & Parameter Sniffing Immunity
+
+### Status
+Accepted
+
+### Context
+In enterprise OLTP and mixed relational databases, query plan caching promises to save query compilation latency by reusing previously generated execution plans. However, evaluating physical plan caching for complex relational SQL (queries with multi-table joins, subqueries, and range predicates) reveals critical industry-wide failure modes:
+1. **Parameter Sniffing & Catastrophic Plan Regression**: In engines like Microsoft SQL Server and PostgreSQL, caching a physical plan derived from initial bind parameters leads to severe plan regression when actual parameter selectivity shifts (e.g. an Index Seek plan chosen for a 1-row parameter `@status = 'CANCELLED'` causes millions of random I/O Key Lookups when re-executed with `@status = 'COMPLETED'`). Decades of ad-hoc fixes (`OPTIMIZE FOR UNKNOWN`, `plan_cache_mode = force_custom_plan`, PSP) demonstrate that physical plan caching on skewed data is inherently unstable.
+2. **Disproportionate Complexity vs. Ultra-Fast Pratt CBO Planning**: LionSQL's native Pratt fast-path parser and in-memory Volcano CBO compile complex multi-table queries in tens of microseconds ($\le 50\mu\text{s}$). Attempting to save $50\mu\text{s}$ at the expense of global mutex contention, cache invalidation storms on DDL/statistics changes, and multi-second runtime stalls represents a severe architectural negative ROI violating `[RULE:RadicalKISS]`.
+
+### Decision
+Permanently **Spec-Out** physical execution plan caching for complex relational queries (`SPEC-OUT-COMPLEX-PLAN-CACHE-1`) and strictly define clear boundaries for plan reuse:
+1. **Spec-In: $O(1)$ Point Lookup Fast-Path (`WHERE pk = ?`)**:
+   - Cardinality is mathematically fixed to $\le 1$ with zero data skew risk.
+   - Bypasses the Volcano CBO entirely and resolves directly via `tx.GetRow(table, pkVal)` in $\sim 300\text{ns}$ (In-Memory) or $\sim 1\mu\text{s}$ (WiredTiger).
+2. **Spec-In: Stored Procedure VDBE Bytecode**:
+   - T-SQL procedural control flow (`IF`, `WHILE`, variable computation, static DDL/DML) has static structural semantics and is safely cached in `PlanCache`.
+3. **Spec-In: Pre-Parsed AST & Semantic Scope Validation**:
+   - Statement syntax parsing and column resolution (Semantic Binder) can be retained at the prepared statement layer, while physical planning dynamically evaluates actual runtime parameters.
+4. **Permanently Spec-Out**:
+   - Caching physical Volcano operator trees (join orderings, join algorithms, index scan directions) for multi-table queries and range filters is permanently excluded.
+
+### Consequences
+- **Positive**: 100% immunity against Parameter Sniffing and catastrophic plan degradation. Zero cache invalidation storms or lock contention. Radical engine simplicity (`[RULE:RadicalKISS]`).
+- **Negative**: Relational queries incur standard sub-microsecond Pratt CBO re-planning on each execution.
+- **Compliance**: Adheres to `[RULE:RadicalKISS]`, `[Invariant 1: Dual-Parser]`, `[Invariant 18: ZeroParameterSniffing]`, and `notes/ENGINEERING_CONTEXT.ko.md`.
 
 
 

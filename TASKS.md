@@ -97,7 +97,7 @@
 | `DONE` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `PENDING` | **`BINDER-EVOL-PHASE-6`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-6`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-7`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
@@ -562,6 +562,7 @@
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`** |  | Wire | P1 | v0.96.0 | [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
@@ -1452,8 +1453,8 @@
 
 ---
 
-### [PENDING] 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) `BINDER-EVOL-PHASE-6`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:25:02
+### [DONE] 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) `BINDER-EVOL-PHASE-6`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-25 06:24:56
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
@@ -5408,6 +5409,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:35:10
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
+
+---
+
+### [PENDING] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 06:19:19
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md)
 
 ---
 

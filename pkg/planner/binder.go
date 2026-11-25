@@ -9,23 +9,44 @@ import (
 	"lionsql/pkg/storage"
 )
 
+// ScopeContext represents a hierarchical query scope (root query or nested subquery).
+type ScopeContext struct {
+	Parent      *ScopeContext
+	OuterLevel  int
+	Tables      []BoundTableRef
+	TableLookup map[string]int // lowercase table/alias -> TableID in this scope
+	SlotOffsets []int          // TableID -> starting slot in joined Tuple.Values
+	Scope       *TableScope
+}
+
+func newScopeContext(parent *ScopeContext) *ScopeContext {
+	outerLevel := 0
+	var parentScope *TableScope
+	if parent != nil {
+		outerLevel = parent.OuterLevel + 1
+		parentScope = parent.Scope
+	}
+	return &ScopeContext{
+		Parent:      parent,
+		OuterLevel:  outerLevel,
+		TableLookup: make(map[string]int),
+		Scope:       NewTableScopeWithParent(parentScope),
+	}
+}
+
 // Binder performs semantic binding of an AST against database catalog schemas,
 // resolving all identifiers to physical table offsets, column indices, and data types,
-// and producing a typed BoundSelectStmt.
+// and producing a typed BoundSelectStmt with support for hierarchical correlated subquery scopes.
 type Binder struct {
-	schemas     map[string]*storage.TableSchema
-	scope       *TableScope
-	tables      []BoundTableRef
-	tableLookup map[string]int // lowercase table/alias -> TableID
-	slotOffsets []int          // TableID -> starting slot in joined Tuple.Values
+	schemas map[string]*storage.TableSchema
+	current *ScopeContext
 }
 
 // NewBinder creates a dedicated Binder instance with the given catalog schemas.
 func NewBinder(schemas map[string]*storage.TableSchema) *Binder {
 	return &Binder{
-		schemas:     schemas,
-		scope:       NewTableScope(),
-		tableLookup: make(map[string]int),
+		schemas: schemas,
+		current: newScopeContext(nil),
 	}
 }
 
@@ -34,11 +55,24 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 	if stmt == nil {
 		return nil, nil
 	}
+	return b.bindSelectInternal(stmt)
+}
+
+func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, error) {
+	if stmt == nil {
+		return nil, nil
+	}
 
 	// 1. Semantic verification gatekeeper pass
-	if err := ValidateQueryAST(stmt, b.schemas); err != nil {
+	var parentScope *TableScope
+	if b.current != nil && b.current.Parent != nil {
+		parentScope = b.current.Parent.Scope
+	}
+	if err := ValidateQueryASTWithParent(stmt, b.schemas, parentScope); err != nil {
 		return nil, err
 	}
+
+	cur := b.current
 
 	// 2. Register base relation (FROM)
 	if stmt.From.Name != "" {
@@ -47,7 +81,7 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 		cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(stmt.From.Alias))
 
 		sch := b.findSchema(stmt.From.Name)
-		tableID := len(b.tables)
+		tableID := len(cur.Tables)
 		slotOffset := 0
 
 		tRef := BoundTableRef{
@@ -57,19 +91,19 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 			Schema:     sch,
 			SlotOffset: slotOffset,
 		}
-		b.tables = append(b.tables, tRef)
-		b.slotOffsets = append(b.slotOffsets, slotOffset)
+		cur.Tables = append(cur.Tables, tRef)
+		cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
 
 		if cleanTbl != "" {
-			b.tableLookup[cleanTbl] = tableID
+			cur.TableLookup[cleanTbl] = tableID
 		}
 		if bareTbl != "" {
-			b.tableLookup[bareTbl] = tableID
+			cur.TableLookup[bareTbl] = tableID
 		}
 		if cleanAlias != "" {
-			b.tableLookup[cleanAlias] = tableID
+			cur.TableLookup[cleanAlias] = tableID
 		}
-		b.scope.Register(stmt.From.Name, stmt.From.Alias, sch)
+		cur.Scope.Register(stmt.From.Name, stmt.From.Alias, sch)
 	}
 
 	// 3. Register joined relations (JOINs)
@@ -80,15 +114,15 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
 
 			sch := b.findSchema(j.Table.Name)
-			tableID := len(b.tables)
+			tableID := len(cur.Tables)
 
 			// Calculate starting slot offset in joined Tuple.Values
 			prevOffset := 0
-			if len(b.slotOffsets) > 0 {
-				lastIdx := len(b.tables) - 1
-				prevOffset = b.slotOffsets[lastIdx]
-				if b.tables[lastIdx].Schema != nil {
-					prevOffset += len(b.tables[lastIdx].Schema.Columns)
+			if len(cur.SlotOffsets) > 0 {
+				lastIdx := len(cur.Tables) - 1
+				prevOffset = cur.SlotOffsets[lastIdx]
+				if cur.Tables[lastIdx].Schema != nil {
+					prevOffset += len(cur.Tables[lastIdx].Schema.Columns)
 				}
 			}
 			slotOffset := prevOffset
@@ -100,26 +134,26 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 				Schema:     sch,
 				SlotOffset: slotOffset,
 			}
-			b.tables = append(b.tables, tRef)
-			b.slotOffsets = append(b.slotOffsets, slotOffset)
+			cur.Tables = append(cur.Tables, tRef)
+			cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
 
 			if cleanTbl != "" {
-				b.tableLookup[cleanTbl] = tableID
+				cur.TableLookup[cleanTbl] = tableID
 			}
 			if bareTbl != "" {
-				b.tableLookup[bareTbl] = tableID
+				cur.TableLookup[bareTbl] = tableID
 			}
 			if cleanAlias != "" {
-				b.tableLookup[cleanAlias] = tableID
+				cur.TableLookup[cleanAlias] = tableID
 			}
-			b.scope.Register(j.Table.Name, j.Table.Alias, sch)
+			cur.Scope.Register(j.Table.Name, j.Table.Alias, sch)
 		}
 	}
 
 	// 4. Register projection aliases for ORDER BY resolution
 	for _, p := range stmt.Projections {
 		if p.Alias != "" {
-			b.scope.AddProjectionAlias(p.Alias)
+			cur.Scope.AddProjectionAlias(p.Alias)
 		}
 	}
 
@@ -158,8 +192,8 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 			}
 		}
 		var tRef BoundTableRef
-		if i+1 < len(b.tables) {
-			tRef = b.tables[i+1]
+		if i+1 < len(cur.Tables) {
+			tRef = cur.Tables[i+1]
 		}
 		boundJoins = append(boundJoins, BoundJoin{
 			Table:    tRef,
@@ -214,7 +248,7 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 
 	return &BoundSelectStmt{
 		RawStmt:     stmt,
-		Tables:      b.tables,
+		Tables:      cur.Tables,
 		Projections: boundProjections,
 		Where:       boundWhere,
 		Joins:       boundJoins,
@@ -242,7 +276,16 @@ func (b *Binder) findSchema(name string) *storage.TableSchema {
 	return nil
 }
 
-// ResolveColumn resolves a column reference identifier against registered tables in the scope.
+func (b *Binder) hasAnySchema() bool {
+	for s := b.current; s != nil; s = s.Parent {
+		if len(s.Tables) > 0 && s.Tables[0].Schema != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveColumn resolves a column reference identifier against registered tables in the scope hierarchy.
 func (b *Binder) ResolveColumn(raw string) (*BoundColumnRef, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" || trimmed == "*" {
@@ -256,80 +299,97 @@ func (b *Binder) ResolveColumn(raw string) (*BoundColumnRef, error) {
 		colPart := sqlutil.CleanIdentifier(parts[last])
 		tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[last-1]))
 
-		tableID, ok := b.tableLookup[tblPart]
-		if !ok {
-			return nil, fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
-		}
-		tRef := b.tables[tableID]
-		if tRef.Schema != nil {
-			col, colIdx, found := tRef.Schema.FindColumn(colPart)
-			if !found {
-				return nil, fmt.Errorf("column %q does not exist in table or alias %q", parts[last], parts[last-1])
+		for s := b.current; s != nil; s = s.Parent {
+			tableID, ok := s.TableLookup[tblPart]
+			if ok {
+				tRef := s.Tables[tableID]
+				outerLevel := b.current.OuterLevel - s.OuterLevel
+				if tRef.Schema != nil {
+					col, colIdx, found := tRef.Schema.FindColumn(colPart)
+					if !found {
+						return nil, fmt.Errorf("column %q does not exist in table or alias %q", parts[last], parts[last-1])
+					}
+					tupleSlot := s.SlotOffsets[tableID] + colIdx
+					return &BoundColumnRef{
+						Name:       raw,
+						TableName:  tRef.Name,
+						TableID:    tableID,
+						ColumnIdx:  colIdx,
+						TupleSlot:  tupleSlot,
+						DataType:   col.Type,
+						OuterLevel: outerLevel,
+					}, nil
+				}
+				// Schema unknown at bind-time
+				return &BoundColumnRef{
+					Name:       raw,
+					TableName:  tblPart,
+					TableID:    tableID,
+					ColumnIdx:  -1,
+					TupleSlot:  -1,
+					DataType:   storage.TypeUnknown,
+					OuterLevel: outerLevel,
+				}, nil
 			}
-			tupleSlot := b.slotOffsets[tableID] + colIdx
-			return &BoundColumnRef{
-				Name:       raw,
-				TableName:  tRef.Name,
-				TableID:    tableID,
-				ColumnIdx:  colIdx,
-				TupleSlot:  tupleSlot,
-				DataType:   col.Type,
-				OuterLevel: 0,
-			}, nil
 		}
-		// Schema unknown at bind-time
-		return &BoundColumnRef{Name: raw, TableName: tblPart, TableID: tableID, ColumnIdx: -1, TupleSlot: -1, DataType: storage.TypeUnknown}, nil
+		return nil, fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
 	}
 
 	// Unqualified reference: e.g. "salary"
 	colName := sqlutil.CleanIdentifier(trimmed)
 	type matchInfo struct {
-		tableID  int
-		colIdx   int
-		colType  storage.DataType
-		tblName  string
-		schemaPtr *storage.TableSchema
+		outerLevel int
+		tableID    int
+		colIdx     int
+		colType    storage.DataType
+		tblName    string
+		slotOffset int
 	}
-	var matches []matchInfo
-	seenSchemas := make(map[*storage.TableSchema]bool)
 
-	for _, tRef := range b.tables {
-		if tRef.Schema != nil {
-			if seenSchemas[tRef.Schema] {
-				continue
+	for s := b.current; s != nil; s = s.Parent {
+		var matches []matchInfo
+		seenSchemas := make(map[*storage.TableSchema]bool)
+		outerLevel := b.current.OuterLevel - s.OuterLevel
+
+		for _, tRef := range s.Tables {
+			if tRef.Schema != nil {
+				if seenSchemas[tRef.Schema] {
+					continue
+				}
+				seenSchemas[tRef.Schema] = true
+				if col, colIdx, found := tRef.Schema.FindColumn(colName); found {
+					matches = append(matches, matchInfo{
+						outerLevel: outerLevel,
+						tableID:    tRef.TableID,
+						colIdx:     colIdx,
+						colType:    col.Type,
+						tblName:    tRef.Name,
+						slotOffset: s.SlotOffsets[tRef.TableID],
+					})
+				}
 			}
-			seenSchemas[tRef.Schema] = true
-			if col, colIdx, found := tRef.Schema.FindColumn(colName); found {
-				matches = append(matches, matchInfo{
-					tableID:   tRef.TableID,
-					colIdx:    colIdx,
-					colType:   col.Type,
-					tblName:   tRef.Name,
-					schemaPtr: tRef.Schema,
-				})
-			}
+		}
+
+		if len(matches) > 1 {
+			return nil, fmt.Errorf("column reference %q is ambiguous", raw)
+		}
+		if len(matches) == 1 {
+			m := matches[0]
+			tupleSlot := m.slotOffset + m.colIdx
+			return &BoundColumnRef{
+				Name:       raw,
+				TableName:  m.tblName,
+				TableID:    m.tableID,
+				ColumnIdx:  m.colIdx,
+				TupleSlot:  tupleSlot,
+				DataType:   m.colType,
+				OuterLevel: m.outerLevel,
+			}, nil
 		}
 	}
 
-	if len(matches) > 1 {
-		return nil, fmt.Errorf("column reference %q is ambiguous", raw)
-	}
-	if len(matches) == 1 {
-		m := matches[0]
-		tupleSlot := b.slotOffsets[m.tableID] + m.colIdx
-		return &BoundColumnRef{
-			Name:       raw,
-			TableName:  m.tblName,
-			TableID:    m.tableID,
-			ColumnIdx:  m.colIdx,
-			TupleSlot:  tupleSlot,
-			DataType:   m.colType,
-			OuterLevel: 0,
-		}, nil
-	}
-
 	// If schemas are populated and column is not found
-	if len(b.tables) > 0 && b.tables[0].Schema != nil {
+	if b.hasAnySchema() {
 		return nil, fmt.Errorf("column %q does not exist", raw)
 	}
 
@@ -343,7 +403,7 @@ func (b *Binder) bindOrderBy(expr proc.Expr) (BoundExpr, error) {
 	// Check projection alias in ORDER BY
 	if col, ok := expr.(*proc.ColumnRefExpr); ok {
 		clean := strings.ToLower(sqlutil.CleanIdentifier(col.Name))
-		if b.scope.projectionAliases[clean] {
+		if b.current.Scope.projectionAliases[clean] {
 			return &BoundColumnRef{
 				Name:       col.Name,
 				ColumnIdx:  -1,
@@ -418,8 +478,102 @@ func (b *Binder) bindExpr(expr proc.Expr) (BoundExpr, error) {
 			HasOver:     e.HasOver,
 		}, nil
 
+	case *proc.ScalarSubqueryExpr:
+		if e.Query != nil {
+			childScope := newScopeContext(b.current)
+			b.current = childScope
+			boundSubquery, err := b.bindSelectInternal(e.Query)
+			b.current = childScope.Parent
+			if err != nil {
+				return nil, err
+			}
+			retType := storage.TypeUnknown
+			if len(boundSubquery.Projections) > 0 {
+				retType = boundSubquery.Projections[0].Type
+			}
+			return &BoundSubqueryExpr{
+				Subquery:   boundSubquery,
+				ResultType: retType,
+			}, nil
+		}
+		return &BoundGenericExpr{Inner: expr, ResultType: storage.TypeUnknown}, nil
+
+	case *proc.ExistsExpr:
+		if e.Query != nil {
+			childScope := newScopeContext(b.current)
+			b.current = childScope
+			boundSubquery, err := b.bindSelectInternal(e.Query)
+			b.current = childScope.Parent
+			if err != nil {
+				return nil, err
+			}
+			return &BoundExistsExpr{
+				Subquery: boundSubquery,
+				Not:      e.Not,
+			}, nil
+		}
+		return &BoundGenericExpr{Inner: expr, ResultType: storage.TypeBool}, nil
+
+	case *proc.InExpr:
+		left, err := b.bindExpr(e.Expr)
+		if err != nil {
+			return nil, err
+		}
+		if e.Query != nil {
+			childScope := newScopeContext(b.current)
+			b.current = childScope
+			boundSubquery, err := b.bindSelectInternal(e.Query)
+			b.current = childScope.Parent
+			if err != nil {
+				return nil, err
+			}
+			return &BoundInSubqueryExpr{
+				Expr:       left,
+				Subquery:   boundSubquery,
+				Not:        e.Not,
+				ResultType: storage.TypeBool,
+			}, nil
+		}
+		var boundList []BoundExpr
+		for _, itm := range e.List {
+			bi, err := b.bindExpr(itm)
+			if err != nil {
+				return nil, err
+			}
+			boundList = append(boundList, bi)
+		}
+		return &BoundInListExpr{
+			Expr:       left,
+			List:       boundList,
+			Not:        e.Not,
+			ResultType: storage.TypeBool,
+		}, nil
+
+	case *proc.QuantifiedComparisonExpr:
+		left, err := b.bindExpr(e.Expr)
+		if err != nil {
+			return nil, err
+		}
+		if e.Query != nil {
+			childScope := newScopeContext(b.current)
+			b.current = childScope
+			boundSubquery, err := b.bindSelectInternal(e.Query)
+			b.current = childScope.Parent
+			if err != nil {
+				return nil, err
+			}
+			return &BoundQuantifiedComparisonExpr{
+				Expr:       left,
+				Op:         e.Op,
+				Quantifier: e.Quantifier,
+				Subquery:   boundSubquery,
+				ResultType: storage.TypeBool,
+			}, nil
+		}
+		return &BoundGenericExpr{Inner: expr, ResultType: storage.TypeBool}, nil
+
 	default:
-		// Bridge for extension expressions (e.g. CaseExpr, InExpr)
+		// Bridge for extension expressions (e.g. CaseExpr)
 		return &BoundGenericExpr{
 			Inner:      expr,
 			ResultType: storage.TypeUnknown,

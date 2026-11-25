@@ -1,6 +1,7 @@
 package planner_test
 
 import (
+	"strings"
 	"testing"
 
 	"lionsql/pkg/execution"
@@ -226,5 +227,184 @@ func TestBoundColumnRef_DirectTupleSlotEvaluation(t *testing.T) {
 	fVal, ok := val.(float64)
 	if !ok || fVal != 299.95 {
 		t.Errorf("expected 299.95, got %v (%T)", val, val)
+	}
+}
+
+func TestBinder_CorrelatedSubquery_OuterLevelResolution(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT u.id, u.name FROM users u WHERE u.age > (SELECT AVG(o.amount) FROM orders o WHERE o.user_id = u.id);"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	// Outer WHERE: u.age > (subquery)
+	whereBin, ok := bound.Where.(*planner.BoundBinaryExpr)
+	if !ok {
+		t.Fatalf("expected BoundBinaryExpr for WHERE, got %T", bound.Where)
+	}
+	outerCol, ok := whereBin.Left.(*planner.BoundColumnRef)
+	if !ok || outerCol.OuterLevel != 0 || outerCol.Name != "u.age" {
+		t.Errorf("expected outer u.age with OuterLevel 0, got %+v", outerCol)
+	}
+
+	// Subquery
+	subExpr, ok := whereBin.Right.(*planner.BoundSubqueryExpr)
+	if !ok {
+		t.Fatalf("expected BoundSubqueryExpr for right operand, got %T", whereBin.Right)
+	}
+	subStmt := subExpr.Subquery
+	if len(subStmt.Tables) != 1 || subStmt.Tables[0].Name != "orders" {
+		t.Fatalf("expected subquery table 'orders', got %+v", subStmt.Tables)
+	}
+
+	// Subquery WHERE: o.user_id = u.id
+	subWhere, ok := subStmt.Where.(*planner.BoundBinaryExpr)
+	if !ok {
+		t.Fatalf("expected BoundBinaryExpr for subquery WHERE, got %T", subStmt.Where)
+	}
+	innerCol, ok := subWhere.Left.(*planner.BoundColumnRef)
+	if !ok || innerCol.OuterLevel != 0 || innerCol.TableName != "orders" || innerCol.ColumnIdx != 1 {
+		t.Errorf("expected inner o.user_id with OuterLevel 0, got %+v", innerCol)
+	}
+	correlatedCol, ok := subWhere.Right.(*planner.BoundColumnRef)
+	if !ok {
+		t.Fatalf("expected BoundColumnRef for correlated reference, got %T", subWhere.Right)
+	}
+	if correlatedCol.OuterLevel != 1 {
+		t.Errorf("expected OuterLevel 1 for correlated u.id, got %d", correlatedCol.OuterLevel)
+	}
+	if correlatedCol.TableName != "users" || correlatedCol.ColumnIdx != 0 {
+		t.Errorf("unexpected correlated column metadata: %+v", correlatedCol)
+	}
+}
+
+func TestBinder_CorrelatedSubquery_ScopeShadowingAndUnqualifiedFallback(t *testing.T) {
+	schemas := setupTestCatalog()
+	// In orders: order_id, user_id, amount
+	// In users: id, name, age
+	// Inside subquery on orders: 'amount' is in orders (OuterLevel 0), 'name' is NOT in orders but in users (OuterLevel 1)
+	sql := "SELECT u.id FROM users u WHERE u.age > (SELECT AVG(amount) FROM orders WHERE user_id = u.id AND name = 'Alice');"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	whereBin := bound.Where.(*planner.BoundBinaryExpr)
+	subExpr := whereBin.Right.(*planner.BoundSubqueryExpr)
+	subStmt := subExpr.Subquery
+
+	// Projection: AVG(amount) -> amount is inner (OuterLevel 0)
+	fn := subStmt.Projections[0].Expr.(*planner.BoundFunctionCall)
+	argCol := fn.Args[0].(*planner.BoundColumnRef)
+	if argCol.OuterLevel != 0 || argCol.ColumnIdx != 2 {
+		t.Errorf("expected inner 'amount' with OuterLevel 0, got %+v", argCol)
+	}
+
+	// WHERE: user_id = u.id AND name = 'Alice'
+	andBin := subStmt.Where.(*planner.BoundBinaryExpr)
+	rightBin := andBin.Right.(*planner.BoundBinaryExpr)
+	nameCol := rightBin.Left.(*planner.BoundColumnRef)
+	if nameCol.OuterLevel != 1 || nameCol.TableName != "users" || nameCol.ColumnIdx != 1 {
+		t.Errorf("expected outer 'name' fallback with OuterLevel 1, got %+v", nameCol)
+	}
+}
+
+func TestBinder_CorrelatedSubquery_ExistsBinding(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	existsExpr, ok := bound.Where.(*planner.BoundExistsExpr)
+	if !ok || existsExpr.Not {
+		t.Fatalf("expected BoundExistsExpr for WHERE, got %T", bound.Where)
+	}
+	subWhere := existsExpr.Subquery.Where.(*planner.BoundBinaryExpr)
+	corrCol := subWhere.Right.(*planner.BoundColumnRef)
+	if corrCol.OuterLevel != 1 || corrCol.ColumnIdx != 0 {
+		t.Errorf("expected correlated u.id with OuterLevel 1, got %+v", corrCol)
+	}
+}
+
+func TestBinder_CorrelatedSubquery_DeepNestingLevel2(t *testing.T) {
+	schemas := setupTestCatalog()
+	// users u -> orders o -> profiles p
+	// p references u.age across 2 scope levels
+	sql := "SELECT u.id FROM users u WHERE u.age > (SELECT AVG(o.amount) FROM orders o WHERE o.user_id IN (SELECT p.id FROM profiles p WHERE p.id = u.id));"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	whereBin := bound.Where.(*planner.BoundBinaryExpr)
+	sub1 := whereBin.Right.(*planner.BoundSubqueryExpr).Subquery
+	inSub := sub1.Where.(*planner.BoundInSubqueryExpr)
+	sub2 := inSub.Subquery
+
+	// In sub2: p.id = u.id
+	sub2Where := sub2.Where.(*planner.BoundBinaryExpr)
+	pCol := sub2Where.Left.(*planner.BoundColumnRef)
+	if pCol.OuterLevel != 0 || pCol.TableName != "profiles" {
+		t.Errorf("expected inner p.id with OuterLevel 0, got %+v", pCol)
+	}
+	uCol := sub2Where.Right.(*planner.BoundColumnRef)
+	if uCol.OuterLevel != 2 || uCol.TableName != "users" || uCol.ColumnIdx != 0 {
+		t.Errorf("expected u.id from root query with OuterLevel 2, got %+v", uCol)
+	}
+}
+
+func TestBinder_CorrelatedSubquery_GhostColumnFailClosed(t *testing.T) {
+	schemas := setupTestCatalog()
+	// ghost_col does not exist in inner 'orders' or outer 'users'
+	sql := "SELECT u.id FROM users u WHERE u.age > (SELECT AVG(o.amount) FROM orders o WHERE o.ghost_col = u.id);"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	_, err = binder.BindSelect(sel)
+	if err == nil {
+		t.Fatalf("expected error for non-existent ghost_col in subquery, got nil")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected 'does not exist' error, got: %v", err)
 	}
 }

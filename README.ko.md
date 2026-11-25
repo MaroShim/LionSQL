@@ -189,6 +189,21 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
 ./bin/lionsql stop
 ```
 
+### 3. 도커(Docker)로 실행
+
+GitHub Container Registry에서 공식 멀티 아키텍처 컨테이너(`linux/amd64`, `linux/arm64`)를 즉시 실행할 수 있습니다:
+
+```bash
+docker run -d \
+  --name lionsql \
+  -p 5433:5433 \
+  -p 1433:1433 \
+  -p 8090:8090 \
+  -e LIONSQL_ADMIN_PASS="YourSecurePassword123!" \
+  -v lionsql_data:/data \
+  ghcr.io/maroshim/lionsql:latest
+```
+
 서버 기동 시 콘솔에 접속 엔드포인트 정보가 출력됩니다:
 
 ```text

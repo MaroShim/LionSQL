@@ -1,0 +1,14 @@
+.git
+.github
+bin/
+data/
+dist/
+*.wt
+*.log
+*.zip
+*.tar.gz
+*.exe
+notes/
+test/
+tmp/
+.gemini/

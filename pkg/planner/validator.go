@@ -182,6 +182,11 @@ func CheckDisallowedExprs(expr proc.Expr, scope ClauseScope) error {
 
 // ValidateQueryAST validates semantic invariants on a parsed GeneralSelectStmt.
 func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) error {
+	return ValidateQueryASTWithParent(stmt, schemas, nil)
+}
+
+// ValidateQueryASTWithParent validates semantic rules and column references for a query within an optional parent scope.
+func ValidateQueryASTWithParent(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema, parentScope *TableScope) error {
 	if stmt == nil {
 		return nil
 	}
@@ -259,7 +264,7 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 
 	// 5. Ambiguous Column References across JOINs and Qualified Column Binding
 	if len(schemas) > 0 {
-		scope := NewTableScope()
+		scope := NewTableScopeWithParent(parentScope)
 		if stmt.From.Name != "" {
 			scope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name))
 		}
@@ -296,7 +301,7 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 			}
 		}
 		// Incremental JOIN ON Scope validation
-		joinScope := NewTableScope()
+		joinScope := NewTableScopeWithParent(parentScope)
 		if stmt.From.Name != "" {
 			joinScope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name))
 		}
@@ -315,6 +320,7 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 
 // TableScope manages visible table schemas and aliases within a query scope.
 type TableScope struct {
+	parent            *TableScope
 	schemas           map[string]*storage.TableSchema
 	uniqueTables      []*storage.TableSchema
 	projectionAliases map[string]bool
@@ -337,7 +343,13 @@ func findSchemaFromMap(schemas map[string]*storage.TableSchema, name string) *st
 
 // NewTableScope creates an empty TableScope.
 func NewTableScope() *TableScope {
+	return NewTableScopeWithParent(nil)
+}
+
+// NewTableScopeWithParent creates an empty TableScope linked to a parent scope for subquery resolution.
+func NewTableScopeWithParent(parent *TableScope) *TableScope {
 	return &TableScope{
+		parent:            parent,
 		schemas:           make(map[string]*storage.TableSchema),
 		projectionAliases: make(map[string]bool),
 	}
@@ -445,7 +457,16 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 			if colPart == "*" {
 				if len(s.schemas) > 0 {
 					if _, ok := s.schemas[tblPart]; !ok {
-						return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+						foundInParent := false
+						for p := s.parent; p != nil; p = p.parent {
+							if _, pok := p.schemas[tblPart]; pok {
+								foundInParent = true
+								break
+							}
+						}
+						if !foundInParent {
+							return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+						}
 					}
 				}
 				return nil
@@ -454,7 +475,17 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 			if len(s.schemas) > 0 {
 				sch, ok := s.schemas[tblPart]
 				if !ok {
-					return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+					foundInParent := false
+					for p := s.parent; p != nil; p = p.parent {
+						if psch, pok := p.schemas[tblPart]; pok {
+							sch = psch
+							foundInParent = true
+							break
+						}
+					}
+					if !foundInParent {
+						return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
+					}
 				}
 				if sch != nil {
 					if _, _, found := sch.FindColumn(colPart); !found {
@@ -485,7 +516,27 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 				return fmt.Errorf("column reference %q is ambiguous", raw)
 			}
 			if matchCount == 0 {
-				return fmt.Errorf("column %q does not exist", raw)
+				foundInParent := false
+				for p := s.parent; p != nil; p = p.parent {
+					pmatchCount := 0
+					for _, psch := range p.uniqueTables {
+						if psch != nil {
+							if _, _, ok := psch.FindColumn(cleanCol); ok {
+								pmatchCount++
+							}
+						}
+					}
+					if pmatchCount > 1 {
+						return fmt.Errorf("column reference %q is ambiguous", raw)
+					}
+					if pmatchCount == 1 {
+						foundInParent = true
+						break
+					}
+				}
+				if !foundInParent {
+					return fmt.Errorf("column %q does not exist", raw)
+				}
 			}
 		}
 		return nil

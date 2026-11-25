@@ -98,6 +98,121 @@ func (b *BoundFunctionCall) String() string {
 }
 func (b *BoundFunctionCall) BoundType() storage.DataType { return b.ReturnType }
 
+// BoundSubqueryExpr represents a scalar subquery returning a single row and column.
+type BoundSubqueryExpr struct {
+	proc.BaseExpr
+	Subquery   *BoundSelectStmt
+	ResultType storage.DataType
+}
+
+func (b *BoundSubqueryExpr) String() string {
+	if b.Subquery != nil && b.Subquery.RawStmt != nil {
+		return fmt.Sprintf("(%s)", b.Subquery.RawStmt.String())
+	}
+	return "(SELECT ...)"
+}
+func (b *BoundSubqueryExpr) BoundType() storage.DataType { return b.ResultType }
+
+// BoundExistsExpr represents an EXISTS (SELECT ...) or NOT EXISTS (SELECT ...) predicate.
+type BoundExistsExpr struct {
+	proc.BaseExpr
+	Subquery *BoundSelectStmt
+	Not      bool
+}
+
+func (b *BoundExistsExpr) String() string {
+	prefix := "EXISTS"
+	if b.Not {
+		prefix = "NOT EXISTS"
+	}
+	if b.Subquery != nil && b.Subquery.RawStmt != nil {
+		return fmt.Sprintf("%s (%s)", prefix, b.Subquery.RawStmt.String())
+	}
+	return fmt.Sprintf("%s (SELECT ...)", prefix)
+}
+func (b *BoundExistsExpr) BoundType() storage.DataType { return storage.TypeBool }
+
+// BoundInSubqueryExpr represents an expr IN (SELECT ...) or expr NOT IN (SELECT ...) predicate.
+type BoundInSubqueryExpr struct {
+	proc.BaseExpr
+	Expr       BoundExpr
+	Subquery   *BoundSelectStmt
+	Not        bool
+	ResultType storage.DataType
+}
+
+func (b *BoundInSubqueryExpr) String() string {
+	op := "IN"
+	if b.Not {
+		op = "NOT IN"
+	}
+	leftStr := ""
+	if b.Expr != nil {
+		leftStr = b.Expr.String()
+	}
+	if b.Subquery != nil && b.Subquery.RawStmt != nil {
+		return fmt.Sprintf("%s %s (%s)", leftStr, op, b.Subquery.RawStmt.String())
+	}
+	return fmt.Sprintf("%s %s (SELECT ...)", leftStr, op)
+}
+func (b *BoundInSubqueryExpr) BoundType() storage.DataType { return storage.TypeBool }
+
+// BoundInListExpr represents an expr IN (val1, val2, ...) predicate.
+type BoundInListExpr struct {
+	proc.BaseExpr
+	Expr       BoundExpr
+	List       []BoundExpr
+	Not        bool
+	ResultType storage.DataType
+}
+
+func (b *BoundInListExpr) String() string {
+	op := "IN"
+	if b.Not {
+		op = "NOT IN"
+	}
+	leftStr := ""
+	if b.Expr != nil {
+		leftStr = b.Expr.String()
+	}
+	var items []string
+	for _, itm := range b.List {
+		if itm != nil {
+			items = append(items, itm.String())
+		}
+	}
+	return fmt.Sprintf("%s %s (%s)", leftStr, op, strings.Join(items, ", "))
+}
+func (b *BoundInListExpr) BoundType() storage.DataType { return storage.TypeBool }
+
+// BoundQuantifiedComparisonExpr represents an expr Op (ALL | ANY | SOME) (SELECT ...) predicate.
+type BoundQuantifiedComparisonExpr struct {
+	proc.BaseExpr
+	Expr       BoundExpr
+	Op         proc.TokenType
+	Quantifier proc.TokenType
+	Subquery   *BoundSelectStmt
+	ResultType storage.DataType
+}
+
+func (b *BoundQuantifiedComparisonExpr) String() string {
+	qStr := "ANY"
+	if b.Quantifier == proc.TokenAll {
+		qStr = "ALL"
+	} else if b.Quantifier == proc.TokenSome {
+		qStr = "SOME"
+	}
+	leftStr := ""
+	if b.Expr != nil {
+		leftStr = b.Expr.String()
+	}
+	if b.Subquery != nil && b.Subquery.RawStmt != nil {
+		return fmt.Sprintf("%s %s %s (%s)", leftStr, b.Op, qStr, b.Subquery.RawStmt.String())
+	}
+	return fmt.Sprintf("%s %s %s (SELECT ...)", leftStr, b.Op, qStr)
+}
+func (b *BoundQuantifiedComparisonExpr) BoundType() storage.DataType { return storage.TypeBool }
+
 // BoundGenericExpr wraps any proc.Expr whose sub-expressions have been bound,
 // serving as a bridge for expressions such as CASE, CAST, BETWEEN, and IN.
 type BoundGenericExpr struct {

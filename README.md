@@ -191,6 +191,21 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
 ./bin/lionsql stop
 ```
 
+### 3. Running with Docker
+
+Run the official lightweight multi-architecture container (`linux/amd64`, `linux/arm64`) from GitHub Container Registry:
+
+```bash
+docker run -d \
+  --name lionsql \
+  -p 5433:5433 \
+  -p 1433:1433 \
+  -p 8090:8090 \
+  -e LIONSQL_ADMIN_PASS="YourSecurePassword123!" \
+  -v lionsql_data:/data \
+  ghcr.io/maroshim/lionsql:latest
+```
+
 Upon startup, the console displays the connection endpoints:
 
 ```text

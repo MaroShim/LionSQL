@@ -209,6 +209,22 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - Layer 2 (Linter & Review Gate): Prohibits introduction of `IsPostgres()` or `IsTDS()` checks in `pkg/proc/` parser/compiler packages.
    - Layer 3 (Architecture Contract): Codified in `GEMINI.md` and `notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`.
 
+### Invariant 18: Complex Relational Physical Plan Cache Prohibition & Parameter Sniffing Immunity (`[RULE:ZeroParameterSniffing]`)
+1. **Strict Prohibition of Complex Relational Physical Plan Caching**:
+   - The query planner, CBO optimizer, and execution engine must **NEVER** cache physical Volcano iterator execution plan trees (join algorithms, join orderings, index scan directions) for complex relational queries (multi-table joins, range filters, aggregations, subqueries).
+   - In commercial engines (MS SQL Server, PostgreSQL), caching physical execution plans compiled from initial parameter bindings introduces catastrophic **Parameter Sniffing (Plan Regression)**: an Index Seek plan optimized for a 1-row parameter (`@status = 'CANCELLED'`) is forced upon subsequent 1,000,000-row executions (`@status = 'COMPLETED'`), causing random I/O storms and database hangs.
+2. **Sub-Microsecond Pratt CBO Primacy over Fragile Caching**:
+   - LionSQL's native Pratt parser and Volcano CBO compile complex relational queries in tens of microseconds ($\le 50\mu\text{s}$). Attempting to bypass this tiny overhead by maintaining a complex plan cache introduces global lock contention, cache invalidation storms on DDL/statistics changes, and fragile heuristics (`OPTIMIZE FOR UNKNOWN`, PSP), directly violating `[RULE:RadicalKISS]`.
+3. **Strict Boundary: Spec-In vs. Permanently Spec-Out**:
+   - **Spec-In (Fast-Path & Static Caching)**:
+     - **Point Lookup Fast-Path (`WHERE pk = ?`)**: Cardinality is strictly fixed to $\le 1$ with zero data skew risk. Bypasses Volcano CBO directly to `tx.GetRow(table, pkVal)`.
+     - **Stored Procedure VDBE Bytecode**: Procedural control flow (`IF`, `WHILE`, variable computation) is structurally static and safely cached in `PlanCache`.
+     - **Pre-Parsed AST & Semantic Scope**: Prepared statement syntax parsing and binder scope validation may be retained at the driver statement layer.
+   - **Permanently Spec-Out**:
+     - Caching physical Volcano operator trees for multi-table joins, range scans, and complex analytical queries is permanently forbidden.
+4. **Multi-Layer Defensive Lockdown**:
+   - Layer 1 (Architecture Contract): Codified in `GEMINI.md`, `doc/ADR.md` (ADR-032), and `notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
@@ -235,6 +251,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 19. **Partial / Delta WAL Logging (`WAL-DELTA-1`)**: Permanently Spec-Out. While logging only modified columns on UPDATE promises theoretical write-volume savings, it introduces severe architectural drawbacks: (1) crash recovery and replication replay suffer catastrophic Read-Modify-Write penalties as every record requires reading the base row before patching, drastically inflating Recovery Time Objective (RTO); (2) composite secondary indexes containing unmodified columns cannot identify previous key values without full-row lookups, risking index corruption; (3) variable-length column (VARCHAR) realignment eliminates in-memory CPU benefits; and (4) OS 4KB page caching combined with LionSQL's group commit (`wal.GroupCommit`) masks sub-block differences, rendering physical I/O gains negligible. LionSQL strictly standardizes on instant $O(1)$ Full-Row WAL logging as its verified single standard.
 20. **In-Process Graceful Reboot Multi-Database Switching (`RESEARCH-INPROCESS-REBOOT-USE`)**: Permanently Spec-Out. The proposal to implement `USE <dbname>` by gracefully tearing down and rebooting the entire database kernel/engine within the process to switch storage subfolders has been definitively rejected: (1) it destroys connection multiplexing and transaction isolation across concurrent client sessions; (2) tear-down/spin-up introduces multi-second latency spikes in high-frequency queries; and (3) cross-database joins and 3-part naming (`SalesDB.dbo.Orders`) are fundamentally impossible across distinct physical process states. LionSQL standardizes permanently on **Prefix-Based Logical Database Namespaces (`__db_<dbname>_*`)** in `v1.1.0` (`ARCH-LOGICAL-NAMESPACE-1`), delivering sub-microsecond local cross-database joins and zero process restart overhead.
 21. **Complex Middle Column Virtual Dropped Masking (`PERF-OCC-INSTANT-DROP-COL-1`)**: Permanently Spec-Out. Dropping non-terminal (middle) columns at runtime in a live production environment is an operational anti-pattern. Technically, executing a physical row rewrite during runtime causes catastrophic stalls, latency spikes, and table locks; conversely, attempting instant schema tombstone masking or virtual column indirection maps introduces extreme implementation complexity, fragile verification edge cases, and degrades the 0.5ns sub-microsecond fixed-offset decoding hot path. LionSQL standardizes permanently on Instant Tail-Only DDL with fail-closed rejection (`ErrDropColumnNotTail`) for middle column drops, prescribing the production-standard **Copy-and-Switch** pattern (`CREATE TABLE new AS SELECT ...` followed by atomic rename) for structural reorganizations.
+22. **Complex Relational Physical Plan Caching (`SPEC-OUT-COMPLEX-PLAN-CACHE-1`)**: Permanently Spec-Out. Caching physical Volcano execution plans (join orderings, join algorithms, index scan selections) for multi-table queries and range filters is permanently excluded to eliminate **Parameter Sniffing (Plan Regression)** and global cache invalidation lock contention. LionSQL relies on its sub-microsecond Pratt CBO to fresh-plan relational queries with actual parameters, confining plan fast-paths strictly to $O(1)$ single-row Point Lookups (`WHERE pk = ?`) and static stored procedure VDBE bytecode.
 
 ---
 

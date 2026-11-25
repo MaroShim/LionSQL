@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement hierarchical scope binding and outer level resolution for correlated subqueries in dedicated Semantic Binder (`BINDER-EVOL-PHASE-6`)
+- codify Invariant 18 and ADR-032 permanently Spec-Outing complex relational physical plan caching to eliminate Parameter Sniffing and plan regression (`SPEC-OUT-COMPLEX-PLAN-CACHE-1`)
+- establish dedicated architecture plan for PGWire single PK point lookup fast-path (`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`)
+- add official multi-stage Alpine Dockerfile and automated multi-arch (`linux/amd64`, `linux/arm64`) image publishing to GitHub Container Registry (`ghcr.io`) on version release (`DOCKER-RELEASE-PIPELINE-1`)
+- extend environment variable overrides (`ApplyEnvOverrides`) for `LIONSQL_DATA_DIR`, `LIONSQL_HTTP`, `LIONSQL_PG`, and `LIONSQL_TDS` (`[RULE:ConfigHierarchy]`)
 - introduce dedicated Semantic Binder and Gatekeeper architecture pass (`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`, `ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`) in `pkg/planner/validator.go` enforcing compile-time scope isolation, identifier resolution, and DML write contracts
 - document dedicated binder architecture in `notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md` comparing against global DBMS standards (PostgreSQL `parse_analyze`, DuckDB `Binder`, Calcite `SqlValidator`)
 - add template-based random generative fuzz test suites for DML constraints and 2-tier parser boundary fail-closed validation (`fuzz_dml_constraint_negative_test.go`, `fuzz_two_tier_boundary_test.go`)

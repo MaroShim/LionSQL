@@ -451,6 +451,16 @@ func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
 	os.Setenv("LIONSQL_APP", "./dist")
 	defer os.Unsetenv("LIONSQL_APP")
 
+	// LIONSQL_DATA_DIR, LIONSQL_HTTP, LIONSQL_PG, LIONSQL_TDS
+	os.Setenv("LIONSQL_DATA_DIR", "/custom/data")
+	defer os.Unsetenv("LIONSQL_DATA_DIR")
+	os.Setenv("LIONSQL_HTTP", ":9090")
+	defer os.Unsetenv("LIONSQL_HTTP")
+	os.Setenv("LIONSQL_PG", ":6433")
+	defer os.Unsetenv("LIONSQL_PG")
+	os.Setenv("LIONSQL_TDS", ":2433")
+	defer os.Unsetenv("LIONSQL_TDS")
+
 	cfg := config.DefaultConfig()
 	config.ApplyEnvOverrides(cfg)
 	if cfg.Auth.AdminPass != "EnvPass999" {
@@ -458,6 +468,18 @@ func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
 	}
 	if cfg.Server.AppPath != "./dist" {
 		t.Errorf("expected AppPath './dist', got %q", cfg.Server.AppPath)
+	}
+	if cfg.Server.DataDir != "/custom/data" {
+		t.Errorf("expected DataDir '/custom/data', got %q", cfg.Server.DataDir)
+	}
+	if cfg.Network.HTTPAddr != ":9090" {
+		t.Errorf("expected HTTPAddr ':9090', got %q", cfg.Network.HTTPAddr)
+	}
+	if cfg.Network.PGAddr != ":6433" {
+		t.Errorf("expected PGAddr ':6433', got %q", cfg.Network.PGAddr)
+	}
+	if cfg.Network.TDSAddr != ":2433" {
+		t.Errorf("expected TDSAddr ':2433', got %q", cfg.Network.TDSAddr)
 	}
 }
 

@@ -89,6 +89,42 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 	case *planner.BoundGenericExpr:
 		return EvalTupleExprWithContext(t, e.Inner, execSubquery, sessionVars)
 
+	case *planner.BoundSubqueryExpr:
+		if e.Subquery != nil && e.Subquery.RawStmt != nil {
+			return EvalTupleExprWithContext(t, &proc.ScalarSubqueryExpr{Query: e.Subquery.RawStmt}, execSubquery, sessionVars)
+		}
+		return nil, false
+
+	case *planner.BoundExistsExpr:
+		if e.Subquery != nil && e.Subquery.RawStmt != nil {
+			return EvalTupleExprWithContext(t, &proc.ExistsExpr{Query: e.Subquery.RawStmt, Not: e.Not}, execSubquery, sessionVars)
+		}
+		return false, false
+
+	case *planner.BoundInSubqueryExpr:
+		if e.Subquery != nil && e.Subquery.RawStmt != nil {
+			return EvalTupleExprWithContext(t, &proc.InExpr{Expr: e.Expr, Query: e.Subquery.RawStmt, Not: e.Not}, execSubquery, sessionVars)
+		}
+		return false, false
+
+	case *planner.BoundInListExpr:
+		var rawList []proc.Expr
+		for _, itm := range e.List {
+			rawList = append(rawList, itm)
+		}
+		return EvalTupleExprWithContext(t, &proc.InExpr{Expr: e.Expr, List: rawList, Not: e.Not}, execSubquery, sessionVars)
+
+	case *planner.BoundQuantifiedComparisonExpr:
+		if e.Subquery != nil && e.Subquery.RawStmt != nil {
+			return EvalTupleExprWithContext(t, &proc.QuantifiedComparisonExpr{
+				Expr:       e.Expr,
+				Op:         e.Op,
+				Quantifier: e.Quantifier,
+				Query:      e.Subquery.RawStmt,
+			}, execSubquery, sessionVars)
+		}
+		return false, false
+
 	case *proc.ColumnRefExpr:
 		name := e.Name
 		if val, ok := t.GetOK(name); ok {
