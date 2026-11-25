@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"container/heap"
 	"context"
 	"errors"
 	"fmt"
@@ -2738,41 +2739,31 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 	if qInfo.OrderByClause != "" && len(aggRows) > 0 {
 		orderItems := sqlutil.ParseOrderBy(qInfo.OrderByClause)
 		if len(orderItems) > 0 {
-			sort.SliceStable(aggRows, func(i, j int) bool {
-				for _, item := range orderItems {
-					orderCol := cleanIdentifier(item.Column)
-					bareCol := orderCol
-					if idx := strings.Index(bareCol, "."); idx != -1 {
-						bareCol = bareCol[idx+1:]
-					}
-					v1, ok1 := aggRows[i][orderCol]
-					if !ok1 || v1 == nil {
-						v1 = aggRows[i][bareCol]
-					}
-					v2, ok2 := aggRows[j][orderCol]
-					if !ok2 || v2 == nil {
-						v2 = aggRows[j][bareCol]
-					}
-					if v1 == nil && v2 == nil {
-						continue
-					}
-					if (v1 == nil || v2 == nil) && item.NullsFirst != nil {
-						if *item.NullsFirst {
-							return v1 == nil
-						}
-						return v1 != nil
-					}
-					cmp := sqlutil.CompareAny(v1, v2)
-					if cmp == 0 {
-						continue
-					}
-					if item.Desc {
-						return cmp > 0
-					}
-					return cmp < 0
+			k := int(qInfo.LimitCount + qInfo.OffsetCount)
+			if qInfo.LimitCount > 0 && k > 0 && k < len(aggRows) {
+				// Top-N heapsort optimization for coordinator execution
+				h := &topNRowHeap{
+					items:      make([]map[string]any, 0, k),
+					itemsOrder: orderItems,
 				}
-				return false
-			})
+				heap.Init(h)
+				for _, row := range aggRows {
+					if h.Len() < k {
+						heap.Push(h, row)
+					} else if compareAggRows(row, h.items[0], orderItems) < 0 {
+						h.items[0] = row
+						heap.Fix(h, 0)
+					}
+				}
+				aggRows = h.items
+				sort.SliceStable(aggRows, func(i, j int) bool {
+					return compareAggRows(aggRows[i], aggRows[j], orderItems) < 0
+				})
+			} else {
+				sort.SliceStable(aggRows, func(i, j int) bool {
+					return compareAggRows(aggRows[i], aggRows[j], orderItems) < 0
+				})
+			}
 		}
 	}
 
@@ -3245,6 +3236,68 @@ func (s *Coordinator) execGenerateSeries(argsRaw string, qInfo *planner.QueryInf
 		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
+}
+
+// compareAggRows compares two row maps based on the given order items.
+func compareAggRows(r1, r2 map[string]any, orderItems []sqlutil.OrderByItem) int {
+	for _, item := range orderItems {
+		orderCol := cleanIdentifier(item.Column)
+		bareCol := orderCol
+		if idx := strings.Index(bareCol, "."); idx != -1 {
+			bareCol = bareCol[idx+1:]
+		}
+		v1, ok1 := r1[orderCol]
+		if !ok1 || v1 == nil {
+			v1 = r1[bareCol]
+		}
+		v2, ok2 := r2[orderCol]
+		if !ok2 || v2 == nil {
+			v2 = r2[bareCol]
+		}
+		if v1 == nil && v2 == nil {
+			continue
+		}
+		if (v1 == nil || v2 == nil) && item.NullsFirst != nil {
+			if *item.NullsFirst {
+				if v1 == nil {
+					return -1
+				}
+				return 1
+			}
+			if v1 == nil {
+				return 1
+			}
+			return -1
+		}
+		cmp := sqlutil.CompareAny(v1, v2)
+		if cmp == 0 {
+			continue
+		}
+		if item.Desc {
+			return -cmp
+		}
+		return cmp
+	}
+	return 0
+}
+
+type topNRowHeap struct {
+	items      []map[string]any
+	itemsOrder []sqlutil.OrderByItem
+}
+
+func (h topNRowHeap) Len() int { return len(h.items) }
+func (h topNRowHeap) Less(i, j int) bool {
+	return compareAggRows(h.items[i], h.items[j], h.itemsOrder) > 0
+} // root is worst
+func (h topNRowHeap) Swap(i, j int) { h.items[i], h.items[j] = h.items[j], h.items[i] }
+func (h *topNRowHeap) Push(x any)   { h.items = append(h.items, x.(map[string]any)) }
+func (h *topNRowHeap) Pop() any {
+	old := h.items
+	n := len(old)
+	item := old[n-1]
+	h.items = old[0 : n-1]
+	return item
 }
 
 

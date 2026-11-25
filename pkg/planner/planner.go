@@ -116,6 +116,7 @@ type PlanNode struct {
 	FilterCond       string      `json:"filter_cond,omitempty"`
 	SortKey          string      `json:"sort_key,omitempty"`
 	SortOrder        string      `json:"sort_order,omitempty"`
+	SortLimit        int64       `json:"sort_limit,omitempty"`
 	LimitCount       int64       `json:"limit_count,omitempty"`
 	OffsetCount      int64       `json:"offset_count,omitempty"`
 	Projections      []string    `json:"projections,omitempty"`
@@ -1987,6 +1988,14 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			TotalCost:     limitCost,
 			EstimatedRows: limitEstRows,
 			Children:      []*PlanNode{currentNode},
+		}
+		if limitCnt >= 0 {
+			k := limitCnt + q.OffsetCount
+			if currentNode.Type == NodeSort {
+				currentNode.SortLimit = k
+			} else if currentNode.Type == NodeProjection && len(currentNode.Children) > 0 && currentNode.Children[0].Type == NodeSort {
+				currentNode.Children[0].SortLimit = k
+			}
 		}
 		currentNode = limitNode
 	}

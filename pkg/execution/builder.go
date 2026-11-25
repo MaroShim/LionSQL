@@ -138,6 +138,14 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("limit node has no children")
 		}
+		if plan.LimitCount >= 0 {
+			k := plan.LimitCount + plan.OffsetCount
+			if plan.Children[0].Type == planner.NodeSort {
+				plan.Children[0].SortLimit = k
+			} else if plan.Children[0].Type == planner.NodeProjection && len(plan.Children[0].Children) > 0 && plan.Children[0].Children[0].Type == planner.NodeSort {
+				plan.Children[0].Children[0].SortLimit = k
+			}
+		}
 		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
 		if cErr != nil {
 			return nil, cErr
@@ -157,6 +165,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			orderClause += " " + plan.SortOrder
 		}
 		sIter := NewSortIterator(child, orderClause)
+		if plan.SortLimit > 0 {
+			sIter.SetLimit(plan.SortLimit)
+		}
 		if opts.WorkMem > 0 {
 			sIter.SetWorkMem(opts.WorkMem)
 		}

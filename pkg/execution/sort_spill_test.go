@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"lionsql/pkg/execution"
@@ -235,6 +236,81 @@ func TestSortIterator_DescendingSortSpill(t *testing.T) {
 	for i := 1; i < len(sortedVals); i++ {
 		if sortedVals[i] > sortedVals[i-1] {
 			t.Fatalf("descending ordering violation at index %d: %d > %d", i, sortedVals[i], sortedVals[i-1])
+		}
+	}
+}
+
+func TestSortIterator_TopNHeapsort(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql-topn-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Generate 1,000 randomized tuples
+	nTuples := 1000
+	schema := []string{"id", "score"}
+	tuples := make([]execution.Tuple, nTuples)
+	for i := 0; i < nTuples; i++ {
+		tuples[i] = execution.NewTupleFromMap(map[string]any{
+			"id":    int64(i + 1),
+			"score": int64((i*41 + 17) % 10000),
+		}, schema)
+	}
+
+	mock := &mockTupleIterator{schema: schema, tuples: tuples}
+	sortIter := execution.NewSortIterator(mock, "score ASC, id ASC")
+	// Set tight workMem 4KB. Without Top-N heapsort this would spill 5+ times.
+	sortIter.SetWorkMem(4 * 1024)
+	sortIter.SetTempDir(tempDir)
+	// Request top 10 rows
+	sortIter.SetLimit(10)
+
+	ctx := context.Background()
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	if sortIter.SortMethod() != "top-N heapsort" {
+		t.Fatalf("expected 'top-N heapsort', got %s", sortIter.SortMethod())
+	}
+	if sortIter.SpillCount() != 0 {
+		t.Fatalf("expected 0 spills with top-N heapsort, got %d", sortIter.SpillCount())
+	}
+
+	var results []int64
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple.Get("score").(int64))
+	}
+
+	if len(results) != 10 {
+		t.Fatalf("expected 10 tuples, got %d", len(results))
+	}
+
+	// Verify monotonic ascending order
+	for i := 1; i < len(results); i++ {
+		if results[i] < results[i-1] {
+			t.Fatalf("ordering violation at index %d: %d < %d", i, results[i], results[i-1])
+		}
+	}
+
+	// Verify these 10 are indeed the smallest 10 scores from the entire 1,000 tuples
+	allScores := make([]int64, nTuples)
+	for i := range tuples {
+		allScores[i] = tuples[i].Get("score").(int64)
+	}
+	sort.Slice(allScores, func(i, j int) bool { return allScores[i] < allScores[j] })
+	for i := 0; i < 10; i++ {
+		if results[i] != allScores[i] {
+			t.Fatalf("mismatch at rank %d: expected %d, got %d", i, allScores[i], results[i])
 		}
 	}
 }

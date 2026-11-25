@@ -569,7 +569,7 @@
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-TOP-N-SORT-FUSION-1`** | `v0.95.0` | Execution | P2 | Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) | [`notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md`](notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-TOP-N-SORT-FUSION-1`** | `v0.95.0` | Execution | P2 | Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) | [`notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md`](notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
@@ -5454,8 +5454,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) `PERF-TOP-N-SORT-FUSION-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 00:32:32
+### [DONE] Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) `PERF-TOP-N-SORT-FUSION-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 00:41:08
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md`](notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md)
 

@@ -48,6 +48,27 @@ func (h *tupleMergeHeap) Pop() any {
 	return item
 }
 
+// topNHeap implements container/heap.Interface for bounded Top-N sort.
+// It maintains a max-heap where the root element items[0] is the "worst" tuple
+// according to the user-specified sort order, allowing O(1) worst-rejection
+// and O(log k) replacement.
+type topNHeap struct {
+	items []Tuple
+	cmp   func(tA, tB Tuple) int
+}
+
+func (h topNHeap) Len() int           { return len(h.items) }
+func (h topNHeap) Less(i, j int) bool { return h.cmp(h.items[i], h.items[j]) > 0 } // root is worst
+func (h topNHeap) Swap(i, j int)      { h.items[i], h.items[j] = h.items[j], h.items[i] }
+func (h *topNHeap) Push(x any)        { h.items = append(h.items, x.(Tuple)) }
+func (h *topNHeap) Pop() any {
+	old := h.items
+	n := len(old)
+	item := old[n-1]
+	h.items = old[0 : n-1]
+	return item
+}
+
 // SortIterator buffers incoming tuples, sorts them by one or more order keys, and streams them out.
 // When memory exceeds workMem, it automatically spills sorted runs to temporary disk files
 // and merges them on-demand via an N-way Min-Heap (External Merge Sort).
@@ -58,6 +79,7 @@ type SortIterator struct {
 	idx        int
 	workMem    int64
 	tempDir    string
+	limit      int64 // Maximum number of sorted rows needed (Top-N heapsort)
 	runFiles   []string
 	openFiles  []*os.File
 	decoders   []*json.Decoder
@@ -119,6 +141,13 @@ func (s *SortIterator) SetWorkMem(bytes int64) {
 func (s *SortIterator) SetTempDir(dir string) {
 	if dir != "" {
 		s.tempDir = dir
+	}
+}
+
+// SetLimit configures the maximum number of sorted tuples required (enabling Top-N heapsort).
+func (s *SortIterator) SetLimit(limit int64) {
+	if limit > 0 {
+		s.limit = limit
 	}
 }
 
@@ -318,6 +347,55 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	var curMem int64 = 0
 	inChunk := GetChunk()
 	defer PutChunk(inChunk)
+
+	// Top-N Heapsort Optimization:
+	// When a limit k is specified, maintain a bounded max-heap of size at most k.
+	// Non-qualifying incoming tuples are rejected in O(1) without expanding memory or spilling to disk.
+	if s.limit > 0 {
+		h := &topNHeap{cmp: s.compareTuples}
+		heap.Init(h)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			err := PullChunk(ctx, s.child, inChunk, DefaultChunkSize)
+			if err != nil && err != io.EOF {
+				return err
+			}
+			if inChunk.Len() == 0 && err == io.EOF {
+				break
+			}
+
+			for _, tuple := range inChunk.Tuples {
+				tSize := EstimateTupleSize(tuple)
+				if int64(h.Len()) < s.limit {
+					heap.Push(h, tuple)
+					curMem += tSize
+				} else if s.compareTuples(tuple, h.items[0]) < 0 {
+					oldSize := EstimateTupleSize(h.items[0])
+					h.items[0] = tuple
+					heap.Fix(h, 0)
+					curMem = curMem - oldSize + tSize
+				}
+				if curMem > s.peakMemory {
+					s.peakMemory = curMem
+				}
+			}
+
+			if err == io.EOF {
+				break
+			}
+		}
+
+		s.tuples = h.items
+		s.sortSlice(s.tuples)
+		s.sortMethod = "top-N heapsort"
+		return nil
+	}
 
 	// Materialize incoming child tuples in chunks
 	for {
