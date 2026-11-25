@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage"
 )
 
@@ -22,6 +24,8 @@ type SeqScanIterator struct {
 	eof          bool
 	arena        *storage.Arena
 	requiredCols []int
+	filterCond   string
+	filterExpr   proc.Expr
 }
 
 // SetArena configures an optional memory arena for zero-GC tuple allocation.
@@ -32,6 +36,17 @@ func (s *SeqScanIterator) SetArena(a *storage.Arena) {
 // SetRequiredCols configures selective column decoding for projection pushdown.
 func (s *SeqScanIterator) SetRequiredCols(cols []int) {
 	s.requiredCols = cols
+}
+
+// SetFilterCond configures a pushdown filter predicate for early row rejection in storage scan.
+func (s *SeqScanIterator) SetFilterCond(cond string) {
+	s.filterCond = strings.TrimSpace(cond)
+	if s.filterCond != "" {
+		p := proc.NewParser(proc.NewLexer(s.filterCond))
+		if expr := p.ParseExpr(); expr != nil && len(p.Errors()) == 0 {
+			s.filterExpr = proc.FoldConstants(expr)
+		}
+	}
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
@@ -76,7 +91,7 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena, requiredCols []int, eof *bool, dest *Chunk) error {
+func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena, requiredCols []int, filterExpr proc.Expr, eof *bool, dest *Chunk) error {
 	if cursor == nil || *eof {
 		return io.EOF
 	}
@@ -108,6 +123,19 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 
 		if hasRaw {
 			if rawCur.RawTupleBuffer(bufPtr) {
+				// Scan-Filter Fusion: early predicate evaluation before heap allocations
+				if filterExpr != nil {
+					rawTuple := Tuple{
+						Raw:    *bufPtr,
+						Schema: schema,
+						Index:  colMap,
+					}
+					matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					if !matched {
+						continue // Filter mismatch: 0 heap allocations, drop immediately
+					}
+				}
+
 				if hasSelection {
 					if row, err := storage.DecodeTupleSelectedWithArena(schema, *bufPtr, requiredCols, arena); err == nil {
 						dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
@@ -136,6 +164,17 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 					continue
 				}
 			} else if rawData, ok := rawCur.RawTuple(); ok {
+				if filterExpr != nil {
+					rawTuple := Tuple{
+						Raw:    rawData,
+						Schema: schema,
+						Index:  colMap,
+					}
+					matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					if !matched {
+						continue
+					}
+				}
 				if hasSelection {
 					if row, err := storage.DecodeTupleSelectedWithArena(schema, rawData, requiredCols, arena); err == nil {
 						dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
@@ -161,21 +200,37 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 
 		if hasArena && arena != nil {
 			if row, err := arenaCur.RowWithArena(arena); err == nil {
+				var t Tuple
 				if hasSelection {
-					dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
+					t = FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena)
 				} else {
-					dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, schema, alias, colMap, arena))
+					t = FormatRowWithArena(row, schema, alias, colMap, arena)
 				}
+				if filterExpr != nil {
+					matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+					if !matched {
+						continue
+					}
+				}
+				dest.Tuples = append(dest.Tuples, t)
 				continue
 			}
 		}
 
 		if row, err := cursor.Row(); err == nil {
+			var t Tuple
 			if hasSelection {
-				dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
+				t = FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena)
 			} else {
-				dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, schema, alias, colMap, arena))
+				t = FormatRowWithArena(row, schema, alias, colMap, arena)
 			}
+			if filterExpr != nil {
+				matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+				if !matched {
+					continue
+				}
+			}
+			dest.Tuples = append(dest.Tuples, t)
 			continue
 		}
 
@@ -186,7 +241,14 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 			}
 			return err
 		}
-		dest.Tuples = append(dest.Tuples, FormatRecord(rec, schema, alias, colMap))
+		t := FormatRecord(rec, schema, alias, colMap)
+		if filterExpr != nil {
+			matched, _ := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+			if !matched {
+				continue
+			}
+		}
+		dest.Tuples = append(dest.Tuples, t)
 	}
 	return nil
 }
@@ -246,7 +308,7 @@ func FormatRowWithSelectedCols(row storage.Row, schema *storage.TableSchema, ali
 }
 
 func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, &s.eof, dest)
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, &s.eof, dest)
 }
 
 func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
@@ -313,6 +375,8 @@ type IndexScanIterator struct {
 	eof          bool
 	arena        *storage.Arena
 	requiredCols []int
+	filterCond   string
+	filterExpr   proc.Expr
 }
 
 // SetArena configures an optional memory arena for zero-GC tuple allocation.
@@ -323,6 +387,17 @@ func (s *IndexScanIterator) SetArena(a *storage.Arena) {
 // SetRequiredCols configures selective column decoding for projection pushdown.
 func (s *IndexScanIterator) SetRequiredCols(cols []int) {
 	s.requiredCols = cols
+}
+
+// SetFilterCond configures a pushdown filter predicate for early row rejection in storage index scan.
+func (s *IndexScanIterator) SetFilterCond(cond string) {
+	s.filterCond = strings.TrimSpace(cond)
+	if s.filterCond != "" {
+		p := proc.NewParser(proc.NewLexer(s.filterCond))
+		if expr := p.ParseExpr(); expr != nil && len(p.Errors()) == 0 {
+			s.filterExpr = proc.FoldConstants(expr)
+		}
+	}
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -367,7 +442,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 }
 
 func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, &s.eof, dest)
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, &s.eof, dest)
 }
 
 func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {

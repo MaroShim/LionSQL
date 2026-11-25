@@ -157,35 +157,19 @@ type Tuple struct {
 	Values []any
 	Index  *ColumnIndexMap
 	Lazy   *storage.LazyTuple
+	Raw    []byte
+	Schema *storage.TableSchema
 }
 
 // IsNil returns true if the tuple is empty or uninitialized.
 func (t Tuple) IsNil() bool {
-	return t.Values == nil && t.Index == nil && t.Lazy == nil
+	return t.Values == nil && t.Index == nil && t.Lazy == nil && len(t.Raw) == 0
 }
 
 // Get returns the value for the given column name or expression.
 func (t Tuple) Get(col string) any {
-	if t.Index == nil {
-		return nil
-	}
-	idx, ok := t.Index.Index(col)
-	if !ok || idx < 0 {
-		return nil
-	}
-	if t.Lazy != nil && (idx >= len(t.Values) || t.Values[idx] == nil) {
-		val, err := t.Lazy.Get(idx)
-		if err == nil {
-			if idx < len(t.Values) {
-				t.Values[idx] = formatStorageVal(val)
-				return t.Values[idx]
-			}
-		}
-	}
-	if idx >= len(t.Values) {
-		return nil
-	}
-	return t.Values[idx]
+	val, _ := t.GetOK(col)
+	return val
 }
 
 // GetOK returns the value and whether the column exists in the tuple schema.
@@ -197,14 +181,27 @@ func (t Tuple) GetOK(col string) (any, bool) {
 	if !ok || idx < 0 {
 		return nil, false
 	}
-	if t.Lazy != nil && (idx >= len(t.Values) || t.Values[idx] == nil) {
+	if idx < len(t.Values) && t.Values[idx] != nil {
+		return t.Values[idx], true
+	}
+	if len(t.Raw) > 0 && t.Schema != nil {
+		val, err := storage.ExtractColumnFromTuple(t.Schema, t.Raw, idx)
+		if err == nil {
+			formatted := formatStorageVal(val)
+			if idx < len(t.Values) {
+				t.Values[idx] = formatted
+			}
+			return formatted, true
+		}
+	}
+	if t.Lazy != nil {
 		val, err := t.Lazy.Get(idx)
 		if err == nil {
+			formatted := formatStorageVal(val)
 			if idx < len(t.Values) {
-				t.Values[idx] = formatStorageVal(val)
-				return t.Values[idx], true
+				t.Values[idx] = formatted
 			}
-			return formatStorageVal(val), true
+			return formatted, true
 		}
 	}
 	if idx >= len(t.Values) {

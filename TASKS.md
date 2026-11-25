@@ -562,7 +562,7 @@
 | `DONE` | **`PERF-RESULT-ROW-STREAM-1`** | `v1.10.0` | Engine | P2 | 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-RUNTIME-BLOOM-FILTER-1`** | `v0.96.0` | Execution | P2 | Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-RUNTIME-BLOOM-FILTER-JOIN-1`** | `Post-1.0` | Execution | P2 | Runtime Bloom Filter Pushdown (Join Build-side 블룸 필터 Probe Scan 주입) | [`notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md`](notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-SCAN-FILTER-FUSION-1`** | `v0.95.0` | Execution | P2 | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) | [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-SCAN-FILTER-FUSION-1`** | `v0.95.0` | Execution | P2 | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) | [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.97.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
@@ -5403,8 +5403,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) `PERF-SCAN-FILTER-FUSION-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 00:32:32
+### [DONE] Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) `PERF-SCAN-FILTER-FUSION-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 00:48:11
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md)
 

@@ -67,6 +67,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if len(plan.RequiredCols) > 0 {
 			sIter.SetRequiredCols(plan.RequiredCols)
 		}
+		if plan.FilterCond != "" {
+			sIter.SetFilterCond(plan.FilterCond)
+		}
 		if opts.Arena != nil {
 			sIter.SetArena(opts.Arena)
 		}
@@ -83,6 +86,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
 		if len(plan.RequiredCols) > 0 {
 			it.SetRequiredCols(plan.RequiredCols)
+		}
+		if plan.FilterCond != "" {
+			it.SetFilterCond(plan.FilterCond)
 		}
 		if opts.Arena != nil {
 			it.SetArena(opts.Arena)
@@ -103,6 +109,21 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 	case planner.NodeFilter:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("filter node has no children")
+		}
+		// Scan-Filter Fusion Pushdown:
+		// Push filter condition down directly into child scan for zero-GC early tuple rejection.
+		// If instrumentation is requested (e.g. EXPLAIN ANALYZE node measurement), keep individual node counters intact.
+		if !instrument {
+			childPlan := plan.Children[0]
+			if childPlan.Type == planner.NodeTableScan || childPlan.Type == planner.NodeIndexScan || childPlan.Type == planner.NodeIndexOnlyScan {
+				if !sqlutil.ContainsKeyword(plan.FilterCond, "SELECT", true) && !sqlutil.ContainsKeyword(plan.FilterCond, "EXISTS", true) {
+					if childPlan.FilterCond == "" {
+						childPlan.FilterCond = plan.FilterCond
+					} else {
+						childPlan.FilterCond = "(" + childPlan.FilterCond + ") AND (" + plan.FilterCond + ")"
+					}
+				}
+			}
 		}
 		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
 		if cErr != nil {
