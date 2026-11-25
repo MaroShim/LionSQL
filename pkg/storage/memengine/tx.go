@@ -264,6 +264,14 @@ func (tx *Transaction) resetForPoolLocked() {
 }
 
 func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) error {
+	return tx.tryAcquireWriteLockInternal(td, pkKey, false)
+}
+
+func (tx *Transaction) tryAcquireDeleteLockLocked(td *TableData, pkKey string) error {
+	return tx.tryAcquireWriteLockInternal(td, pkKey, true)
+}
+
+func (tx *Transaction) tryAcquireWriteLockInternal(td *TableData, pkKey string, isDelete bool) error {
 	if td == nil {
 		return nil
 	}
@@ -279,8 +287,9 @@ func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) er
 	if owner, exists := sh.activeWriters[pkKey]; exists && owner != tx.txID {
 		return storage.ErrSerializationFailure
 	}
-	// Check if other transactions hold a shared foreign key reference lock on this row
-	if sh.activeReaders != nil {
+	// Shared foreign key reference lock on parent rows only conflicts with DELETE / PK-mutation (isDelete = true).
+	// Non-PK column UPDATEs (e.g. warehouse.w_ytd, district.d_next_o_id) do not orphan child rows and can safely proceed concurrently.
+	if isDelete && sh.activeReaders != nil {
 		if readers, hasReaders := sh.activeReaders[pkKey]; hasReaders {
 			for rTxID := range readers {
 				if rTxID != tx.txID {
@@ -1350,7 +1359,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 	tableName = td.Schema.Name
 
 	pkKey := pk.String()
-	if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+	if err := tx.tryAcquireDeleteLockLocked(td, pkKey); err != nil {
 		return err
 	}
 	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
@@ -2699,16 +2708,11 @@ func (tx *Transaction) Commit() error {
 			if rawData == nil && ch.kind != changeDelete {
 				return fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table)
 			}
-			var opSchema *storage.TableSchema
-			if chTD != nil {
-				opSchema = &chTD.Schema
-			}
 			ops = append(ops, WALOp{
 				Type:    opType,
 				Table:   ch.table,
 				Key:     ch.key,
 				Data:    rawData,
-				Schema:  opSchema,
 				BaseVer: ch.baseVer,
 			})
 		}

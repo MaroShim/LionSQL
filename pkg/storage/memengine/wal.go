@@ -3,6 +3,7 @@ package memengine
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -162,15 +163,294 @@ func (w *WALWriter) Append(rec WALRecord) error {
 }
 
 // walFrameHeaderSize is the 8-byte header size for each WAL frame:
+// walBinaryMagic is the 1-byte version magic for pure binary WAL frames (Invariant 13).
+// Frames starting with 0x02 use pure binary streaming encoding; older frames fallback to MessagePack.
+const walBinaryMagic = 0x02
+
+// MarshalWALRecordBinary encodes a WALRecord into high-performance zero-reflection binary format.
+// Frame format:
+//   [1B Magic: 0x02]
+//   [8B LSN][8B TxID][8B Timestamp][4B OpCount]
+//   Per Op:
+//     [1B OpType]
+//     [2B TableLen][N bytes Table]
+//     [2B KeyLen][N bytes Key]
+//     [8B BaseVer]
+//     [4B DataLen][N bytes Data]
+//     [1B HasMeta: 0 or 1]
+//     (if HasMeta == 1: [4B MetaLen][N bytes JSON-encoded extra fields])
+func MarshalWALRecordBinary(rec WALRecord) ([]byte, error) {
+	// Pre-calculate estimated buffer size
+	size := 1 + 8 + 8 + 8 + 4
+	for _, op := range rec.Ops {
+		size += 1 + 2 + len(op.Table) + 2 + len(op.Key) + 8 + 4 + len(op.Data) + 1
+		if op.Schema != nil || op.IndexSchema != nil || op.IndexName != "" || op.Column != nil || op.Record != nil {
+			size += 4 + 256 // estimated meta size
+		}
+	}
+	buf := make([]byte, 0, size)
+
+	buf = append(buf, walBinaryMagic)
+	var numBuf [8]byte
+
+	binary.BigEndian.PutUint64(numBuf[0:8], uint64(rec.LSN))
+	buf = append(buf, numBuf[0:8]...)
+
+	binary.BigEndian.PutUint64(numBuf[0:8], uint64(rec.TxID))
+	buf = append(buf, numBuf[0:8]...)
+
+	binary.BigEndian.PutUint64(numBuf[0:8], uint64(rec.Timestamp))
+	buf = append(buf, numBuf[0:8]...)
+
+	binary.BigEndian.PutUint32(numBuf[0:4], uint32(len(rec.Ops)))
+	buf = append(buf, numBuf[0:4]...)
+
+	for _, op := range rec.Ops {
+		buf = append(buf, byte(walOpTypeToByte(op.Type)))
+
+		// Table string
+		tLen := len(op.Table)
+		binary.BigEndian.PutUint16(numBuf[0:2], uint16(tLen))
+		buf = append(buf, numBuf[0:2]...)
+		if tLen > 0 {
+			buf = append(buf, op.Table...)
+		}
+
+		// Key string
+		kLen := len(op.Key)
+		binary.BigEndian.PutUint16(numBuf[0:2], uint16(kLen))
+		buf = append(buf, numBuf[0:2]...)
+		if kLen > 0 {
+			buf = append(buf, op.Key...)
+		}
+
+		// BaseVer
+		binary.BigEndian.PutUint64(numBuf[0:8], uint64(op.BaseVer))
+		buf = append(buf, numBuf[0:8]...)
+
+		// Data (tuple bytes)
+		dLen := len(op.Data)
+		binary.BigEndian.PutUint32(numBuf[0:4], uint32(dLen))
+		buf = append(buf, numBuf[0:4]...)
+		if dLen > 0 {
+			buf = append(buf, op.Data...)
+		}
+
+		// HasMeta (DDL schemas or non-standard fields)
+		if op.Schema != nil || op.IndexSchema != nil || op.IndexName != "" || op.Column != nil || op.Record != nil {
+			metaBytes, err := json.Marshal(walOpMeta{
+				Record:      op.Record,
+				Schema:      op.Schema,
+				Column:      op.Column,
+				IndexSchema: op.IndexSchema,
+				IndexName:   op.IndexName,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal WALOp metadata: %w", err)
+			}
+			buf = append(buf, 1) // hasMeta = true
+			binary.BigEndian.PutUint32(numBuf[0:4], uint32(len(metaBytes)))
+			buf = append(buf, numBuf[0:4]...)
+			buf = append(buf, metaBytes...)
+		} else {
+			buf = append(buf, 0) // hasMeta = false
+		}
+	}
+	return buf, nil
+}
+
+type walOpMeta struct {
+	Record      storage.Record       `json:"record,omitempty"`
+	Schema      *storage.TableSchema `json:"schema,omitempty"`
+	Column      *storage.Column      `json:"column,omitempty"`
+	IndexSchema *storage.IndexSchema `json:"index_schema,omitempty"`
+	IndexName   string               `json:"index_name,omitempty"`
+}
+
+func walOpTypeToByte(t WALOpType) byte {
+	switch t {
+	case OpInsert:
+		return 1
+	case OpUpdate:
+		return 2
+	case OpDelete:
+		return 3
+	case OpCreateTable:
+		return 4
+	case OpDropTable:
+		return 5
+	case OpRenameTable:
+		return 6
+	case OpCreateIndex:
+		return 7
+	case OpDropIndex:
+		return 8
+	case OpAlterTable:
+		return 9
+	case OpTruncateTable:
+		return 10
+	case OpDropPartition:
+		return 11
+	default:
+		return 0
+	}
+}
+
+func byteToWALOpType(b byte) WALOpType {
+	switch b {
+	case 1:
+		return OpInsert
+	case 2:
+		return OpUpdate
+	case 3:
+		return OpDelete
+	case 4:
+		return OpCreateTable
+	case 5:
+		return OpDropTable
+	case 6:
+		return OpRenameTable
+	case 7:
+		return OpCreateIndex
+	case 8:
+		return OpDropIndex
+	case 9:
+		return OpAlterTable
+	case 10:
+		return OpTruncateTable
+	case 11:
+		return OpDropPartition
+	default:
+		return ""
+	}
+}
+
+// UnmarshalWALRecordBinary decodes binary bytes into rec. If data does not start with
+// walBinaryMagic (0x02), it transparently falls back to UnmarshalMsgPack for backwards compatibility.
+func UnmarshalWALRecordBinary(data []byte, rec *WALRecord) error {
+	if len(data) == 0 {
+		return io.ErrUnexpectedEOF
+	}
+	if data[0] != walBinaryMagic {
+		return UnmarshalMsgPack(data, rec)
+	}
+
+	if len(data) < 1+8+8+8+4 {
+		return io.ErrUnexpectedEOF
+	}
+
+	rec.LSN = int64(binary.BigEndian.Uint64(data[1:9]))
+	rec.TxID = int64(binary.BigEndian.Uint64(data[9:17]))
+	rec.Timestamp = int64(binary.BigEndian.Uint64(data[17:25]))
+	opCount := int(binary.BigEndian.Uint32(data[25:29]))
+	offset := 29
+
+	rec.Ops = make([]WALOp, 0, opCount)
+	for i := 0; i < opCount; i++ {
+		if offset >= len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		opTypeByte := data[offset]
+		offset++
+
+		// Table string
+		if offset+2 > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		tLen := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		offset += 2
+		if offset+tLen > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		tableStr := string(data[offset : offset+tLen])
+		offset += tLen
+
+		// Key string
+		if offset+2 > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		kLen := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		offset += 2
+		if offset+kLen > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		keyStr := string(data[offset : offset+kLen])
+		offset += kLen
+
+		// BaseVer
+		if offset+8 > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		baseVer := int64(binary.BigEndian.Uint64(data[offset : offset+8]))
+		offset += 8
+
+		// Data
+		if offset+4 > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		dLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
+		offset += 4
+		if offset+dLen > len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		var tupleData []byte
+		if dLen > 0 {
+			tupleData = make([]byte, dLen)
+			copy(tupleData, data[offset:offset+dLen])
+			offset += dLen
+		}
+
+		// HasMeta
+		if offset >= len(data) {
+			return io.ErrUnexpectedEOF
+		}
+		hasMeta := data[offset]
+		offset++
+
+		op := WALOp{
+			Type:    byteToWALOpType(opTypeByte),
+			Table:   tableStr,
+			Key:     keyStr,
+			BaseVer: baseVer,
+			Data:    tupleData,
+		}
+
+		if hasMeta == 1 {
+			if offset+4 > len(data) {
+				return io.ErrUnexpectedEOF
+			}
+			metaLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
+			offset += 4
+			if offset+metaLen > len(data) {
+				return io.ErrUnexpectedEOF
+			}
+			metaBytes := data[offset : offset+metaLen]
+			offset += metaLen
+
+			var meta walOpMeta
+			if err := json.Unmarshal(metaBytes, &meta); err != nil {
+				return fmt.Errorf("failed to unmarshal WALOp metadata: %w", err)
+			}
+			op.Record = meta.Record
+			op.Schema = meta.Schema
+			op.Column = meta.Column
+			op.IndexSchema = meta.IndexSchema
+			op.IndexName = meta.IndexName
+		}
+		rec.Ops = append(rec.Ops, op)
+	}
+	return nil
+}
+
 // [4-byte big-endian payload length | 4-byte big-endian IEEE CRC32 checksum].
 const walFrameHeaderSize = 8
 
 // writeFrame marshals rec and writes a single length+CRC32-prefixed frame to the OS file buffer
 // under w.mu, returning the assigned write sequence number without calling fsync.
 func (w *WALWriter) writeFrame(rec WALRecord) (int64, error) {
-	payload, err := MarshalMsgPack(rec)
+	payload, err := MarshalWALRecordBinary(rec)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
+		return 0, fmt.Errorf("failed to marshal binary WAL record: %w", err)
 	}
 
 	// Build single contiguous frame [4-byte big-endian length | 4-byte CRC32 | payload]
@@ -530,12 +810,12 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 		}
 
 		var rec WALRecord
-		if err := UnmarshalMsgPack(payload, &rec); err != nil {
+		if err := UnmarshalWALRecordBinary(payload, &rec); err != nil {
 			return maxLSN, fmt.Errorf("wal: corrupted payload unmarshal at offset %d (file size %d): %w", validOffset+walFrameHeaderSize, fileSize, err)
 		}
 
 		if err := applyFn(rec); err != nil {
-			return maxLSN, fmt.Errorf("failed to apply MessagePack WAL record (LSN=%d, frame=%d): %w", rec.LSN, frameIdx, err)
+			return maxLSN, fmt.Errorf("failed to apply WAL record (LSN=%d, frame=%d): %w", rec.LSN, frameIdx, err)
 		}
 
 		frameIdx++
