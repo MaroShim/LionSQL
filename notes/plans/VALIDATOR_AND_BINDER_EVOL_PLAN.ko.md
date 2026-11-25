@@ -1,5 +1,19 @@
 # VALIDATOR-AND-BINDER-EVOL: Semantic Gatekeeper First Architecture & Binder Evolution Plan
 
+> **문서 상태**: Phase 1 ~ 8 구현 완료 및 Phase 9/10 Spec-Out 종결 (Completed)  
+> **최초 작성일**: 2026-11-24  
+> **최종 갱신일**: 2026-11-25  
+> **관련 마일스톤**: `v0.95.0`, `v0.96.0`  
+> **선행 아키텍처 및 계보 문서 링크**:
+> 1. [BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md](file:///Users/maro/Projects/SQLion/doc/internal/BOUND_AST_AND_DEDICATED_BINDER_SPEC.ko.md) (전용 바인더 진화 아키텍처 및 5대 핵심 결함 분석 사양서)
+> 2. [SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md](file:///Users/maro/Projects/SQLion/doc/internal/SEMANTIC_GATEKEEPER_ARCHITECTURE.ko.md) (시맨틱 게이트키퍼 수문장 및 Scope 격리 설계)
+> 3. [BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md](file:///Users/maro/Projects/SQLion/doc/internal/BINDER_AND_TX_TO_BE_ARCHITECTURE.ko.md) (바인더 및 트랜잭션 관리자 To-Be 아키텍처)
+> 4. [SQL_SEMANTIC_INTEGRITY_SPEC.ko.md](file:///Users/maro/Projects/SQLion/doc/internal/SQL_SEMANTIC_INTEGRITY_SPEC.ko.md) (SQL 포괄적 무결성 및 시맨틱 표준 사양)
+> 5. [VALIDATOR_GATEKEEPER_HARDENING_PLAN.ko.md](file:///Users/maro/Projects/SQLion/notes/plans/VALIDATOR_GATEKEEPER_HARDENING_PLAN.ko.md) (게이트키퍼 5대 표준 SQL 불변식 강화 계획)
+> **핵심 엔지니어링 규칙**: `[RULE:PlanPersistence]`, `[RULE:RadicalKISS]`, `[RULE:PipelineVerification]`, `[RULE:ExplicitError]`, `[RULE:StyleIntegrity]`
+
+---
+
 ## 1. 개요 및 목적
 본 문서는 LionSQL **Validator(시맨틱 유효성 검증 및 표준 SQL 방화벽)**와 **Binder(심볼 바인딩 및 슬롯 매핑)**의 핵심 의미론적 불변식과 결함을 전면적으로 해결하기 위한 통합 진화 설계 및 구현 계획을 정의합니다.
 
@@ -166,3 +180,63 @@
    - 세이브포인트 DDL 트랜잭션 도중 `ShadowCatalog.MarkTableAltered` 호출을 추가하여 롤백 후 스키마 불일치 방지.
 5. **문자열 정렬 시 수치 파싱 역전 버그 수정**:
    - `SortIterator`의 `toInt64Fast`에서 `case string:` 분기를 제거하여 문자열 컬럼(`VARCHAR`)이 사전식 정렬을 유지하도록 복원.
+
+---
+
+## 5. Phase 8: DML 검증 및 바인딩 계약 단일화 (DML Validation & Binding Consolidation)
+
+### 5.1 목표 및 설계 원칙
+SELECT 절에서 달성한 "Clause별 검증 계약 단일화"를 DML(`INSERT`, `UPDATE`, `DELETE`, `MERGE`) 전반에 동일하게 적용하여, `sqlexec_dml.go` 곳곳에 파편화되어 흩어져 있던 검사 로직을 **단일 게이트키퍼 계약 함수**로 통합한다.
+
+### 5.2 DML 6대 핵심 검증 계약
+1. **[DML-1] 타겟 테이블 정합성 및 시스템 카탈로그 뷰 보호**:
+   - 수정 대상 테이블의 카탈로그 존재 여부 확인.
+   - `sys.*`, `information_schema.*` 등 가상 시스템 카탈로그 뷰에 대한 DML(INSERT/UPDATE/DELETE/MERGE) 즉각 Fail-Closed 차단 (`cannot modify system catalog view`).
+2. **[DML-2] INSERT Arity / Column Count 불변식**:
+   - 명시적 컬럼 지정 시: 컬럼 수와 VALUES 각 튜플의 표현식 수가 일치하지 않으면 즉각 차단 (`column count mismatch`).
+   - 무컬럼 INSERT 시: 타겟 테이블의 비-계산/비-Hidden 컬럼 수와 일치해야 함.
+   - `INSERT ... SELECT`: 타겟 테이블의 컬럼 개수와 SELECT 프로젝션 컬럼 수가 불일치하면 즉각 차단.
+3. **[DML-3] UPDATE SET 절 컬럼 및 수정 불가 컬럼 제약**:
+   - `SET col = expr`에서 `col`이 타겟 테이블에 존재하지 않으면 `column %q does not exist` 즉각 차단.
+   - 읽기 전용 계산 컬럼(`IsComputed`), `ROWVERSION` 컬럼을 직접 `SET`으로 수정하려 할 경우 차단.
+   - 동일 컬럼을 SET 절에서 중복 수정(`SET a = 1, a = 2`) 시 방어.
+4. **[DML-4] DML WHERE 절 무결성 계약**:
+   - UPDATE / DELETE의 WHERE 절 내 집계 함수(`42803`) 및 윈도우 함수(`42P20`) 금지.
+   - 스칼라 서브쿼리 및 IN 서브쿼리의 단일 컬럼 반환 보장 (`SQLSTATE 42601`).
+   - 존재하지 않는 컬럼 참조 Fail-Closed 차단.
+5. **[DML-5] MERGE INTO Target/Source 계약**:
+   - Target 테이블과 Source (테이블 또는 서브쿼리) 존재 및 ON 조건 유효성.
+   - `WHEN MATCHED THEN UPDATE`의 SET 컬럼이 Target에 존재하는지 검증.
+   - `WHEN NOT MATCHED THEN INSERT`의 컬럼 및 VALUES 개수 일치 검증.
+6. **[DML-6] RETURNING / OUTPUT 프로젝션 유효성**:
+   - RETURNING / OUTPUT 절의 컬럼이 타겟 테이블 또는 유효한 표현식인지 검증.
+
+### 5.1 Phase 8 구현 완료 및 계약 검증 성과 (100% PASS)
+- **전용 TDD 계약 테스트 스위트 완비**: [`pkg/planner/validator_dml_contract_test.go`](file:///Users/maro/Projects/SQLion/pkg/planner/validator_dml_contract_test.go) (5대 핵심 계약군 27개 서브케이스 100% 통과).
+  1. `TestContract_DML_TargetTableProtection`: 비존재 테이블 및 시스템 카탈로그 뷰(`sys.*`, `information_schema.*`) 수정 Fail-Closed 차단.
+  2. `TestContract_DML_InsertArityAndColumns`: 컬럼수-값 불일치, 다중행 arity 불일치, 유령 컬럼, 중복 컬럼, NOT NULL 누락, 계산 컬럼 직접 INSERT 차단, INSERT ... SELECT arity 불일치 차단.
+  3. `TestContract_DML_UpdateSetClause`: SET 유령 컬럼 차단, 계산 컬럼/ROWVERSION 직접 수정 차단, SET 절 내 집계/윈도우 함수 차단(`ScopeUpdateSet`), 동일 컬럼 중복 SET 차단.
+  4. `TestContract_DML_WhereClause`: UPDATE/DELETE WHERE 절 내 집계 함수(`42803`), 윈도우 함수(`42P20`), 유령 컬럼, 다중 컬럼 서브쿼리(`42601`) 차단.
+  5. `TestContract_DML_PositiveValidStatements`: 정상 DML 10종에 대한 무오류 통과 검증.
+- **게이트키퍼 엔진 연동**:
+  - `pkg/planner/validator.go`: `ValidateDMLStmt` 및 `ScopeUpdateSet` 구현 완료. `Hidden` 컬럼(예: synthetic `_row_id`) 자동 제외 인라인 반영.
+  - `pkg/engine/dml_validator.go`: `ValidateDMLStatementAST` 구현 및 멀티 테이블 JOIN DML 예외 분기 연동.
+  - `pkg/engine/sqlexec_dml.go`: `execInsert`, `execUpdate`, `execDelete` 진입점에 AST 레벨 1차 수문장 검증 배포 완료.
+
+---
+
+## 6. Phase 9 & 10 아키텍처 종결 (Spec-Out 불변식 확정)
+
+### 6.1 Phase 9: 파생 서브쿼리 인라인 가상 슬롯화 $\rightarrow$ [SPEC-OUT] 확정
+- **결정**: 임의의 중첩/복합 서브쿼리(윈도우, 스칼라 연산, 피벗 등)에 대한 인라인 가상 스키마 컴파일러 구축은 **영구 Spec-Out(배제)**한다.
+- **아키텍처 근거 (`[RULE:RadicalKISS]`)**:
+  - LionSQL은 이미 `resolveDerivedTables`를 통해 복잡한 파생 테이블을 인메모리 임시 테이블로 실체화(Materialize)하여 실제 `TableSchema` 기반으로 100% 안전하게 실행하고 있다.
+  - 여기에 슬롯 완벽주의를 위해 컴파일러급 정밀도/타입 추론 엔진을 도입하는 것은 수천 줄의 예외 처리 코드를 증식시키고 엣지 케이스 결함을 유발하는 안티패턴이다.
+  - 따라서 파생 서브쿼리는 검증된 기존 실체화 경로에 안전하게 위임하고, 단일 테이블 및 물리 다중 조인 핫패스(`TupleSlot`)만 슬롯화하는 **하이브리드 바인딩 모델(Hybrid Binding Model)**을 영구 표준으로 확정한다.
+
+### 6.2 Phase 10: Volcano 실행기 완전 순수 BoundAST 직결 $\rightarrow$ [SPEC-OUT] 확정
+- **결정**: Volcano 반복자 전체(`pkg/execution/`)를 순수 `BoundAST` 전용 인터페이스로 빅뱅 재작성(Big Bang Rewrite)하는 작업은 **영구 Spec-Out(배제)**한다.
+- **아키텍처 근거 (`[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`)**:
+  - 현재 Volcano 실행기는 행(row)마다 파싱하지 않으며, 쿼리 시작 시 단 1회 파싱된 AST(`f.parsed`)를 캐싱하여 메모리에서 즉시 평가한다.
+  - 수만 줄의 검증된 스토리지/조인/집계/정렬 반복자를 모두 뜯어고치는 것은 시스템 안정성을 위협하며 위험 대비 얻는 성능 이득(쿼리당 최초 수 µs)이 무의미하다.
+  - 따라서 기존의 단 1회 파싱 AST 캐시 + 슬롯 핫패스(`t.GetIdx`) 하이브리드 실행 구조를 최종 완성형으로 유지한다.

@@ -22,6 +22,48 @@ func (s *Coordinator) ValidateDMLTableTarget(tableName string) error {
 	return nil
 }
 
+// ValidateDMLStatementAST validates a DML query against the canonical planner.ValidateDMLStmt contracts.
+func (s *Coordinator) ValidateDMLStatementAST(query string, cs *ClientSession) error {
+	// Multi-table JOIN DML (UPDATE ... FROM ... or DELETE ... JOIN ...)
+	// has aliases in target and is validated by dedicated join executors.
+	if sqlutil.FindTopLevelKeyword(query, "FROM") != -1 {
+		upper := strings.ToUpper(strings.TrimSpace(query))
+		if strings.HasPrefix(upper, "UPDATE") {
+			return nil
+		}
+		if strings.HasPrefix(upper, "DELETE") && sqlutil.FindTopLevelKeyword(query, "JOIN") != -1 {
+			return nil
+		}
+	}
+
+	parsed, err := proc.ParseSQL(query)
+	if err != nil {
+		// Non-standard vendor syntax or expressions fallback gracefully to string-based checks
+		return nil
+	}
+	schemas := make(map[string]*storage.TableSchema)
+	if s.engine != nil {
+		if tables, err := s.engine.ListTables(); err == nil {
+			for _, t := range tables {
+				if t != nil {
+					schemas[strings.ToLower(t.Name)] = t
+					schemas[t.Name] = t
+				}
+			}
+		}
+	}
+	// Overlay any session-specific / shadow / ephemeral table schemas
+	if cs != nil {
+		for name := range schemas {
+			if tbl, err := s.getTable(cs, name); err == nil && tbl != nil {
+				schemas[name] = tbl
+				schemas[strings.ToLower(name)] = tbl
+			}
+		}
+	}
+	return planner.ValidateDMLStmt(parsed, schemas)
+}
+
 // ValidateOutputClause verifies that column references in RETURNING / OUTPUT exist on schema.
 func ValidateOutputClause(rawOutput string, schema *storage.TableSchema) error {
 	if rawOutput == "" || schema == nil {

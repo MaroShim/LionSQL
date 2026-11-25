@@ -338,6 +338,11 @@ func (s *Coordinator) routeOutputRowDirect(tx storage.Transaction, outInfo outpu
 func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	// Canonical DML Gatekeeper AST Validation (Phase 8: DML Contract Consolidation)
+	if err := s.ValidateDMLStatementAST(cleaned, cs); err != nil {
+		return nil, err
+	}
+
 	// RBAC Permission Check
 	dml, parseErr := ParseDMLCommand(cleaned)
 	if dml != nil {
@@ -1545,6 +1550,11 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	// Canonical DML Gatekeeper AST Validation (Phase 8: DML Contract Consolidation)
+	if err := s.ValidateDMLStatementAST(cleaned, cs); err != nil {
+		return nil, err
+	}
+
 	// RBAC Permission Check
 	if kind, table, ok := dmlHead(cleaned); ok && kind == dmlUpdate {
 		if err := s.checkTableAccess(cs, cleanIdentifier(table), auth.PrivUpdate); err != nil {
@@ -1962,6 +1972,11 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Canonical DML Gatekeeper AST Validation (Phase 8: DML Contract Consolidation)
+	if err := s.ValidateDMLStatementAST(cleaned, cs); err != nil {
+		return nil, err
+	}
 
 	// RBAC Permission Check
 	if kind, table, ok := dmlHead(cleaned); ok && kind == dmlDelete {

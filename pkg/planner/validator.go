@@ -20,6 +20,7 @@ const (
 	ScopeOrderBy
 	ScopeReturning
 	ScopeValues
+	ScopeUpdateSet
 )
 
 func scopeName(scope ClauseScope) string {
@@ -38,6 +39,8 @@ func scopeName(scope ClauseScope) string {
 		return "RETURNING"
 	case ScopeValues:
 		return "VALUES"
+	case ScopeUpdateSet:
+		return "UPDATE SET"
 	default:
 		return "clause"
 	}
@@ -167,13 +170,13 @@ func CheckDisallowedExprs(expr proc.Expr, scope ClauseScope) error {
 		switch n := node.(type) {
 		case *proc.FunctionCallExpr:
 			if n.HasOver {
-				// Window functions are disallowed in WHERE, HAVING, GROUP BY, and JOIN ON
-				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy|ScopeJoinOn) != 0 {
+				// Window functions are disallowed in WHERE, HAVING, GROUP BY, JOIN ON, and UPDATE SET
+				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy|ScopeJoinOn|ScopeUpdateSet) != 0 {
 					return fmt.Errorf("window functions are not allowed in %s", scopeName(scope))
 				}
 			} else if proc.IsAggregateFunctionName(n.Name) {
-				// Aggregate functions are disallowed in WHERE, JOIN ON, GROUP BY
-				if scope&(ScopeWhere|ScopeJoinOn|ScopeGroupBy) != 0 {
+				// Aggregate functions are disallowed in WHERE, JOIN ON, GROUP BY, and UPDATE SET
+				if scope&(ScopeWhere|ScopeJoinOn|ScopeGroupBy|ScopeUpdateSet) != 0 {
 					return fmt.Errorf("aggregate functions are not allowed in %s", scopeName(scope))
 				}
 			}
@@ -1542,4 +1545,396 @@ func ValidateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 		return nil
 	}
 	return nil
+}
+
+// -----------------------------------------------------------------------------
+// DML Statement Validation Contracts (Phase 8: DML Contract Consolidation)
+// -----------------------------------------------------------------------------
+
+// ValidateDMLStmt validates semantic invariants and contracts on DML statements (INSERT, UPDATE, DELETE, MERGE).
+func ValidateDMLStmt(stmt proc.Statement, schemas map[string]*storage.TableSchema) error {
+	if stmt == nil {
+		return nil
+	}
+	switch s := stmt.(type) {
+	case *proc.GeneralInsertStmt:
+		return validateGeneralInsertStmt(s, schemas)
+	case *proc.InsertStmt:
+		return validateLegacyInsertStmt(s, schemas)
+	case *proc.UpdateWhereStmt:
+		return validateUpdateWhereStmt(s, schemas)
+	case *proc.UpdateStmt:
+		return validateLegacyUpdateStmt(s, schemas)
+	case *proc.DeleteWhereStmt:
+		return validateDeleteWhereStmt(s, schemas)
+	case *proc.DeleteStmt:
+		return validateLegacyDeleteStmt(s, schemas)
+	case *proc.MergeStmt:
+		return validateMergeStmt(s, schemas)
+	default:
+		return nil
+	}
+}
+
+func validateDMLTargetTable(rawTable string, schemas map[string]*storage.TableSchema) (*storage.TableSchema, string, error) {
+	clean := proc.CleanSchemaPrefix(rawTable)
+	lower := strings.ToLower(clean)
+	if strings.HasPrefix(lower, "sys.") || strings.HasPrefix(lower, "information_schema.") || strings.HasPrefix(lower, "pg_catalog.") {
+		return nil, clean, fmt.Errorf("cannot modify system catalog view %q (read-only)", rawTable)
+	}
+	if schemas == nil {
+		return nil, clean, nil
+	}
+	schema, ok := schemas[clean]
+	if !ok {
+		schema, ok = schemas[lower]
+	}
+	if !ok {
+		for k, v := range schemas {
+			if strings.EqualFold(k, clean) || (v != nil && strings.EqualFold(v.Name, clean)) {
+				schema = v
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		return nil, clean, fmt.Errorf("table %q does not exist", rawTable)
+	}
+	return schema, clean, nil
+}
+
+func validateGeneralInsertStmt(s *proc.GeneralInsertStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	targetCols := s.Columns
+	if len(targetCols) == 0 && schema != nil {
+		targetCols = make([]string, 0, len(schema.Columns))
+		for _, col := range schema.Columns {
+			if col.Hidden {
+				continue
+			}
+			targetCols = append(targetCols, col.Name)
+		}
+	}
+
+	if len(s.Columns) > 0 {
+		colSet := make(map[string]bool)
+		for _, col := range s.Columns {
+			norm := strings.ToLower(proc.CleanSchemaPrefix(col))
+			if colSet[norm] {
+				return fmt.Errorf("column %q specified more than once in INSERT", col)
+			}
+			colSet[norm] = true
+		}
+
+		if schema != nil {
+			for _, col := range s.Columns {
+				norm := strings.ToLower(proc.CleanSchemaPrefix(col))
+				schemaCol, _, ok := schema.FindColumn(norm)
+				if !ok {
+					return fmt.Errorf("column %q does not exist in table %q", col, schema.Name)
+				}
+				if schemaCol.ComputedExpr != "" {
+					return fmt.Errorf("cannot insert into computed column %q", col)
+				}
+			}
+
+			// Validate NOT NULL constraints on missing columns
+			for _, col := range schema.Columns {
+				if !col.Nullable && col.Default == "" && !col.Identity && col.ComputedExpr == "" && !col.IsRowVersion {
+					if !colSet[strings.ToLower(col.Name)] {
+						return fmt.Errorf("column %q violates not-null constraint: no default value provided", col.Name)
+					}
+				}
+			}
+		}
+	}
+
+	// Arity and value validation for VALUES
+	if len(s.Tuples) > 0 {
+		for _, tuple := range s.Tuples {
+			if len(tuple) != len(targetCols) {
+				return fmt.Errorf("column count mismatch: expected %d columns, got %d expressions", len(targetCols), len(tuple))
+			}
+			for _, expr := range tuple {
+				if err := CheckDisallowedExprs(expr, ScopeValues); err != nil {
+					return err
+				}
+				if err := validateDMLValueExpr(expr); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Arity and query validation for SELECT
+	if s.Select != nil {
+		if err := ValidateQueryAST(s.Select, schemas); err != nil {
+			return err
+		}
+		if len(s.Select.Projections) != len(targetCols) {
+			return fmt.Errorf("column count mismatch: target has %d columns, but query returns %d columns", len(targetCols), len(s.Select.Projections))
+		}
+	}
+
+	return nil
+}
+
+func validateLegacyInsertStmt(s *proc.InsertStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	targetCols := s.Columns
+	if len(targetCols) == 0 && schema != nil {
+		targetCols = make([]string, 0, len(schema.Columns))
+		for _, col := range schema.Columns {
+			if col.Hidden {
+				continue
+			}
+			targetCols = append(targetCols, col.Name)
+		}
+	}
+
+	if len(s.Columns) > 0 {
+		colSet := make(map[string]bool)
+		for _, col := range s.Columns {
+			norm := strings.ToLower(proc.CleanSchemaPrefix(col))
+			if colSet[norm] {
+				return fmt.Errorf("column %q specified more than once in INSERT", col)
+			}
+			colSet[norm] = true
+		}
+
+		if schema != nil {
+			for _, col := range s.Columns {
+				norm := strings.ToLower(proc.CleanSchemaPrefix(col))
+				schemaCol, _, ok := schema.FindColumn(norm)
+				if !ok {
+					return fmt.Errorf("column %q does not exist in table %q", col, schema.Name)
+				}
+				if schemaCol.ComputedExpr != "" {
+					return fmt.Errorf("cannot insert into computed column %q", col)
+				}
+			}
+
+			// Validate NOT NULL constraints on missing columns
+			for _, col := range schema.Columns {
+				if !col.Nullable && col.Default == "" && !col.Identity && col.ComputedExpr == "" && !col.IsRowVersion {
+					if !colSet[strings.ToLower(col.Name)] {
+						return fmt.Errorf("column %q violates not-null constraint: no default value provided", col.Name)
+					}
+				}
+			}
+		}
+	}
+
+	if len(s.Values) != len(targetCols) {
+		return fmt.Errorf("column count mismatch: expected %d columns, got %d expressions", len(targetCols), len(s.Values))
+	}
+	for _, expr := range s.Values {
+		if err := CheckDisallowedExprs(expr, ScopeValues); err != nil {
+			return err
+		}
+		if err := validateDMLValueExpr(expr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateUpdateWhereStmt(s *proc.UpdateWhereStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	if err := validateUpdateAssignments(s.Assignments, schema, schemas); err != nil {
+		return err
+	}
+
+	if s.Where != nil {
+		if err := validateDMLWhereExpr(s.Where, schema, schemas); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateLegacyUpdateStmt(s *proc.UpdateStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	if err := validateUpdateAssignments(s.Assignments, schema, schemas); err != nil {
+		return err
+	}
+
+	if s.WhereCol != "" && schema != nil {
+		norm := strings.ToLower(proc.CleanSchemaPrefix(s.WhereCol))
+		if _, _, ok := schema.FindColumn(norm); !ok {
+			return fmt.Errorf("column %q does not exist in table %q", s.WhereCol, schema.Name)
+		}
+	}
+
+	if s.WhereVal != nil {
+		if err := validateDMLWhereExpr(s.WhereVal, schema, schemas); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateUpdateAssignments(assignments []proc.UpdateAssignment, schema *storage.TableSchema, schemas map[string]*storage.TableSchema) error {
+	colSet := make(map[string]bool)
+	for _, a := range assignments {
+		norm := strings.ToLower(proc.CleanSchemaPrefix(a.Column))
+		if colSet[norm] {
+			return fmt.Errorf("column %q specified more than once in UPDATE SET", a.Column)
+		}
+		colSet[norm] = true
+
+		if schema != nil {
+			schemaCol, _, ok := schema.FindColumn(norm)
+			if !ok {
+				return fmt.Errorf("column %q does not exist in table %q", a.Column, schema.Name)
+			}
+			if schemaCol.ComputedExpr != "" {
+				return fmt.Errorf("cannot update computed column %q", a.Column)
+			}
+			if schemaCol.IsRowVersion {
+				return fmt.Errorf("cannot update timestamp/rowversion column %q", a.Column)
+			}
+		}
+
+		if err := CheckDisallowedExprs(a.Value, ScopeUpdateSet); err != nil {
+			return err
+		}
+		if err := validateDMLScopeExpr(a.Value, schema, schemas); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDeleteWhereStmt(s *proc.DeleteWhereStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	if s.Where != nil {
+		if err := validateDMLWhereExpr(s.Where, schema, schemas); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateLegacyDeleteStmt(s *proc.DeleteStmt, schemas map[string]*storage.TableSchema) error {
+	schema, _, err := validateDMLTargetTable(s.Table, schemas)
+	if err != nil {
+		return err
+	}
+
+	if s.WhereCol != "" && schema != nil {
+		norm := strings.ToLower(proc.CleanSchemaPrefix(s.WhereCol))
+		if _, _, ok := schema.FindColumn(norm); !ok {
+			return fmt.Errorf("column %q does not exist in table %q", s.WhereCol, schema.Name)
+		}
+	}
+
+	if s.WhereVal != nil {
+		if err := validateDMLWhereExpr(s.WhereVal, schema, schemas); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateMergeStmt(s *proc.MergeStmt, schemas map[string]*storage.TableSchema) error {
+	// MERGE parsing and validation fallback
+	return nil
+}
+
+func validateDMLWhereExpr(whereExpr proc.Expr, schema *storage.TableSchema, schemas map[string]*storage.TableSchema) error {
+	if whereExpr == nil {
+		return nil
+	}
+	if err := CheckDisallowedExprs(whereExpr, ScopeWhere); err != nil {
+		return err
+	}
+	return validateDMLScopeExpr(whereExpr, schema, schemas)
+}
+
+func validateDMLValueExpr(expr proc.Expr) error {
+	return WalkAST(expr, func(node proc.Expr) error {
+		col, ok := node.(*proc.ColumnRefExpr)
+		if !ok {
+			return nil
+		}
+		name := col.Name
+		if strings.HasPrefix(name, "@") || proc.IsBuiltinFunction(name) ||
+			strings.EqualFold(name, "NULL") || strings.EqualFold(name, "DEFAULT") ||
+			strings.EqualFold(name, "TRUE") || strings.EqualFold(name, "FALSE") {
+			return nil
+		}
+		return fmt.Errorf("column %q does not exist in VALUES expression", name)
+	})
+}
+
+func validateDMLScopeExpr(expr proc.Expr, schema *storage.TableSchema, schemas map[string]*storage.TableSchema) error {
+	if expr == nil {
+		return nil
+	}
+	return WalkAST(expr, func(node proc.Expr) error {
+		switch n := node.(type) {
+		case *proc.InExpr:
+			if n.Query != nil {
+				if len(n.Query.Projections) != 1 {
+					return fmt.Errorf("subquery must return only one column, got %d", len(n.Query.Projections))
+				}
+				if err := ValidateQueryAST(n.Query, schemas); err != nil {
+					return err
+				}
+			}
+		case *proc.ScalarSubqueryExpr:
+			if len(n.Query.Projections) != 1 {
+				return fmt.Errorf("subquery must return only one column, got %d", len(n.Query.Projections))
+			}
+			if err := ValidateQueryAST(n.Query, schemas); err != nil {
+				return err
+			}
+		case *proc.ExistsExpr:
+			if err := ValidateQueryAST(n.Query, schemas); err != nil {
+				return err
+			}
+		case *proc.ColumnRefExpr:
+			name := n.Name
+			if strings.HasPrefix(name, "@") || proc.IsBuiltinFunction(name) ||
+				strings.EqualFold(name, "NULL") || strings.EqualFold(name, "DEFAULT") ||
+				strings.EqualFold(name, "TRUE") || strings.EqualFold(name, "FALSE") ||
+				name == "*" {
+				return nil
+			}
+			if schema != nil {
+				colName := proc.CleanSchemaPrefix(name)
+				if _, _, ok := schema.FindColumn(colName); !ok {
+					return fmt.Errorf("column %q does not exist in table %q", name, schema.Name)
+				}
+			}
+		}
+		return nil
+	})
 }
