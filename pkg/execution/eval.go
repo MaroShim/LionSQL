@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
@@ -44,6 +45,50 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 	}
 
 	switch e := expr.(type) {
+	case *planner.BoundColumnRef:
+		if e.TupleSlot >= 0 {
+			if val, ok := t.GetIdx(e.TupleSlot); ok {
+				return val, true
+			}
+		}
+		if val, ok := t.GetOK(e.Name); ok {
+			return val, true
+		}
+		return nil, false
+
+	case *planner.BoundLiteral:
+		if e.Val.IsNull {
+			return nil, true
+		}
+		switch e.Val.Type {
+		case storage.TypeInt:
+			return e.Val, true
+		case storage.TypeFloat:
+			return e.Val.FVal, true
+		case storage.TypeBool:
+			return e.Val.BVal, true
+		case storage.TypeDateTime:
+			return e.Val.TVal, true
+		default:
+			return formatStorageVal(e.Val), true
+		}
+
+	case *planner.BoundBinaryExpr:
+		return evalTupleBinaryExprWithContext(t, &proc.BinaryExpr{Left: e.Left, Op: e.Op, Right: e.Right}, execSubquery, sessionVars)
+
+	case *planner.BoundUnaryExpr:
+		return EvalTupleExprWithContext(t, &proc.UnaryExpr{Op: e.Op, Expr: e.Expr}, execSubquery, sessionVars)
+
+	case *planner.BoundFunctionCall:
+		var rawArgs []proc.Expr
+		for _, a := range e.Args {
+			rawArgs = append(rawArgs, a)
+		}
+		return EvalTupleExprWithContext(t, &proc.FunctionCallExpr{Name: e.Name, Args: rawArgs, HasOver: e.HasOver}, execSubquery, sessionVars)
+
+	case *planner.BoundGenericExpr:
+		return EvalTupleExprWithContext(t, e.Inner, execSubquery, sessionVars)
+
 	case *proc.ColumnRefExpr:
 		name := e.Name
 		if val, ok := t.GetOK(name); ok {

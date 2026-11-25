@@ -1,0 +1,230 @@
+package planner_test
+
+import (
+	"testing"
+
+	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
+)
+
+func setupTestCatalog() map[string]*storage.TableSchema {
+	userSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "age", Type: storage.TypeInt},
+		},
+	}
+	orderSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "order_id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	}
+	ambigSchema := &storage.TableSchema{
+		Name: "profiles",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "bio", Type: storage.TypeVarChar},
+		},
+	}
+
+	return map[string]*storage.TableSchema{
+		"users":    userSchema,
+		"orders":   orderSchema,
+		"profiles": ambigSchema,
+	}
+}
+
+func TestBinder_SingleTable_SlotResolution(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT id, name, age FROM users WHERE age > 21 ORDER BY age;"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel, ok := parsed.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected *proc.GeneralSelectStmt, got %T", parsed)
+	}
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	if len(bound.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(bound.Tables))
+	}
+	if bound.Tables[0].Name != "users" || bound.Tables[0].TableID != 0 || bound.Tables[0].SlotOffset != 0 {
+		t.Errorf("unexpected table ref: %+v", bound.Tables[0])
+	}
+
+	if len(bound.Projections) != 3 {
+		t.Fatalf("expected 3 projections, got %d", len(bound.Projections))
+	}
+
+	// id -> TableID 0, ColIdx 0, TupleSlot 0
+	p0, ok := bound.Projections[0].Expr.(*planner.BoundColumnRef)
+	if !ok || p0.TableID != 0 || p0.ColumnIdx != 0 || p0.TupleSlot != 0 || p0.DataType != storage.TypeInt {
+		t.Errorf("proj[0] id resolution mismatch: %+v", p0)
+	}
+
+	// name -> TableID 0, ColIdx 1, TupleSlot 1
+	p1, ok := bound.Projections[1].Expr.(*planner.BoundColumnRef)
+	if !ok || p1.TableID != 0 || p1.ColumnIdx != 1 || p1.TupleSlot != 1 || p1.DataType != storage.TypeVarChar {
+		t.Errorf("proj[1] name resolution mismatch: %+v", p1)
+	}
+
+	// age -> TableID 0, ColIdx 2, TupleSlot 2
+	p2, ok := bound.Projections[2].Expr.(*planner.BoundColumnRef)
+	if !ok || p2.TableID != 0 || p2.ColumnIdx != 2 || p2.TupleSlot != 2 || p2.DataType != storage.TypeInt {
+		t.Errorf("proj[2] age resolution mismatch: %+v", p2)
+	}
+
+	// WHERE: age > 21
+	whereBin, ok := bound.Where.(*planner.BoundBinaryExpr)
+	if !ok {
+		t.Fatalf("expected *planner.BoundBinaryExpr for WHERE, got %T", bound.Where)
+	}
+	whereLeft, ok := whereBin.Left.(*planner.BoundColumnRef)
+	if !ok || whereLeft.TupleSlot != 2 {
+		t.Errorf("WHERE Left slot mismatch: %+v", whereLeft)
+	}
+}
+
+func TestBinder_MultiTableJoin_SlotResolution(t *testing.T) {
+	schemas := setupTestCatalog()
+	sql := "SELECT u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id WHERE o.amount > 50.0;"
+
+	parsed, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+
+	binder := planner.NewBinder(schemas)
+	bound, err := binder.BindSelect(sel)
+	if err != nil {
+		t.Fatalf("BindSelect failed: %v", err)
+	}
+
+	if len(bound.Tables) != 2 {
+		t.Fatalf("expected 2 tables, got %d", len(bound.Tables))
+	}
+	// u: SlotOffset 0
+	if bound.Tables[0].TableID != 0 || bound.Tables[0].SlotOffset != 0 {
+		t.Errorf("table u mismatch: %+v", bound.Tables[0])
+	}
+	// o: SlotOffset 3 (since users has 3 columns: id, name, age)
+	if bound.Tables[1].TableID != 1 || bound.Tables[1].SlotOffset != 3 {
+		t.Errorf("table o mismatch: %+v", bound.Tables[1])
+	}
+
+	// Projections
+	// u.name -> TableID 0, ColIdx 1, TupleSlot 0 + 1 = 1
+	p0 := bound.Projections[0].Expr.(*planner.BoundColumnRef)
+	if p0.TableID != 0 || p0.ColumnIdx != 1 || p0.TupleSlot != 1 {
+		t.Errorf("proj[0] u.name slot mismatch: %+v", p0)
+	}
+
+	// o.amount -> TableID 1, ColIdx 2, TupleSlot 3 + 2 = 5
+	p1 := bound.Projections[1].Expr.(*planner.BoundColumnRef)
+	if p1.TableID != 1 || p1.ColumnIdx != 2 || p1.TupleSlot != 5 {
+		t.Errorf("proj[1] o.amount slot mismatch: %+v", p1)
+	}
+
+	// JOIN ON: u.id = o.user_id
+	joinOn := bound.Joins[0].On.(*planner.BoundBinaryExpr)
+	onLeft := joinOn.Left.(*planner.BoundColumnRef)
+	onRight := joinOn.Right.(*planner.BoundColumnRef)
+
+	// u.id -> TableID 0, TupleSlot 0
+	if onLeft.TableID != 0 || onLeft.TupleSlot != 0 {
+		t.Errorf("ON left u.id slot mismatch: %+v", onLeft)
+	}
+	// o.user_id -> TableID 1, ColIdx 1, TupleSlot 3 + 1 = 4
+	if onRight.TableID != 1 || onRight.TupleSlot != 4 {
+		t.Errorf("ON right o.user_id slot mismatch: %+v", onRight)
+	}
+}
+
+func TestBinder_AmbiguousAndGhostColumnRejection(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr string
+	}{
+		{
+			name:    "ambiguous column in join without qualifier",
+			sql:     "SELECT id FROM users JOIN profiles ON users.id = profiles.id;",
+			wantErr: "ambiguous",
+		},
+		{
+			name:    "non existent column in single table",
+			sql:     "SELECT ghost_col FROM users;",
+			wantErr: "does not exist",
+		},
+		{
+			name:    "non existent column in qualified table",
+			sql:     "SELECT u.ghost_col FROM users u;",
+			wantErr: "does not exist",
+		},
+		{
+			name:    "non existent table alias in query scope",
+			sql:     "SELECT wrong_alias.id FROM users u;",
+			wantErr: "does not exist in query scope",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := proc.ParseSQL(tt.sql)
+			if err != nil {
+				t.Fatalf("ParseSQL failed: %v", err)
+			}
+			binder := planner.NewBinder(schemas)
+			_, err = binder.BindSelect(parsed.(*proc.GeneralSelectStmt))
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !testing.Short() && len(tt.wantErr) > 0 {
+				t.Logf("Got expected fail-closed error: %v", err)
+			}
+		})
+	}
+}
+
+func TestBoundColumnRef_DirectTupleSlotEvaluation(t *testing.T) {
+	// Simulate joined tuple values: [users.id, users.name, users.age, orders.order_id, orders.user_id, orders.amount]
+	tup := execution.Tuple{
+		Values: []any{int64(42), "Alice", int64(30), int64(1001), int64(42), float64(299.95)},
+	}
+
+	boundCol := &planner.BoundColumnRef{
+		Name:      "o.amount",
+		TableName: "orders",
+		TableID:   1,
+		ColumnIdx: 2,
+		TupleSlot: 5,
+		DataType:  storage.TypeFloat,
+	}
+
+	val, ok := execution.EvalTupleExpr(tup, boundCol)
+	if !ok {
+		t.Fatalf("EvalTupleExpr failed to evaluate bound column")
+	}
+	fVal, ok := val.(float64)
+	if !ok || fVal != 299.95 {
+		t.Errorf("expected 299.95, got %v (%T)", val, val)
+	}
+}

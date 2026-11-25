@@ -172,13 +172,10 @@ func (t Tuple) Get(col string) any {
 	return val
 }
 
-// GetOK returns the value and whether the column exists in the tuple schema.
-func (t Tuple) GetOK(col string) (any, bool) {
-	if t.Index == nil {
-		return nil, false
-	}
-	idx, ok := t.Index.Index(col)
-	if !ok || idx < 0 {
+// GetIdx returns the value for the given physical column index in O(1) time,
+// bypassing any string hashing, lowercasing, or map lookups.
+func (t Tuple) GetIdx(idx int) (any, bool) {
+	if idx < 0 {
 		return nil, false
 	}
 	if idx < len(t.Values) && t.Values[idx] != nil {
@@ -205,9 +202,21 @@ func (t Tuple) GetOK(col string) (any, bool) {
 		}
 	}
 	if idx >= len(t.Values) {
-		return nil, true
+		return nil, false
 	}
 	return t.Values[idx], true
+}
+
+// GetOK returns the value and whether the column exists in the tuple schema.
+func (t Tuple) GetOK(col string) (any, bool) {
+	if t.Index == nil {
+		return nil, false
+	}
+	idx, ok := t.Index.Index(col)
+	if !ok || idx < 0 {
+		return nil, false
+	}
+	return t.GetIdx(idx)
 }
 
 // Set sets the value for a column name.

@@ -18,6 +18,11 @@ type Expr interface {
 	exprNode()
 }
 
+// BaseExpr is an embeddable struct that implements exprNode() for AST expression types.
+type BaseExpr struct{}
+
+func (BaseExpr) exprNode() {}
+
 // Statement represents an executable statement.
 type Statement interface {
 	Node
@@ -47,10 +52,14 @@ func (e *VariableExpr) String() string { return e.Name }
 
 // ColumnRefExpr represents a column name reference.
 type ColumnRefExpr struct {
-	Name string
+	BaseExpr
+	Name       string
+	ColIdx     int // -1 if unbound, >= 0 when statically resolved to TableSchema.Columns
+	TableID    int // -1 if unbound, 0 for base table, 1..N for joins
+	TupleSlot  int // -1 if unbound, >= 0 for direct joined tuple slot offset
+	OuterLevel int // 0 = current scope, 1 = parent scope
 }
 
-func (e *ColumnRefExpr) exprNode()      {}
 func (e *ColumnRefExpr) String() string { return e.Name }
 
 // BinaryExpr represents binary operation (A + B, A = B, etc.).

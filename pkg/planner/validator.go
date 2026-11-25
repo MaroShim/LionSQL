@@ -259,12 +259,12 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 
 	// 5. Ambiguous Column References across JOINs and Qualified Column Binding
 	if len(schemas) > 0 {
-		scope := NewTableScopeFromMap(schemas)
+		scope := NewTableScope()
 		if stmt.From.Name != "" {
-			scope.Register(stmt.From.Name, stmt.From.Alias, schemas[stmt.From.Name])
+			scope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name))
 		}
 		for _, j := range stmt.Joins {
-			scope.Register(j.Table.Name, j.Table.Alias, schemas[j.Table.Name])
+			scope.Register(j.Table.Name, j.Table.Alias, findSchemaFromMap(schemas, j.Table.Name))
 		}
 		for _, p := range stmt.Projections {
 			if p.Alias != "" {
@@ -296,12 +296,12 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 			}
 		}
 		// Incremental JOIN ON Scope validation
-		joinScope := NewTableScopeFromMap(schemas)
+		joinScope := NewTableScope()
 		if stmt.From.Name != "" {
-			joinScope.Register(stmt.From.Name, stmt.From.Alias, schemas[stmt.From.Name])
+			joinScope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name))
 		}
 		for _, j := range stmt.Joins {
-			joinScope.Register(j.Table.Name, j.Table.Alias, schemas[j.Table.Name])
+			joinScope.Register(j.Table.Name, j.Table.Alias, findSchemaFromMap(schemas, j.Table.Name))
 			if j.On != nil {
 				if err := joinScope.ValidateExpr(j.On); err != nil {
 					return err
@@ -318,6 +318,21 @@ type TableScope struct {
 	schemas           map[string]*storage.TableSchema
 	uniqueTables      []*storage.TableSchema
 	projectionAliases map[string]bool
+}
+
+func findSchemaFromMap(schemas map[string]*storage.TableSchema, name string) *storage.TableSchema {
+	if schemas == nil {
+		return nil
+	}
+	clean := strings.ToLower(sqlutil.CleanIdentifier(name))
+	if sch, ok := schemas[clean]; ok {
+		return sch
+	}
+	bare := strings.ToLower(proc.CleanSchemaPrefix(name))
+	if sch, ok := schemas[bare]; ok {
+		return sch
+	}
+	return nil
 }
 
 // NewTableScope creates an empty TableScope.

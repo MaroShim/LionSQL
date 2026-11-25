@@ -206,6 +206,7 @@ type QueryInfo struct {
 	IsAnalyze     bool
 	QueryHints    []string
 	AST           *proc.GeneralSelectStmt
+	BoundAST      *BoundSelectStmt
 }
 
 // Clone creates a shallow copy of QueryInfo so variable substitution can safely modify WhereClause.
