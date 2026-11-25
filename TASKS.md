@@ -330,6 +330,7 @@
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.97.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `COMPLETED` | **`FEAT-TRI-STATE-COLUMN-RESOLUTION-1`** |  | Planner | P1 | Validator 삼가 상태 컬럼 결정(존재 확정, 부존재 확정, 판단 불가) 및 파생 테이블 Closed/Open 스키마 구축 |  |  |
 | `PENDING` | **`FEAT-TSQL-CREATE-SYNONYM-1`** | `v1.2.0` | Engine | P3 | T-SQL CREATE SYNONYM 동의어 객체 지원 |  |  |
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
@@ -3713,6 +3714,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:53:04
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [COMPLETED] Validator 삼가 상태 컬럼 결정(존재 확정, 부존재 확정, 판단 불가) 및 파생 테이블 Closed/Open 스키마 구축 `FEAT-TRI-STATE-COLUMN-RESOLUTION-1`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-25 12:52:24
 
 ---
 
