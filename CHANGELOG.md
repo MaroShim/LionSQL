@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- harden Semantic Validator Gatekeeper defense lines with standard SQL invariants (`FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`):
+  - reject unaggregated non-grouped column references in ORDER BY when GROUP BY is present (`SQLSTATE 42803`)
+  - enforce SELECT DISTINCT ORDER BY projection list inclusion requirement (`SQLSTATE 42P10`)
+  - reject subqueries in FROM and JOIN clauses missing mandatory table alias (`SQLSTATE 42601`)
+  - reject negative integer literal bounds in LIMIT and OFFSET expressions (`SQLSTATE 2201W / 2201X`)
+  - reject nested window function calls and window functions inside aggregate functions (`SQLSTATE 42P20`)
 - implement hybrid binding model and Phase 7 semantic gatekeeper invariants in Dedicated Binder (`BINDER-EVOL-PHASE-7`):
   - implement compile-time Scope Shadowing preventing access to original table names when aliased (`SQLSTATE 42P01`)
   - enforce compile-time ambiguity detection on self-joins and unqualified column collisions (`SQLSTATE 42702`)

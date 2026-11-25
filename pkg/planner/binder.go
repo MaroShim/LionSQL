@@ -77,7 +77,29 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 	cur := b.current
 
 	// 2. Register base relation (FROM)
-	if stmt.From.Name != "" {
+	if stmt.From.Subquery != nil {
+		cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(stmt.From.Alias))
+		tableID := len(cur.Tables)
+		slotOffset := 0
+
+		tRef := BoundTableRef{
+			TableID:    tableID,
+			Name:       stmt.From.Alias,
+			Alias:      stmt.From.Alias,
+			SlotOffset: slotOffset,
+		}
+		cur.Tables = append(cur.Tables, tRef)
+		cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
+		if cleanAlias != "" {
+			if _, exists := cur.TableLookup[cleanAlias]; exists {
+				return nil, fmt.Errorf("table name or alias %q specified more than once", stmt.From.Alias)
+			}
+			cur.TableLookup[cleanAlias] = tableID
+		}
+		if err := cur.Scope.Register("", stmt.From.Alias, nil); err != nil {
+			return nil, err
+		}
+	} else if stmt.From.Name != "" {
 		cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(stmt.From.Name))
 		bareTbl := strings.ToLower(proc.CleanSchemaPrefix(stmt.From.Name))
 		cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(stmt.From.Alias))
@@ -119,7 +141,38 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 
 	// 3. Register joined relations (JOINs)
 	for _, j := range stmt.Joins {
-		if j.Table.Name != "" {
+		if j.Table.Subquery != nil {
+			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
+			tableID := len(cur.Tables)
+
+			prevOffset := 0
+			if len(cur.SlotOffsets) > 0 {
+				lastIdx := len(cur.Tables) - 1
+				prevOffset = cur.SlotOffsets[lastIdx]
+				if cur.Tables[lastIdx].Schema != nil {
+					prevOffset += len(cur.Tables[lastIdx].Schema.Columns)
+				}
+			}
+			slotOffset := prevOffset
+
+			tRef := BoundTableRef{
+				TableID:    tableID,
+				Name:       j.Table.Alias,
+				Alias:      j.Table.Alias,
+				SlotOffset: slotOffset,
+			}
+			cur.Tables = append(cur.Tables, tRef)
+			cur.SlotOffsets = append(cur.SlotOffsets, slotOffset)
+			if cleanAlias != "" {
+				if _, exists := cur.TableLookup[cleanAlias]; exists {
+					return nil, fmt.Errorf("table name or alias %q specified more than once", j.Table.Alias)
+				}
+				cur.TableLookup[cleanAlias] = tableID
+			}
+			if err := cur.Scope.Register("", j.Table.Alias, nil); err != nil {
+				return nil, err
+			}
+		} else if j.Table.Name != "" {
 			cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Name))
 			bareTbl := strings.ToLower(proc.CleanSchemaPrefix(j.Table.Name))
 			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))

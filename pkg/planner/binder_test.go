@@ -708,3 +708,206 @@ func TestBinder_Phase7_GroupBy_TableColumnPrimacy(t *testing.T) {
 			colRef.ColumnIdx, colRef.TupleSlot)
 	}
 }
+
+func TestValidator_Hardening_GroupBy_OrderByUnaggregated(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. ORDER BY unaggregated column 'age' not in GROUP BY -> Fail (42803)
+	sqlFail := "SELECT name, COUNT(*) FROM users GROUP BY name ORDER BY age;"
+	parsed, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel := parsed.(*proc.GeneralSelectStmt)
+	if _, err := planner.NewBinder(schemas).BindSelect(sel); err == nil {
+		t.Errorf("expected error for unaggregated column in ORDER BY under GROUP BY, got nil")
+	} else if !strings.Contains(err.Error(), "must appear in the GROUP BY clause or be used in an aggregate function") {
+		t.Errorf("expected 'must appear in the GROUP BY clause...' error, got: %v", err)
+	}
+
+	// 2. ORDER BY aggregated column COUNT(*) -> Pass
+	sqlPassAgg := "SELECT name, COUNT(*) FROM users GROUP BY name ORDER BY COUNT(*);"
+	parsedPassAgg, err := proc.ParseSQL(sqlPassAgg)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassAgg.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected ORDER BY COUNT(*) to pass, got: %v", err)
+	}
+
+	// 3. ORDER BY projection alias 'cnt' -> Pass
+	sqlPassAlias := "SELECT name, COUNT(*) AS cnt FROM users GROUP BY name ORDER BY cnt;"
+	parsedPassAlias, err := proc.ParseSQL(sqlPassAlias)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassAlias.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected ORDER BY alias 'cnt' to pass, got: %v", err)
+	}
+
+	// 4. ORDER BY ordinal position 1 (which is 'name') -> Pass
+	sqlPassOrd := "SELECT name, COUNT(*) FROM users GROUP BY name ORDER BY 1;"
+	parsedPassOrd, err := proc.ParseSQL(sqlPassOrd)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassOrd.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected ORDER BY ordinal 1 to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_Distinct_OrderByNotInProjection(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. SELECT DISTINCT id, name ORDER BY age -> Fail (42P10)
+	sqlFail := "SELECT DISTINCT id, name FROM users ORDER BY age;"
+	parsed, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsed.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for SELECT DISTINCT with ORDER BY not in select list, got nil")
+	} else if !strings.Contains(err.Error(), "for SELECT DISTINCT, ORDER BY expressions must appear in select list") || !strings.Contains(err.Error(), "42P10") {
+		t.Errorf("expected 42P10 'for SELECT DISTINCT...' error, got: %v", err)
+	}
+
+	// 2. SELECT DISTINCT id, name ORDER BY name -> Pass
+	sqlPassName := "SELECT DISTINCT id, name FROM users ORDER BY name;"
+	parsedPassName, err := proc.ParseSQL(sqlPassName)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassName.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected SELECT DISTINCT matching ORDER BY to pass, got: %v", err)
+	}
+
+	// 3. SELECT DISTINCT id, name ORDER BY 2 -> Pass
+	sqlPassOrd := "SELECT DISTINCT id, name FROM users ORDER BY 2;"
+	parsedPassOrd, err := proc.ParseSQL(sqlPassOrd)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassOrd.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected SELECT DISTINCT with ordinal 2 to pass, got: %v", err)
+	}
+
+	// 4. SELECT DISTINCT * FROM users ORDER BY age -> Pass (wildcard projects all columns)
+	sqlPassWild := "SELECT DISTINCT * FROM users ORDER BY age;"
+	parsedPassWild, err := proc.ParseSQL(sqlPassWild)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassWild.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected SELECT DISTINCT * with ORDER BY to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_SubqueryWithoutAlias(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. FROM (SELECT 1) without alias -> Fail in ParseSQL or ValidateQueryAST (42601)
+	sqlFailFrom := "SELECT * FROM (SELECT id FROM users);"
+	parsedFailFrom, err := proc.ParseSQL(sqlFailFrom)
+	if err != nil {
+		if !strings.Contains(err.Error(), "subquery in FROM must have an alias") {
+			t.Errorf("expected 'subquery in FROM must have an alias' error in ParseSQL, got: %v", err)
+		}
+	} else {
+		if _, err := planner.NewBinder(schemas).BindSelect(parsedFailFrom.(*proc.GeneralSelectStmt)); err == nil {
+			t.Errorf("expected error for FROM subquery without alias, got nil")
+		} else if !strings.Contains(err.Error(), "subquery in FROM must have an alias") {
+			t.Errorf("expected 'subquery in FROM must have an alias' error, got: %v", err)
+		}
+	}
+
+	// 1b. Direct AST validation for subquery without alias
+	stmtNoAlias := &proc.GeneralSelectStmt{
+		From: proc.TableRef{
+			Subquery: &proc.GeneralSelectStmt{
+				From: proc.TableRef{Name: "users"},
+			},
+		},
+		Projections: []proc.Projection{
+			{Expr: &proc.ColumnRefExpr{Name: "*"}},
+		},
+	}
+	if err := planner.ValidateQueryAST(stmtNoAlias, schemas); err == nil {
+		t.Errorf("expected ValidateQueryAST to fail for subquery without alias, got nil")
+	} else if !strings.Contains(err.Error(), "subquery in FROM must have an alias") {
+		t.Errorf("expected 'subquery in FROM must have an alias' error, got: %v", err)
+	}
+
+	// 2. FROM (SELECT 1) sub -> Pass
+	sqlPassFrom := "SELECT * FROM (SELECT id FROM users) sub;"
+	parsedPassFrom, err := proc.ParseSQL(sqlPassFrom)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassFrom.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected FROM subquery with alias to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_NegativeLimitAndOffset(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. LIMIT (-1) -> Fail (2201W)
+	sqlFailLimit := "SELECT id FROM users LIMIT (-1);"
+	parsedLimit, err := proc.ParseSQL(sqlFailLimit)
+	if err != nil {
+		if !strings.Contains(err.Error(), "LIMIT must not be negative") {
+			t.Errorf("expected 'LIMIT must not be negative' in ParseSQL, got: %v", err)
+		}
+	} else {
+		selLimit := parsedLimit.(*proc.GeneralSelectStmt)
+		if _, err := planner.NewBinder(schemas).BindSelect(selLimit); err == nil {
+			t.Errorf("expected error for LIMIT (-1), got nil")
+		} else if !strings.Contains(err.Error(), "LIMIT must not be negative") || !strings.Contains(err.Error(), "2201W") {
+			t.Errorf("expected 2201W 'LIMIT must not be negative' error, got: %v", err)
+		}
+	}
+
+	// 2. OFFSET (-5) -> Fail (2201X)
+	sqlFailOffset := "SELECT id FROM users OFFSET (-5);"
+	parsedOffset, err := proc.ParseSQL(sqlFailOffset)
+	if err != nil {
+		if !strings.Contains(err.Error(), "OFFSET must not be negative") {
+			t.Errorf("expected 'OFFSET must not be negative' in ParseSQL, got: %v", err)
+		}
+	} else {
+		selOffset := parsedOffset.(*proc.GeneralSelectStmt)
+		if _, err := planner.NewBinder(schemas).BindSelect(selOffset); err == nil {
+			t.Errorf("expected error for OFFSET (-5), got nil")
+		} else if !strings.Contains(err.Error(), "OFFSET must not be negative") || !strings.Contains(err.Error(), "2201X") {
+			t.Errorf("expected 2201X 'OFFSET must not be negative' error, got: %v", err)
+		}
+	}
+}
+
+func TestValidator_Hardening_NestedWindowFunctions(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. ROW_NUMBER() OVER (...) nested inside SUM() aggregate -> Fail (42P20)
+	sqlFailAgg := "SELECT SUM(ROW_NUMBER() OVER ()) FROM users;"
+	parsedAgg, err := proc.ParseSQL(sqlFailAgg)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedAgg.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for window function inside aggregate, got nil")
+	} else if !strings.Contains(err.Error(), "aggregate function calls cannot contain window function calls") || !strings.Contains(err.Error(), "42P20") {
+		t.Errorf("expected 42P20 'cannot contain window function calls' error, got: %v", err)
+	}
+
+	// 2. Window function with nested window function in OVER clause -> Fail (42P20)
+	sqlFailNested := "SELECT ROW_NUMBER() OVER (ORDER BY RANK() OVER ()) FROM users;"
+	parsedNested, err := proc.ParseSQL(sqlFailNested)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedNested.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for nested window functions, got nil")
+	} else if !strings.Contains(err.Error(), "window function calls cannot be nested") || !strings.Contains(err.Error(), "42P20") {
+		t.Errorf("expected 42P20 'window function calls cannot be nested' error, got: %v", err)
+	}
+}

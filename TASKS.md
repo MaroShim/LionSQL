@@ -334,6 +334,7 @@
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1`** | `-` | Engine | P1 | 컬럼 타입별 데이터 검증기 및 정규화 엔진 (VARCHAR/CHAR/DECIMAL/TINYINT) | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`** | `v0.96.0` | 1 | P2 | Planner | [`--milestone`](--milestone) |  |
 | `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `v1.1.0` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
@@ -3738,6 +3739,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 07:42:49
 - **Milestone**: `-`
 - **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
+### [DONE] Planner `FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-25 08:00:44
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`--milestone`](--milestone)
 
 ---
 
