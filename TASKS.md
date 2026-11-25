@@ -14,6 +14,7 @@
 
 | Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |
 | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
+| `PENDING` | **`--id`** | `Architecture` | --milestone | P2 | FEAT-HTAP-ALL-IN-ONE-1 | [`--domain`](--domain) |  |
 | `DONE` | **`1.8`** | `1.0-GA` | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
@@ -660,6 +661,13 @@
 ---
 
 ## 2. Detailed Task Specifications & Execution Records
+
+### [PENDING] FEAT-HTAP-ALL-IN-ONE-1 `--id`
+- **Domain**: --milestone | **Priority**: P2 | **Updated**: 2026-11-25 02:25:50
+- **Milestone**: `Architecture`
+- **Plan Doc**: [`--domain`](--domain)
+
+---
 
 ### [DONE] 1.0 GA 검증 및 잔여 정리 `1.8`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
