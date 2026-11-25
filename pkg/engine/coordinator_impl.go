@@ -296,6 +296,7 @@ func (c *Coordinator) AllocTableIdentityWithStep(tableName string, count int64, 
 		slot.initMu.Unlock()
 	}
 	end := slot.seq.Add(count * step)
+	c.RecordLastIdentity(end, end)
 	return end - (count * step) + step
 }
 

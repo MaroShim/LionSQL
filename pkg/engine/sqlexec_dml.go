@@ -325,6 +325,14 @@ func (s *Coordinator) routeOutputRowDirect(tx storage.Transaction, outInfo outpu
 						return maxID, hasRows
 					})
 					targetRec[col.Name] = storage.IntValue(nextID)
+					if cs != nil {
+						cs.Mu.Lock()
+						cs.Vars["identity"] = nextID
+						cs.Vars["scope_identity"] = nextID
+						cs.Mu.Unlock()
+					}
+					s.SetTableLastIdentity(targetTable, nextID)
+					s.RecordLastIdentity(nextID, nextID)
 				}
 			}
 		}

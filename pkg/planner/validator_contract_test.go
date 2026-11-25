@@ -561,6 +561,131 @@ func TestContract_DerivedTableSubqueryColumnValidation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("expected non-existent qualified column in derived table to fail, got: %v", err)
 	}
+
+	// 5. Qualified wildcard u.* from single-table derived table -> PASS
+	if err := parseAndValidate(t, "SELECT sub.id, sub.name FROM (SELECT u.* FROM users u) AS sub;", schemas); err != nil {
+		t.Errorf("expected valid columns from u.* derived table to pass, got: %v", err)
+	}
+
+	// 6. Non-existent column from qualified wildcard u.* derived table -> FAIL
+	err = parseAndValidate(t, "SELECT sub.ghost_col FROM (SELECT u.* FROM users u) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected non-existent column from u.* derived table to fail, got: %v", err)
+	}
+
+	// 7. Bare wildcard * from single-table derived table -> PASS
+	if err := parseAndValidate(t, "SELECT sub.id, sub.name FROM (SELECT * FROM users) AS sub;", schemas); err != nil {
+		t.Errorf("expected valid columns from * derived table to pass, got: %v", err)
+	}
+
+	// 8. Non-existent column from bare wildcard * derived table -> FAIL
+	err = parseAndValidate(t, "SELECT sub.ghost_col FROM (SELECT * FROM users) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected non-existent column from * derived table to fail, got: %v", err)
+	}
+
+	// 9. Open/Dynamic schema with multi-table JOIN wildcard -> PASS (deferred to binder, zero false positive)
+	if err := parseAndValidate(t, "SELECT sub.any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas); err != nil {
+		t.Errorf("expected open join wildcard to be deferred without false positive, got: %v", err)
+	}
+
+	// 10. Open/Dynamic schema with unqualified column on JOIN wildcard -> PASS (deferred to binder)
+	if err := parseAndValidate(t, "SELECT any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas); err != nil {
+		t.Errorf("expected open join wildcard unqualified column to be deferred, got: %v", err)
+	}
+
+	// 11. Nested closed derived table with * expansion -> PASS for valid, FAIL for ghost
+	if err := parseAndValidate(t, "SELECT sub.id FROM (SELECT * FROM (SELECT id, name FROM users) inner_sub) AS sub;", schemas); err != nil {
+		t.Errorf("expected nested closed derived table valid column to pass, got: %v", err)
+	}
+	err = parseAndValidate(t, "SELECT sub.ghost FROM (SELECT * FROM (SELECT id, name FROM users) inner_sub) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected nested closed derived table ghost column to fail, got: %v", err)
+	}
+
+	// 12. Nested open derived table with JOIN wildcard -> PASS (deferred to binder)
+	if err := parseAndValidate(t, "SELECT sub.dynamic_col FROM (SELECT * FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) inner_sub) AS sub;", schemas); err != nil {
+		t.Errorf("expected nested open derived table to pass to binder, got: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// 14. Tri-State Column Resolution (Definite / NotFound / Indeterminate)
+// -----------------------------------------------------------------------------
+func TestContract_TriStateColumnResolution(t *testing.T) {
+	schemas := setupContractCatalog()
+	scope := planner.NewTableScope()
+
+	// Register closed physical table "users"
+	if err := scope.RegisterWithOpen("users", "u", schemas["users"], false); err != nil {
+		t.Fatalf("failed to register users: %v", err)
+	}
+
+	// Register open dynamic table "dyn" (e.g. from JOIN wildcard)
+	dynSch := &storage.TableSchema{
+		Name: "dyn",
+		Columns: []storage.Column{
+			{Name: "known_col", Type: storage.TypeInt},
+		},
+	}
+	if err := scope.RegisterWithOpen("", "dyn", dynSch, true); err != nil {
+		t.Fatalf("failed to register dyn: %v", err)
+	}
+
+	// Case 1: ResolveDefinite (존재 확정)
+	// 1-1. Qualified column found in closed table
+	res, err := scope.ResolveQualifiedColumn("u", "id")
+	if err != nil || res != planner.ResolveDefinite {
+		t.Errorf("expected ResolveDefinite for u.id, got %v, err: %v", res, err)
+	}
+	// 1-2. Qualified column found in open table
+	res, err = scope.ResolveQualifiedColumn("dyn", "known_col")
+	if err != nil || res != planner.ResolveDefinite {
+		t.Errorf("expected ResolveDefinite for dyn.known_col, got %v, err: %v", res, err)
+	}
+	// 1-3. Unqualified column found in closed table
+	res, err = scope.ResolveUnqualifiedColumn("name", false)
+	if err != nil || res != planner.ResolveDefinite {
+		t.Errorf("expected ResolveDefinite for 'name', got %v, err: %v", res, err)
+	}
+
+	// Case 2: ResolveNotFound (부존재 확정 -> Fail-Closed)
+	// 2-1. Qualified column not in closed table
+	res, err = scope.ResolveQualifiedColumn("u", "ghost_col")
+	if err == nil || res != planner.ResolveNotFound {
+		t.Errorf("expected ResolveNotFound for u.ghost_col, got %v, err: %v", res, err)
+	}
+	// 2-2. Qualified column on non-existent table
+	res, err = scope.ResolveQualifiedColumn("no_such_tbl", "id")
+	if err == nil || res != planner.ResolveNotFound {
+		t.Errorf("expected ResolveNotFound for non-existent table, got %v, err: %v", res, err)
+	}
+	// 2-3. Unqualified column on purely closed scope
+	closedScope := planner.NewTableScope()
+	_ = closedScope.RegisterWithOpen("users", "", schemas["users"], false)
+	res, err = closedScope.ResolveUnqualifiedColumn("ghost_col", false)
+	if err == nil || res != planner.ResolveNotFound {
+		t.Errorf("expected ResolveNotFound for ghost_col in closedScope, got %v, err: %v", res, err)
+	}
+
+	// Case 3: ResolveIndeterminate (현재 메타데이터로 판단 불가 -> Defer to Binder)
+	// 3-1. Qualified column not in explicit projections of open table -> Indeterminate (nil err)
+	res, err = scope.ResolveQualifiedColumn("dyn", "unknown_dynamic_col")
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for dyn.unknown_dynamic_col, got %v, err: %v", res, err)
+	}
+	// 3-2. Unqualified column absent from known columns, but scope has open table -> Indeterminate (nil err)
+	res, err = scope.ResolveUnqualifiedColumn("unknown_dynamic_col", false)
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for unknown_dynamic_col in open scope, got %v, err: %v", res, err)
+	}
+	// 3-3. Qualified column on nil schema -> Indeterminate (nil err)
+	nilScope := planner.NewTableScope()
+	_ = nilScope.RegisterWithOpen("", "nil_tbl", nil, false)
+	res, err = nilScope.ResolveQualifiedColumn("nil_tbl", "any_col")
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for nil schema table, got %v, err: %v", res, err)
+	}
 }
 
 

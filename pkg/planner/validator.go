@@ -277,24 +277,114 @@ func validateLimitOffset(limit, offset proc.Expr) error {
 	return nil
 }
 
-func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) *storage.TableSchema {
+func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) (*storage.TableSchema, bool) {
 	if subquery == nil {
-		return nil
+		return nil, false
 	}
 	var cols []storage.Column
+	isOpen := false
+
+	// Build map of subquery's tables/aliases -> TableSchema
+	subTables := make(map[string]*storage.TableSchema)
+	var fromSubSch *storage.TableSchema
+	fromSubIsOpen := false
+
+	if subquery.From.Subquery != nil {
+		fromSubSch, fromSubIsOpen = deriveSubquerySchema(subquery.From.Alias, subquery.From.Subquery, schemas)
+		if fromSubSch != nil && subquery.From.Alias != "" {
+			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(subquery.From.Alias))
+			subTables[cleanAlias] = fromSubSch
+		}
+	} else if subquery.From.Name != "" {
+		tSch := findSchemaFromMap(schemas, subquery.From.Name)
+		if tSch != nil {
+			cleanName := strings.ToLower(sqlutil.CleanIdentifier(subquery.From.Name))
+			subTables[cleanName] = tSch
+			bare := strings.ToLower(proc.CleanSchemaPrefix(subquery.From.Name))
+			subTables[bare] = tSch
+			if subquery.From.Alias != "" {
+				cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(subquery.From.Alias))
+				subTables[cleanAlias] = tSch
+			}
+		}
+	}
+
+	for _, j := range subquery.Joins {
+		if j.Table.Subquery != nil {
+			jSubSch, _ := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+			if jSubSch != nil && j.Table.Alias != "" {
+				cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
+				subTables[cleanAlias] = jSubSch
+			}
+		} else if j.Table.Name != "" {
+			tSch := findSchemaFromMap(schemas, j.Table.Name)
+			if tSch != nil {
+				cleanName := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Name))
+				subTables[cleanName] = tSch
+				bare := strings.ToLower(proc.CleanSchemaPrefix(j.Table.Name))
+				subTables[bare] = tSch
+				if j.Table.Alias != "" {
+					cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
+					subTables[cleanAlias] = tSch
+				}
+			}
+		}
+	}
+
 	for i, p := range subquery.Projections {
+		// Check for wildcard: * or qual.*
+		isStar := false
+		var starQualifier string
+
+		if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+			trimmed := strings.TrimSpace(colRef.Name)
+			if trimmed == "*" {
+				isStar = true
+			} else {
+				parts := strings.Split(trimmed, ".")
+				if len(parts) > 1 && sqlutil.CleanIdentifier(parts[len(parts)-1]) == "*" {
+					isStar = true
+					starQualifier = strings.ToLower(sqlutil.CleanIdentifier(parts[len(parts)-2]))
+				}
+			}
+		}
+
+		if isStar {
+			if starQualifier == "" {
+				// Bare *
+				if subquery.From.Subquery != nil {
+					if fromSubSch != nil && !fromSubIsOpen && len(subquery.Joins) == 0 {
+						cols = append(cols, fromSubSch.Columns...)
+					} else {
+						isOpen = true
+					}
+				} else if subquery.From.Name != "" && len(subquery.Joins) == 0 {
+					if tSch := findSchemaFromMap(schemas, subquery.From.Name); tSch != nil {
+						cols = append(cols, tSch.Columns...)
+					} else {
+						isOpen = true
+					}
+				} else {
+					// Multiple tables in joins or unknown FROM
+					isOpen = true
+				}
+			} else {
+				// Qualified wildcard: qual.*
+				if tSch, found := subTables[starQualifier]; found && tSch != nil {
+					cols = append(cols, tSch.Columns...)
+				} else {
+					isOpen = true
+				}
+			}
+			continue
+		}
+
+		// Named / regular projection
 		colName := p.Alias
 		if colName == "" {
 			if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
-				colName = proc.CleanSchemaPrefix(colRef.Name)
-			}
-		}
-		if colName == "*" {
-			if subquery.From.Name != "" {
-				if tSch := findSchemaFromMap(schemas, subquery.From.Name); tSch != nil {
-					cols = append(cols, tSch.Columns...)
-					continue
-				}
+				parts := strings.Split(colRef.Name, ".")
+				colName = sqlutil.CleanIdentifier(parts[len(parts)-1])
 			}
 		}
 		if colName == "" {
@@ -305,10 +395,11 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 			Type: storage.TypeUnknown,
 		})
 	}
+
 	return &storage.TableSchema{
 		Name:    alias,
 		Columns: cols,
-	}
+	}, isOpen
 }
 
 func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema, parentScope *TableScope) (*TableScope, error) {
@@ -325,8 +416,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 	scope := NewTableScopeWithParent(parentScope)
 	if len(schemas) > 0 {
 		if stmt.From.Subquery != nil {
-			subSch := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
-			if err := scope.Register("", stmt.From.Alias, subSch); err != nil {
+			subSch, isOpen := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
+			if err := scope.RegisterWithOpen("", stmt.From.Alias, subSch, isOpen); err != nil {
 				return nil, err
 			}
 		} else if stmt.From.Name != "" {
@@ -341,8 +432,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 
 		for _, j := range stmt.Joins {
 			if j.Table.Subquery != nil {
-				subSch := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
-				if err := scope.Register("", j.Table.Alias, subSch); err != nil {
+				subSch, isOpen := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+				if err := scope.RegisterWithOpen("", j.Table.Alias, subSch, isOpen); err != nil {
 					return nil, err
 				}
 			} else if j.Table.Name != "" {
@@ -365,8 +456,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 		// Incremental JOIN ON Scope validation: each join ON condition can only see tables declared up to that join
 		joinScope := NewTableScopeWithParent(parentScope)
 		if stmt.From.Subquery != nil {
-			subSch := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
-			if err := joinScope.Register("", stmt.From.Alias, subSch); err != nil {
+			subSch, isOpen := deriveSubquerySchema(stmt.From.Alias, stmt.From.Subquery, schemas)
+			if err := joinScope.RegisterWithOpen("", stmt.From.Alias, subSch, isOpen); err != nil {
 				return nil, err
 			}
 		} else if stmt.From.Name != "" {
@@ -376,8 +467,8 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 		}
 		for _, j := range stmt.Joins {
 			if j.Table.Subquery != nil {
-				subSch := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
-				if err := joinScope.Register("", j.Table.Alias, subSch); err != nil {
+				subSch, isOpen := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+				if err := joinScope.RegisterWithOpen("", j.Table.Alias, subSch, isOpen); err != nil {
 					return nil, err
 				}
 			} else if j.Table.Name != "" {
@@ -665,6 +756,7 @@ type TableInstance struct {
 	OriginalName string
 	Schema       *storage.TableSchema
 	IsAliased    bool
+	IsOpen       bool
 }
 
 // TableScope manages visible table schemas and aliases within a query scope.
@@ -673,6 +765,7 @@ type TableScope struct {
 	schemas           map[string]*storage.TableSchema
 	instances         []TableInstance
 	projectionAliases map[string]bool
+	openTables        map[string]bool
 }
 
 func findSchemaFromMap(schemas map[string]*storage.TableSchema, name string) *storage.TableSchema {
@@ -701,7 +794,26 @@ func NewTableScopeWithParent(parent *TableScope) *TableScope {
 		parent:            parent,
 		schemas:           make(map[string]*storage.TableSchema),
 		projectionAliases: make(map[string]bool),
+		openTables:        make(map[string]bool),
 	}
+}
+
+// isTableOpen checks whether the table or alias is marked as open/dynamic in this scope or parent scopes.
+func (s *TableScope) isTableOpen(tblName string) bool {
+	clean := strings.ToLower(sqlutil.CleanIdentifier(tblName))
+	for cur := s; cur != nil; cur = cur.parent {
+		if cur.openTables != nil && cur.openTables[clean] {
+			return true
+		}
+		for _, inst := range cur.instances {
+			if strings.EqualFold(inst.Alias, clean) || strings.EqualFold(inst.OriginalName, clean) {
+				if inst.IsOpen {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // NewTableScopeFromMap constructs a TableScope from a map of table/alias names to schemas.
@@ -716,13 +828,21 @@ func NewTableScopeFromMap(schemas map[string]*storage.TableSchema) *TableScope {
 	return scope
 }
 
-// Register registers a table name and optional alias into the scope.
+// Register registers a table name and optional alias into the scope as a closed schema.
+func (s *TableScope) Register(table, alias string, schema *storage.TableSchema) error {
+	return s.RegisterWithOpen(table, alias, schema, false)
+}
+
+// RegisterWithOpen registers a table name and optional alias into the scope with an open/closed flag.
 // Enforces table alias shadowing: when an alias is specified, the original table name
 // is shadowed and hidden from the scope.
 // Rejects duplicate table names or duplicate aliases in the same scope.
-func (s *TableScope) Register(table, alias string, schema *storage.TableSchema) error {
+func (s *TableScope) RegisterWithOpen(table, alias string, schema *storage.TableSchema, isOpen bool) error {
 	if s == nil {
 		return nil
+	}
+	if s.openTables == nil {
+		s.openTables = make(map[string]bool)
 	}
 	cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(table))
 	bareTbl := strings.ToLower(proc.CleanSchemaPrefix(table))
@@ -733,26 +853,37 @@ func (s *TableScope) Register(table, alias string, schema *storage.TableSchema) 
 			return fmt.Errorf("table name or alias %q specified more than once", alias)
 		}
 		s.schemas[cleanAlias] = schema
+		if isOpen {
+			s.openTables[cleanAlias] = true
+		}
 		// Original table name is shadowed!
 		s.instances = append(s.instances, TableInstance{
 			Alias:        cleanAlias,
 			OriginalName: cleanTbl,
 			Schema:       schema,
 			IsAliased:    true,
+			IsOpen:       isOpen,
 		})
 	} else if cleanTbl != "" {
 		if _, exists := s.schemas[cleanTbl]; exists {
 			return fmt.Errorf("table name %q specified more than once", table)
 		}
 		s.schemas[cleanTbl] = schema
+		if isOpen {
+			s.openTables[cleanTbl] = true
+		}
 		if bareTbl != "" && bareTbl != cleanTbl {
 			s.schemas[bareTbl] = schema
+			if isOpen {
+				s.openTables[bareTbl] = true
+			}
 		}
 		s.instances = append(s.instances, TableInstance{
 			Alias:        cleanTbl,
 			OriginalName: cleanTbl,
 			Schema:       schema,
 			IsAliased:    false,
+			IsOpen:       isOpen,
 		})
 	}
 	return nil
@@ -797,6 +928,162 @@ func (s *TableScope) ValidateGroupByExpr(expr proc.Expr) error {
 	return s.validateExprInternal(expr, true)
 }
 
+// ColumnResolution represents the tri-state resolution outcome for a column reference during AST validation:
+// 1. ResolveDefinite: The column is definitively proven to exist in the schema (존재 확정).
+// 2. ResolveNotFound: The schema is closed and the column is definitively proven NOT to exist (부존재 확정 -> Fail-Closed).
+// 3. ResolveIndeterminate: The schema is open or dynamic (wildcards, multi-table joins, or nil metadata),
+//    so column presence cannot be statically proven or disproven from current metadata (현재 메타데이터로 판단 불가 -> Defer to Binder).
+type ColumnResolution int
+
+const (
+	// ResolveDefinite indicates that the column was definitively found in the catalog or scope.
+	ResolveDefinite ColumnResolution = iota
+	// ResolveNotFound indicates that all candidate tables are closed and the column is definitively absent.
+	ResolveNotFound
+	// ResolveIndeterminate indicates that presence cannot be determined from current metadata; deferred to Binder.
+	ResolveIndeterminate
+)
+
+// String returns the canonical human-readable label for the resolution state.
+func (r ColumnResolution) String() string {
+	switch r {
+	case ResolveDefinite:
+		return "Definite"
+	case ResolveNotFound:
+		return "NotFound"
+	case ResolveIndeterminate:
+		return "Indeterminate"
+	default:
+		return fmt.Sprintf("Unknown(%d)", int(r))
+	}
+}
+
+// ResolveQualifiedColumn evaluates a qualified column reference (tblPart.colPart) against the scope.
+// It returns:
+// - (ResolveDefinite, nil) if the column is confirmed to exist.
+// - (ResolveNotFound, err) if the table does not exist or the table is closed and the column is confirmed NOT to exist.
+// - (ResolveIndeterminate, nil) if the table's schema is open/dynamic or nil, deferring resolution to the Binder.
+func (s *TableScope) ResolveQualifiedColumn(tblPart, colPart string) (ColumnResolution, error) {
+	if s == nil || len(s.schemas) == 0 {
+		return ResolveIndeterminate, nil
+	}
+	cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(tblPart))
+	sch, ok := s.schemas[cleanTbl]
+	if !ok {
+		foundInParent := false
+		for p := s.parent; p != nil; p = p.parent {
+			if psch, pok := p.schemas[cleanTbl]; pok {
+				sch = psch
+				foundInParent = true
+				break
+			}
+		}
+		if !foundInParent {
+			return ResolveNotFound, fmt.Errorf("table or alias %q does not exist in query scope", tblPart)
+		}
+	}
+
+	if colPart == "*" {
+		return ResolveDefinite, nil
+	}
+
+	if sch == nil {
+		return ResolveIndeterminate, nil
+	}
+
+	if _, _, found := sch.FindColumn(colPart); found {
+		return ResolveDefinite, nil
+	}
+
+	if s.isTableOpen(cleanTbl) {
+		return ResolveIndeterminate, nil
+	}
+
+	return ResolveNotFound, fmt.Errorf("column %q does not exist in table or alias %q", colPart, tblPart)
+}
+
+// ResolveUnqualifiedColumn evaluates an unqualified column reference against all table instances in the scope.
+// It returns:
+// - (ResolveDefinite, nil) if the column is confirmed to exist uniquely, or (ResolveDefinite, err) if ambiguous.
+// - (ResolveNotFound, err) if all instances are closed and the column is confirmed NOT to exist in any table.
+// - (ResolveIndeterminate, nil) if the column is not found in known columns but an open/dynamic or nil-schema instance exists.
+func (s *TableScope) ResolveUnqualifiedColumn(raw string, allowProjectionAlias bool) (ColumnResolution, error) {
+	if s == nil || len(s.instances) == 0 {
+		return ResolveIndeterminate, nil
+	}
+	cleanCol := strings.ToLower(sqlutil.CleanIdentifier(raw))
+
+	matchCount := 0
+	hasNilSchemaInstance := false
+	hasOpenInstance := false
+	for _, inst := range s.instances {
+		if inst.Schema == nil {
+			hasNilSchemaInstance = true
+			continue
+		}
+		if inst.IsOpen {
+			hasOpenInstance = true
+		}
+		if _, _, ok := inst.Schema.FindColumn(cleanCol); ok {
+			matchCount++
+		}
+	}
+
+	if matchCount > 1 {
+		return ResolveDefinite, fmt.Errorf("column reference %q is ambiguous", raw)
+	}
+	if matchCount == 1 {
+		return ResolveDefinite, nil
+	}
+
+	// matchCount == 0: check projection aliases if permitted
+	if allowProjectionAlias && s.projectionAliases[cleanCol] {
+		return ResolveDefinite, nil
+	}
+
+	// Check parent scopes
+	foundInParent := false
+	for p := s.parent; p != nil; p = p.parent {
+		pmatchCount := 0
+		phasNil := false
+		phasOpen := false
+		for _, pinst := range p.instances {
+			if pinst.Schema == nil {
+				phasNil = true
+				continue
+			}
+			if pinst.IsOpen {
+				phasOpen = true
+			}
+			if _, _, ok := pinst.Schema.FindColumn(cleanCol); ok {
+				pmatchCount++
+			}
+		}
+		if pmatchCount > 1 {
+			return ResolveDefinite, fmt.Errorf("column reference %q is ambiguous", raw)
+		}
+		if pmatchCount == 1 {
+			foundInParent = true
+			break
+		}
+		if phasNil || phasOpen {
+			foundInParent = true
+			break
+		}
+	}
+
+	if foundInParent {
+		return ResolveDefinite, nil
+	}
+
+	// If there are open or nil-schema instances, we cannot prove non-existence from current metadata
+	if hasOpenInstance || hasNilSchemaInstance {
+		return ResolveIndeterminate, nil
+	}
+
+	return ResolveNotFound, fmt.Errorf("column %q does not exist", raw)
+}
+
 func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias bool) error {
 	if s == nil || expr == nil || !s.HasSchemas() {
 		return nil
@@ -824,110 +1111,20 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 			colPart := sqlutil.CleanIdentifier(parts[last])
 			tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[last-1]))
 
-			if colPart == "*" {
-				if len(s.schemas) > 0 {
-					if _, ok := s.schemas[tblPart]; !ok {
-						foundInParent := false
-						for p := s.parent; p != nil; p = p.parent {
-							if _, pok := p.schemas[tblPart]; pok {
-								foundInParent = true
-								break
-							}
-						}
-						if !foundInParent {
-							return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
-						}
-					}
-				}
-				return nil
+			res, err := s.ResolveQualifiedColumn(tblPart, colPart)
+			if err != nil {
+				return err
 			}
-
-			if len(s.schemas) > 0 {
-				sch, ok := s.schemas[tblPart]
-				if !ok {
-					foundInParent := false
-					for p := s.parent; p != nil; p = p.parent {
-						if psch, pok := p.schemas[tblPart]; pok {
-							sch = psch
-							foundInParent = true
-							break
-						}
-					}
-					if !foundInParent {
-						return fmt.Errorf("table or alias %q does not exist in query scope", parts[last-1])
-					}
-				}
-				if sch != nil {
-					if _, _, found := sch.FindColumn(colPart); !found {
-						return fmt.Errorf("column %q does not exist in table or alias %q", parts[last], parts[last-1])
-					}
-				}
-			}
+			_ = res // ResolveDefinite or ResolveIndeterminate passes
 			return nil
 		}
 
 		// Unqualified column reference
-		cleanCol := strings.ToLower(sqlutil.CleanIdentifier(raw))
-
-		if len(s.instances) > 0 {
-			matchCount := 0
-			hasNilSchemaInstance := false
-			for _, inst := range s.instances {
-				if inst.Schema == nil {
-					hasNilSchemaInstance = true
-					continue
-				}
-				if _, _, ok := inst.Schema.FindColumn(cleanCol); ok {
-					matchCount++
-				}
-			}
-			if matchCount > 1 {
-				return fmt.Errorf("column reference %q is ambiguous", raw)
-			}
-			if matchCount == 1 {
-				return nil
-			}
-			if matchCount == 0 {
-				// Table column strictly takes precedence over projection alias:
-				// Only fall back to projection alias if column is not found in table instances.
-				if allowProjectionAlias && s.projectionAliases[cleanCol] {
-					return nil
-				}
-				foundInParent := false
-				for p := s.parent; p != nil; p = p.parent {
-					pmatchCount := 0
-					phasNil := false
-					for _, pinst := range p.instances {
-						if pinst.Schema == nil {
-							phasNil = true
-							continue
-						}
-						if _, _, ok := pinst.Schema.FindColumn(cleanCol); ok {
-							pmatchCount++
-						}
-					}
-					if pmatchCount > 1 {
-						return fmt.Errorf("column reference %q is ambiguous", raw)
-					}
-					if pmatchCount == 1 {
-						foundInParent = true
-						break
-					}
-					if phasNil {
-						foundInParent = true
-						break
-					}
-				}
-				if !foundInParent && !hasNilSchemaInstance {
-					return fmt.Errorf("column %q does not exist", raw)
-				}
-			}
-			return nil
+		res, err := s.ResolveUnqualifiedColumn(raw, allowProjectionAlias)
+		if err != nil {
+			return err
 		}
-
-		if allowProjectionAlias && s.projectionAliases[cleanCol] {
-			return nil
-		}
+		_ = res // ResolveDefinite or ResolveIndeterminate passes
 		return nil
 	})
 }

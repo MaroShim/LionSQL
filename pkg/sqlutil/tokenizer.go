@@ -732,12 +732,13 @@ var nonAliasKeywords = map[string]struct{}{
 	"GROUP": {}, "BY": {}, "HAVING": {}, "ORDER": {}, "SELECT": {}, "UNION": {},
 	"EXCEPT": {}, "INTERSECT": {}, "LIMIT": {}, "OFFSET": {}, "TOP": {}, "DISTINCT": {},
 	"ALL": {}, "AS": {}, "INTO": {}, "OVER": {}, "PARTITION": {}, "WINDOW": {},
-	"ROWS": {}, "RANGE": {},
+	"ROWS": {}, "RANGE": {}, "FOR": {}, "WITH": {}, "WITHIN": {},
 }
 
 var operatorKeywords = map[string]struct{}{
 	"AND": {}, "OR": {}, "NOT": {}, "IS": {}, "IN": {}, "LIKE": {}, "BETWEEN": {},
-	"THEN": {}, "ELSE": {}, "WHEN": {}, "CASE": {},
+	"THEN": {}, "ELSE": {}, "WHEN": {}, "CASE": {}, "FOR": {}, "FROM": {}, "OVER": {},
+	"BY": {}, "WITH": {}, "WITHIN": {}, "AS": {},
 }
 
 // SplitProjectionAlias splits a projection item into an expression and alias.
@@ -753,6 +754,11 @@ func SplitProjectionAlias(item string) (expr string, alias string, hasAlias bool
 
 	if exp, al, hasAs := SplitAsAlias(item); hasAs {
 		return exp, al, true
+	}
+
+	// Single variable tokens (@var, @@identity) without whitespace never have implicit aliases
+	if strings.HasPrefix(item, "@") && !strings.ContainsAny(item, " \t\r\n") {
+		return item, "", false
 	}
 
 	n := len(item)
@@ -817,7 +823,7 @@ func isPrefixEndingWithOp(prefix string) bool {
 	lastChar := prefix[len(prefix)-1]
 	// Check operator characters
 	switch lastChar {
-	case '+', '-', '*', '/', '%', '=', '<', '>', '!', '~', '^', '&', '|', ',', '(', '[', '.':
+	case '+', '-', '*', '/', '%', '=', '<', '>', '!', '~', '^', '&', '|', ',', '(', '[', '.', '@', ':', ';':
 		return true
 	}
 	// Check operator keywords (find last word in prefix)

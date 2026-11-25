@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement tri-state column resolution (`ResolveDefinite`, `ResolveNotFound`, `ResolveIndeterminate`) and closed vs open dynamic schema derivation for derived tables (`FEAT-TRI-STATE-COLUMN-RESOLUTION-1`):
+  - classify column references into 3 deterministic outcomes: Definite Existence (`ResolveDefinite`), Definite Absence (`ResolveNotFound` -> Fail-Closed), and Indeterminate (`ResolveIndeterminate` -> Defer to Binder)
+  - support single-table wildcard expansions (`*`, `u.*`) from catalog schemas while maintaining closed schema isolation
+  - safely defer complex multi-table join wildcards and dynamic subqueries to Binder stage with zero false rejections
+  - prevent implicit alias false matches on `NEXT VALUE FOR` and `@`/`@@` variables in projection tokenizer
+  - synchronize coordinator-wide table identity allocation for cross-session identity preservation in CLI and anonymous block execution
 - harden Semantic Validator Gatekeeper defense lines with standard SQL invariants (`FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`):
   - reject unaggregated non-grouped column references in ORDER BY when GROUP BY is present (`SQLSTATE 42803`)
   - enforce SELECT DISTINCT ORDER BY projection list inclusion requirement (`SQLSTATE 42P10`)
