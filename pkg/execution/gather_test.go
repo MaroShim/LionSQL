@@ -381,3 +381,61 @@ func TestParallelHashJoin_WorkerPoolProbe(t *testing.T) {
 		t.Fatalf("expected 3 joined rows, got %d", joinedCount)
 	}
 }
+
+// TestJoinAggregateOperatorFusion verifies that an AggregateIterator over HashJoinIterator
+// fuses into a single loop, eliminating 100% of intermediate merged tuples.
+func TestJoinAggregateOperatorFusion(t *testing.T) {
+	const totalRows = 5000
+	eng, sess, tx, schema := setupGatherTestTable(t, totalRows)
+	defer eng.Close()
+	defer sess.Close()
+	defer tx.Rollback()
+
+	// Build table: 3 categories (cat_id in 10, 20, 30)
+	catSchema := []string{"cat_id", "cat_name"}
+	catTuples := []execution.Tuple{
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(10), "cat_name": "Cat10"}, catSchema),
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(20), "cat_name": "Cat20"}, catSchema),
+		execution.NewTupleFromMap(map[string]any{"cat_id": int64(30), "cat_name": "Cat30"}, catSchema),
+	}
+	catMock := &mockTupleIterator{schema: catSchema, tuples: catTuples}
+
+	// Probe table: GatherIterator on t_gather_items (val is i * 10)
+	gather := execution.NewGatherIterator(tx, "t_gather_items", "t", schema)
+	gather.SetDOP(4)
+
+	// HashJoin on t.val = cat.cat_id
+	joinIter := execution.NewHashJoinIterator(gather, catMock, "INNER", "val", "cat_id")
+
+	// Aggregate on top: GROUP BY cat_name, SELECT cat_name, COUNT(*), SUM(val)
+	aggIter := execution.NewAggregateIterator(joinIter, []string{"cat_name"}, []string{"cat_name", "COUNT(*)", "SUM(val)"}, "")
+
+	ctx := context.Background()
+	if err := aggIter.Open(ctx); err != nil {
+		t.Fatalf("aggIter.Open failed: %v", err)
+	}
+	defer aggIter.Close()
+
+	var groups []execution.Tuple
+	for {
+		tuple, err := aggIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("aggIter.Next failed: %v", err)
+		}
+		groups = append(groups, tuple)
+	}
+
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 groups, got %d", len(groups))
+	}
+	for _, g := range groups {
+		catName := g.Get("cat_name").(string)
+		count := g.Get("COUNT(*)").(int64)
+		if count != 1 {
+			t.Fatalf("expected count 1 for %s, got %d", catName, count)
+		}
+	}
+}

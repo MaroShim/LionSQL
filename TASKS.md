@@ -542,7 +542,7 @@
 | `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.96.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
@@ -5258,7 +5258,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) `PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 03:55:42
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:50:01
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
@@ -5270,8 +5270,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) `PERF-JOIN-AGG-OPERATOR-FUSION-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 02:57:59
+### [DONE] Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) `PERF-JOIN-AGG-OPERATOR-FUSION-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:48:30
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 

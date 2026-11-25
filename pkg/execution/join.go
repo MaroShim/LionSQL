@@ -103,6 +103,7 @@ type HashJoinIterator struct {
 	parsedJoinFilter    proc.Expr
 	hasJoinFilter       bool
 	parallelProbeActive bool
+	fusedWithParentAgg  bool
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -422,7 +423,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	// [PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1] Parallel Hash Join Activation:
 	// If probe child is GatherIterator (parallel scan worker pool) and build table is materialized,
 	// push down read-only build table into GatherIterator so 8 workers probe and merge in parallel.
-	if (h.joinType == "INNER" || h.joinType == "LEFT") && (h.isFlatIntTable || len(h.intHashTable) > 0) {
+	if !h.fusedWithParentAgg && (h.joinType == "INNER" || h.joinType == "LEFT") && (h.isFlatIntTable || len(h.intHashTable) > 0) {
 		if gather := findGatherIterator(probeIter); gather != nil {
 			var probeKeyIdx int
 			var probeKey string
@@ -760,6 +761,48 @@ func (h *HashJoinIterator) getProbeIter() Iterator {
 		return h.right
 	}
 	return h.left
+}
+
+// CanFuseWithAggregate checks if this hash join can be fused with a parent AggregateIterator,
+// eliminating all intermediate merged tuples and directly accumulating into build-slot accumulators.
+func (h *HashJoinIterator) CanFuseWithAggregate(groupKeys []string, groupByMod proc.GroupByModifier) bool {
+	if h.joinType != "INNER" || h.parsedJoinFilter != nil {
+		return false
+	}
+	if groupByMod != proc.GroupByNormal || len(groupKeys) != 1 {
+		return false
+	}
+	if !h.isFlatIntTable && len(h.intHashTable) == 0 {
+		return false
+	}
+	gk := strings.TrimSpace(groupKeys[0])
+	if dot := strings.Index(gk, "."); dot != -1 {
+		gk = gk[dot+1:]
+	}
+	cleanGk := strings.ToLower(cleanIdentifierParts(gk))
+	bMap := h.right.ColIndexMap()
+	if h.buildSide == "LEFT" {
+		bMap = h.left.ColIndexMap()
+	}
+	if bMap != nil {
+		if _, ok := bMap.Index(cleanGk); ok {
+			return true
+		}
+	}
+	cleanLeftKey := strings.ToLower(cleanIdentifierParts(h.leftKey))
+	cleanRightKey := strings.ToLower(cleanIdentifierParts(h.rightKey))
+	if cleanGk == cleanLeftKey || cleanGk == cleanRightKey {
+		return true
+	}
+	return false
+}
+
+// DisableParallelJoinProbe disables parallel join probe pushdown in the child GatherIterator.
+func (h *HashJoinIterator) DisableParallelJoinProbe() {
+	h.parallelProbeActive = false
+	if gather := findGatherIterator(h.getProbeIter()); gather != nil {
+		gather.SetParallelJoin(nil)
+	}
 }
 
 func (h *HashJoinIterator) NextChunk(ctx context.Context, dest *Chunk) error {

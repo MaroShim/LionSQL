@@ -723,12 +723,251 @@ func (a *AggregateIterator) parseFields() {
 	a.colIndexMap = colMap
 }
 
+func findHashJoinIterator(it Iterator) *HashJoinIterator {
+	curr := it
+	for curr != nil {
+		if h, ok := curr.(*HashJoinIterator); ok {
+			return h
+		}
+		if inst, ok := curr.(*InstrumentedIterator); ok {
+			curr = inst.child
+			continue
+		}
+		break
+	}
+	return nil
+}
+
+type fusedFieldBinding struct {
+	fnType    aggFuncType
+	isStar    bool
+	isLiteral bool
+	fromProbe bool
+	probeIdx  int
+	fromBuild bool
+	buildIdx  int
+}
+
+func (a *AggregateIterator) accumulateFused(acc *groupAccumulator, probeTuple, buildTuple Tuple, bindings []fusedFieldBinding) {
+	for fIdx, b := range bindings {
+		if b.isStar {
+			acc.counts[fIdx]++
+			continue
+		}
+		if b.isLiteral {
+			continue
+		}
+		var val any
+		if b.fromProbe && b.probeIdx >= 0 {
+			val, _ = probeTuple.GetIdx(b.probeIdx)
+		} else if b.fromBuild && b.buildIdx >= 0 {
+			val, _ = buildTuple.GetIdx(b.buildIdx)
+		}
+		if val == nil {
+			continue
+		}
+
+		switch b.fnType {
+		case aggCount:
+			acc.counts[fIdx]++
+		case aggSum, aggTotal:
+			if iv, isInt := toInt64Fast(val); isInt && !acc.isDecimal[fIdx] {
+				acc.intSums[fIdx] += iv
+				acc.hasIntSum[fIdx] = true
+				acc.counts[fIdx]++
+			} else if fv, isFloat := toFloat64(val); isFloat {
+				acc.sums[fIdx] += fv
+				acc.counts[fIdx]++
+			}
+		case aggAvg:
+			if iv, isInt := toInt64Fast(val); isInt && !acc.isDecimal[fIdx] {
+				acc.intSums[fIdx] += iv
+				acc.hasIntSum[fIdx] = true
+				acc.counts[fIdx]++
+			} else if fv, isFloat := toFloat64(val); isFloat {
+				acc.sums[fIdx] += fv
+				acc.counts[fIdx]++
+			}
+		case aggMin:
+			if acc.counts[fIdx] == 0 || CompareValues(val, acc.mins[fIdx]) < 0 {
+				acc.mins[fIdx] = val
+			}
+			acc.counts[fIdx]++
+		case aggMax:
+			if acc.counts[fIdx] == 0 || CompareValues(val, acc.maxs[fIdx]) > 0 {
+				acc.maxs[fIdx] = val
+			}
+			acc.counts[fIdx]++
+		}
+	}
+}
+
+func (a *AggregateIterator) tryJoinAggregateFusion(ctx context.Context, orderedAccs *[]*groupAccumulator, hasRows *bool) (bool, error) {
+	h := findHashJoinIterator(a.child)
+	if h == nil || !h.CanFuseWithAggregate(a.groupKeys, a.groupByMod) {
+		return false, nil
+	}
+
+	for _, f := range a.fields {
+		if f.isDistinct {
+			return false, nil
+		}
+	}
+
+	probeMap := h.left.ColIndexMap()
+	buildMap := h.right.ColIndexMap()
+	if h.buildSide == "LEFT" {
+		probeMap = h.right.ColIndexMap()
+		buildMap = h.left.ColIndexMap()
+	}
+	if probeMap == nil || buildMap == nil {
+		return false, nil
+	}
+
+	bindings := make([]fusedFieldBinding, len(a.fields))
+	for fIdx, f := range a.fields {
+		b := fusedFieldBinding{
+			fnType:    f.fnType,
+			isStar:    f.isStar,
+			isLiteral: f.isLiteral,
+			probeIdx:  -1,
+			buildIdx:  -1,
+		}
+		if !f.isStar && !f.isLiteral {
+			cleanArg := strings.TrimSpace(cleanIdentifierParts(f.argCol))
+			if dot := strings.Index(cleanArg, "."); dot != -1 {
+				cleanArg = cleanArg[dot+1:]
+			}
+			if pIdx, ok := probeMap.Index(cleanArg); ok && pIdx >= 0 {
+				b.fromProbe = true
+				b.probeIdx = pIdx
+			} else if bIdx, ok := buildMap.Index(cleanArg); ok && bIdx >= 0 {
+				b.fromBuild = true
+				b.buildIdx = bIdx
+			} else if f.parsed != nil {
+				return false, nil
+			}
+		}
+		bindings[fIdx] = b
+	}
+
+	type fusedAccItem struct {
+		acc       *groupAccumulator
+		seenCount int64
+		build     Tuple
+	}
+	keyAccMap := make(map[int64]*fusedAccItem)
+	var orderList []*fusedAccItem
+
+	if h.isFlatIntTable {
+		for i := range h.flatIntTable {
+			slot := &h.flatIntTable[i]
+			if slot.used {
+				acc := a.newGroupAccumulator(slot.tuple, 1)
+				item := &fusedAccItem{acc: acc, build: slot.tuple}
+				keyAccMap[slot.key] = item
+				orderList = append(orderList, item)
+			}
+		}
+	} else if len(h.intHashTable) > 0 {
+		for key, matches := range h.intHashTable {
+			if len(matches) > 0 {
+				acc := a.newGroupAccumulator(matches[0].tuple, 1)
+				item := &fusedAccItem{acc: acc, build: matches[0].tuple}
+				keyAccMap[key] = item
+				orderList = append(orderList, item)
+			}
+		}
+	}
+
+	probeIter := h.getProbeIter()
+	probeKeyIdx := h.leftKeyIdx
+	if h.buildSide == "LEFT" {
+		probeKeyIdx = h.rightKeyIdx
+	}
+	if probeKeyIdx < 0 {
+		return false, nil
+	}
+
+	inChunk := GetChunk()
+	defer PutChunk(inChunk)
+
+	for {
+		select {
+		case <-ctx.Done():
+			_ = a.child.Close()
+			return true, ctx.Err()
+		default:
+		}
+
+		err := PullChunk(ctx, probeIter, inChunk, DefaultChunkSize)
+		if err != nil && err != io.EOF {
+			_ = a.child.Close()
+			return true, err
+		}
+		if inChunk.Len() == 0 && err == io.EOF {
+			break
+		}
+
+		for _, probeTuple := range inChunk.Tuples {
+			val, ok := probeTuple.GetIdx(probeKeyIdx)
+			if !ok || val == nil {
+				continue
+			}
+			iKey, isInt := toInt64Fast(val)
+			if !isInt {
+				continue
+			}
+			item, exists := keyAccMap[iKey]
+			if !exists {
+				continue
+			}
+			if item.seenCount == 0 {
+				item.acc.groupTuple = mergeTuplesDirect(probeTuple, item.build, h.buildSide != "LEFT", h.colIndexMap, a.arena)
+			}
+			item.seenCount++
+			a.accumulateFused(item.acc, probeTuple, item.build, bindings)
+		}
+
+		if err == io.EOF {
+			break
+		}
+	}
+
+	for _, item := range orderList {
+		if item.seenCount > 0 {
+			*orderedAccs = append(*orderedAccs, item.acc)
+		}
+	}
+
+	*hasRows = len(*orderedAccs) > 0
+	return true, nil
+}
+
+func (a *AggregateIterator) canFuseWithHashJoin(h *HashJoinIterator) bool {
+	if h == nil || h.joinType != "INNER" || h.parsedJoinFilter != nil {
+		return false
+	}
+	if a.groupByMod != proc.GroupByNormal || len(a.groupKeys) != 1 {
+		return false
+	}
+	for _, f := range a.fields {
+		if f.isDistinct || f.parsed != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	if a.initErr != nil {
 		return a.initErr
 	}
 	if a.child == nil {
 		return fmt.Errorf("aggregate: child iterator is nil")
+	}
+	if h := findHashJoinIterator(a.child); h != nil && a.canFuseWithHashJoin(h) {
+		h.fusedWithParentAgg = true
 	}
 	if err := a.child.Open(ctx); err != nil {
 		return err
@@ -904,7 +1143,14 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	inChunk := GetChunk()
 	defer PutChunk(inChunk)
 
-	if len(a.groupKeys) == 0 {
+	// [PERF-JOIN-AGG-OPERATOR-FUSION-1] Operator Fusion Fast-Path:
+	// If child is HashJoin with a materialized small build table and matching group key,
+	// fuse join probe and aggregation into a single direct-slot loop, bypassing 100% of intermediate merged tuples.
+	if fused, fErr := a.tryJoinAggregateFusion(ctx, &orderedAccs, &hasRows); fused {
+		if fErr != nil {
+			return fErr
+		}
+	} else if len(a.groupKeys) == 0 {
 		// Fast-path: Global aggregation (no GROUP BY). Avoids string formatting and map hashing per tuple.
 		globalAcc := a.newGroupAccumulator(Tuple{}, 0)
 		orderedAccs = append(orderedAccs, globalAcc)
