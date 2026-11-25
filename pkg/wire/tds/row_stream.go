@@ -144,6 +144,11 @@ func (s *tdsStreamWriter) FlushIfReady() error {
 		}
 		rem := copy(raw, raw[s.maxPayload:])
 		s.buf.Truncate(rem)
+		if s.bw != nil {
+			if err := s.bw.Flush(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

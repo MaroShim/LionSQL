@@ -1478,6 +1478,7 @@ func (s *Server) respondExecutionResult(
 	prog *proc.Program,
 ) {
 	stream := sess.newStreamWriter(conn, PacketTabular)
+	defer func() { _ = stream.Close() }()
 	buf := stream.Buffer()
 
 	for _, msg := range res.Logs {
@@ -1807,6 +1808,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	}
 
 	stream := sess.newStreamWriter(conn, PacketTabular)
+	defer func() { _ = stream.Close() }()
 	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
@@ -3009,6 +3011,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	}
 
 	stream := sess.newStreamWriter(conn, PacketTabular)
+	defer func() { _ = stream.Close() }()
 	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
