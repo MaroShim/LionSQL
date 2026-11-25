@@ -109,37 +109,38 @@ flowchart TD
   4. `execDelete` 진입부:
      - `WHERE` 조건 및 `RETURNING` 절의 컬럼 실존성 사전 검증.
 
-### Phase 5: 서브쿼리 및 상관 서브쿼리 스코프 계층 바인딩 (`pkg/planner/validator.go`)
-- **목표**: 외부 쿼리(Outer Scope)와 내부 쿼리(Inner Scope)의 엄격한 컬럼 해석 분리.
-- **세부 작업**:
-  1. `ScopeContext` 구조체 도입:
-     ```go
-     type ScopeContext struct {
-         Parent    *ScopeContext
-         Schemas   map[string]*storage.TableSchema
-         Aliases   map[string]string // alias -> tableName
-         IsSubquery bool
-     }
-     ```
-  2. 내부 쿼리에서 컬럼을 찾을 때:
-     - 1차: 자신의 `Schemas`에서 검색.
-     - 2차: 발견되지 않고 `Parent != nil`인 경우 `Parent.ResolveColumn()`으로 상관 서브쿼리(Correlated Reference) 바인딩.
-     - 3차: 어디에도 없으면 `SQLSTATE 42703` 반환.
-
-### Phase 6: Bound AST 객체 설계 및 CBO / 실행기 연동
-- **목표**: 검증된 메타데이터를 AST 노드에 영구 바인딩하여 런타임 문자열 파싱 제거.
+### Phase 5: Bound AST 객체 설계 및 플랫/조인 O(1) 정수 슬롯 바인딩 도입 (`pkg/planner/bound_ast.go`, `validator.go`)
+- **목표**: Phase 1~4에서 확립된 플랫 쿼리 및 JOIN 스코프에 대해 검증된 메타데이터를 AST 노드에 영구 바인딩하여 런타임 문자열 파싱 및 해시맵 조회를 완전 제거 ($O(1)$ 슬롯 바인딩).
 - **세부 작업**:
   1. `BoundExpr` 인터페이스 및 노드 정의:
      ```go
      type BoundColumnRef struct {
-         TableID   int
-         ColumnIdx int
-         Type      storage.DataType
-         Original  string
+         OuterLevel int              // 0 = 현재 쿼리, 1 = 바로 바깥 부모 쿼리 (Phase 6 상관 서브쿼리 대비)
+         TableID    int              // 조인 트리 상의 물리적 테이블 인덱스
+         ColumnIdx  int              // 테이블 스키마 내 O(1) 정수 슬롯 오프셋
+         Type       storage.DataType // 정적 타입
+         Name       string           // 원본 식별자 (디버깅/EXPLAIN용)
      }
      ```
   2. 바인더가 성공하면 `BoundSelectStmt`를 산출하여 `planner.PlanQuery`로 직접 전달.
   3. Volcano 실행기 및 VDBE가 컬럼 이름을 문자열로 맵에서 찾는 대신 `ColumnIdx`로 $O(1)$ 즉시 인덱싱.
+
+### Phase 6: 서브쿼리 및 상관 서브쿼리 스코프 계층 바인딩 (`pkg/planner/validator.go`, `bound_ast.go`)
+- **목표**: 외부 쿼리(Outer Scope)와 내부 쿼리(Inner Scope)의 엄격한 컬럼 해석 분리 및 `OuterLevel > 0` 상관 서브쿼리 바인딩 확장.
+- **세부 작업**:
+  1. `ScopeContext` 구조체 도입:
+     ```go
+     type ScopeContext struct {
+         Parent     *ScopeContext
+         Schemas    map[string]*storage.TableSchema
+         Aliases    map[string]string // alias -> tableName
+         IsSubquery bool
+     }
+     ```
+  2. 내부 쿼리에서 컬럼을 찾을 때:
+     - 1차: 자신의 `Schemas`에서 검색 (성공 시 `OuterLevel = 0`).
+     - 2차: 발견되지 않고 `Parent != nil`인 경우 `Parent.ResolveColumn()`으로 상관 서브쿼리(Correlated Reference) 탐색 및 `OuterLevel = 1` 바인딩.
+     - 3차: 어디에도 없으면 `SQLSTATE 42703` 반환.
 
 ### Phase 7: 4대 실행 경로 동등성 검증 및 다운스트림 방어 코드 안전 제거
 - **목표**: 바인더 단일 관문 안착 확인 후 다운스트림의 중복 코드 정리 (`[RULE:RadicalKISS]`).
@@ -182,12 +183,12 @@ flowchart TD
 
 | 순서 | 태스크 ID | 도메인 | 마일스톤 | 작업 내용 |
 | :---: | :--- | :---: | :---: | :--- |
-| 1 | `BINDER-EVOL-PHASE-1` | Architecture | **v0.95.0** | `WalkAST` 전수 순회 완료 및 집계 경계 추적기 (`AggregateContextTracker`) 구현 |
-| 2 | `BINDER-EVOL-PHASE-2` | Architecture | **v0.95.0** | Qualified Column 및 미존재 테이블 별칭(`t3.id`) 사전 검증 통합 |
-| 3 | `BINDER-EVOL-PHASE-3` | Architecture | **v0.95.0** | JOIN ON 절 비한정 컬럼 모호성(`id = id`) 검증 및 스코프 확립 |
-| 4 | `BINDER-EVOL-PHASE-4` | Architecture | **v0.95.0** | DML Contract 실제 실행 경로 직결 (`NOT NULL`, `UPDATE SET` 대상/우변 검증) |
-| 5 | `BINDER-EVOL-PHASE-5` | Architecture | **v0.96.0** | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (`ScopeContext`) |
-| 6 | `BINDER-EVOL-PHASE-6` | Architecture | **v0.97.0** | `BoundAST` (`BoundSelectStmt`, `BoundExpr`) 아키텍처 공식 도입 |
+| 1 | `BINDER-EVOL-PHASE-1` | Architecture | **v0.95.0** | `WalkAST` 전수 순회 완료 및 집계 경계 추적기 (`AggregateContextTracker`) 구현 (완료) |
+| 2 | `BINDER-EVOL-PHASE-2` | Architecture | **v0.95.0** | Qualified Column 및 미존재 테이블 별칭(`t3.id`) 사전 검증 통합 (완료) |
+| 3 | `BINDER-EVOL-PHASE-3` | Architecture | **v0.95.0** | JOIN ON 절 비한정 컬럼 모호성(`id = id`) 검증 및 스코프 확립 (완료) |
+| 4 | `BINDER-EVOL-PHASE-4` | Architecture | **v0.95.0** | DML Contract 실제 실행 경로 직결 (`NOT NULL`, `UPDATE SET` 대상/우변 검증) (완료) |
+| 5 | `BINDER-EVOL-PHASE-5` | Architecture | **v0.96.0** | `BoundAST` (`BoundSelectStmt`, `BoundExpr`) 아키텍처 공식 도입 및 플랫/조인 O(1) 슬롯 바인딩 |
+| 6 | `BINDER-EVOL-PHASE-6` | Architecture | **v0.96.0** | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (`ScopeContext` & `OuterLevel` 연동) |
 | 7 | `BINDER-EVOL-PHASE-7` | Architecture | **v0.97.0** | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 |
 
 ---
