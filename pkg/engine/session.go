@@ -118,6 +118,16 @@ func (cs *ClientSession) SetIdleInTxTimeout(d time.Duration) {
 	cs.idleInTxTimeout = d
 }
 
+// SetLastUsedAtForTest overrides lastUsedAt for deterministic time-travel testing.
+func (cs *ClientSession) SetLastUsedAtForTest(t time.Time) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	cs.lastUsedAt = t
+}
+
 // checkAndDrainClosedLocked checks whether the session was marked closed while queries were in-flight,
 // and if all queries have completed, detaches the session, clears any active transaction, and returns
 // the transaction to roll back, the storage session, and the drain release callback.

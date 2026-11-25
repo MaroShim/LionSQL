@@ -585,9 +585,22 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		if cs != nil {
 			failed := cs.IsTxFailed()
 			isPG := cs.IsPostgres()
-			if failed && !isRollbackOrResetQuery(stmt) && (isPG || !sqlutil.HasPrefixKeyword(stmt, "COMMIT")) {
-				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
-				return nil, execErr
+			if failed {
+				if isPG {
+					if !isRollbackOrResetQuery(stmt) {
+						execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
+						return nil, execErr
+					}
+				} else {
+					// T-SQL uncommittable transaction semantics (XACT_STATE = -1):
+					// Reads (SELECT) and ROLLBACK/RESET are permitted so CATCH blocks can inspect XACT_STATE() and error logs.
+					// Writes (INSERT, UPDATE, DELETE, DDL, COMMIT) are rejected with Msg 3930.
+					isReadOrRollback := isRollbackOrResetQuery(stmt) || sqlutil.HasPrefixKeyword(stmt, "SELECT")
+					if !isReadOrRollback {
+						execErr = fmt.Errorf("Msg 3930, Level 16, State 1: The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.")
+						return nil, execErr
+					}
+				}
 			}
 		}
 
@@ -625,7 +638,8 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 					}
 				}
 				cs.Vars["error"] = errNum
-				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel || isConflict) {
+				xactAbort, _ := cs.Vars["xact_abort"].(bool)
+				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel || isConflict || xactAbort) {
 					cs.MarkTxFailed()
 				}
 				cs.Mu.Unlock()
