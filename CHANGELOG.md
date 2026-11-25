@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- document official Docker container image specifications and GHCR release automation in `notes/OFFICIAL_DOCKER_RELEASE_PIPELINE.ko.md` (`DOC-OFFICIAL-DOCKER-RELEASE-PIPELINE-1`)
+- document PGWire and TDS mandatory buffer flush guarantees and deterministic stream lifecycle in `notes/WIRE_TDS_MANDATORY_FLUSH_GUARANTEE.ko.md` (`DOC-WIRE-TDS-MANDATORY-FLUSH-GUARANTEE-1`)
 - implement hierarchical scope binding and outer level resolution for correlated subqueries in dedicated Semantic Binder (`BINDER-EVOL-PHASE-6`)
 - codify Invariant 18 and ADR-032 permanently Spec-Outing complex relational physical plan caching to eliminate Parameter Sniffing and plan regression (`SPEC-OUT-COMPLEX-PLAN-CACHE-1`)
 - establish dedicated architecture plan for PGWire single PK point lookup fast-path (`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`)
@@ -55,6 +57,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - prune redundant ad-hoc validation loops across `sqlexec_select.go` into centralized `ValidateSelectScope` and `ValidateAmbiguousProjections` (`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`), eliminating 90+ lines of duplicate branch checks across `execVolcanoSelect` and `execSelect`
 
 ### Fixed
+- guarantee mandatory buffer flush on all PGWire query completion paths preventing client socket read hangs (`b514fb5e`)
+- implement incremental 4KB packet flush and bind deterministic defer close on TDS tabular row streams (`40bf6807`)
 - strip ON CONFLICT and ON DUPLICATE clauses before tuple extraction in INSERT VALUES validation, preventing target columns from being falsely rejected as ghost columns
 - exclude subquery SEMI and ANTI join relations from outer query ambiguity checks in SELECT scope validation
 - include target join table schema when validating join filter expressions

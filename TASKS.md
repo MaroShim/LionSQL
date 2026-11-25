@@ -277,7 +277,9 @@
 | `DONE` | **`DEFECT-VDBE-DECIMAL-FVAL-CORRUPTION-1`** | `1.0-GA` | VM | P1 | VDBE toFloatNum이 DECIMAL 컬럼 FVal(0.0)을 직접 읽어 비교식이 왜곡되는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `PENDING` | **`DIST-LIONESS-SHARDING-ROUTER-1`** |  | --priority | P3 | Lioness: Vitess/Citus Model Hash Partitioning Sharding Router Architecture & Core |  |  |
+| `DONE` | **`DOC-OFFICIAL-DOCKER-RELEASE-PIPELINE-1`** | `Docs` | --milestone | P2 | 공식 Multi-Stage Dockerfile 및 GHCR 다중 아키텍처 배포 자동화 문서화 | [`--domain`](--domain) |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
+| `DONE` | **`DOC-WIRE-TDS-MANDATORY-FLUSH-GUARANTEE-1`** | `Wire` | --milestone | P2 | PGWire 및 TDS 버퍼링 I/O 무조건적 Flush 보장 및 스트림 생명주기 규격 문서화 | [`--domain`](--domain) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** |  | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
 | `DONE` | **`DURA-HYBRID-COMMIT-TAINT-1`** | `1.0-GA` | Storage | P2 | WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`DURA-KILL-1`** | `1.0-GA` | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
@@ -562,7 +564,7 @@
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
 | `DONE` | **`PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`** |  | Wire | P1 | v0.96.0 | [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
@@ -3263,10 +3265,24 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] 공식 Multi-Stage Dockerfile 및 GHCR 다중 아키텍처 배포 자동화 문서화 `DOC-OFFICIAL-DOCKER-RELEASE-PIPELINE-1`
+- **Domain**: --milestone | **Priority**: P2 | **Updated**: 2026-11-25 06:39:42
+- **Milestone**: `Docs`
+- **Plan Doc**: [`--domain`](--domain)
+
+---
+
 ### [DONE] 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 `DOC-REVAMP-10`
 - **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
+
+---
+
+### [DONE] PGWire 및 TDS 버퍼링 I/O 무조건적 Flush 보장 및 스트림 생명주기 규격 문서화 `DOC-WIRE-TDS-MANDATORY-FLUSH-GUARANTEE-1`
+- **Domain**: --milestone | **Priority**: P2 | **Updated**: 2026-11-25 06:39:47
+- **Milestone**: `Wire`
+- **Plan Doc**: [`--domain`](--domain)
 
 ---
 
@@ -5412,8 +5428,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 06:19:19
+### [IN_PROGRESS] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 06:26:43
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md)
 
