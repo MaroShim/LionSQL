@@ -559,6 +559,7 @@
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
@@ -571,6 +572,7 @@
 | `PENDING` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.96.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.96.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | `v0.96.0` | Storage | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -5385,6 +5387,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) `PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:01:06
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
+
+---
+
 ### [PENDING] WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) `PERF-PROJECTION-PUSHDOWN-1`
 - **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-17 01:03:40
 - **Milestone**: `Post-1.0`
@@ -5476,6 +5485,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 05:34:56
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md)
+
+---
+
+### [PENDING] Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) `PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-25 04:01:12
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
 
 ---
 
