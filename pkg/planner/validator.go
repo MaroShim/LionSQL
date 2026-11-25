@@ -295,6 +295,19 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 				return err
 			}
 		}
+		// Incremental JOIN ON Scope validation
+		joinScope := NewTableScopeFromMap(schemas)
+		if stmt.From.Name != "" {
+			joinScope.Register(stmt.From.Name, stmt.From.Alias, schemas[stmt.From.Name])
+		}
+		for _, j := range stmt.Joins {
+			joinScope.Register(j.Table.Name, j.Table.Alias, schemas[j.Table.Name])
+			if j.On != nil {
+				if err := joinScope.ValidateExpr(j.On); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil

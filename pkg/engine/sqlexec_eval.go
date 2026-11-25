@@ -261,6 +261,147 @@ func ValidateWhereClauseWithScope(whereStr string, scope *planner.TableScope) er
 	return nil
 }
 
+// ValidateJoinOnClauseWithScope verifies that onStr in JOIN ON is syntactically well-formed,
+// checks disallowed expressions (e.g. aggregate and window functions in ScopeJoinOn),
+// and checks column bindings against the join scope.
+func ValidateJoinOnClauseWithScope(onStr string, scope *planner.TableScope) error {
+	onStr = strings.TrimSpace(onStr)
+	if onStr == "" {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(onStr))
+	expr := p.ParseExpr()
+	if len(p.Errors()) > 0 {
+		return fmt.Errorf("syntax error in JOIN ON clause: %s", strings.Join(p.Errors(), "; "))
+	}
+	if expr == nil {
+		return fmt.Errorf("syntax error: empty or invalid expression in JOIN ON clause")
+	}
+
+	for p.CurrentToken().Type == proc.TokenSemicolon {
+		p.NextToken()
+	}
+	if p.CurrentToken().Type != proc.TokenEOF {
+		return fmt.Errorf("syntax error: unexpected trailing token %q in JOIN ON clause", p.CurrentToken().Literal)
+	}
+
+	if err := planner.CheckDisallowedExprs(expr, planner.ScopeJoinOn); err != nil {
+		return err
+	}
+
+	var checkConditionExpr func(e proc.Expr) error
+	checkConditionExpr = func(e proc.Expr) error {
+		if e == nil {
+			return nil
+		}
+		switch node := e.(type) {
+		case *proc.LiteralExpr:
+			if node.Val.Type != storage.TypeBool {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+		case *proc.UnaryExpr:
+			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+			return checkConditionExpr(node.Expr)
+		case *proc.BinaryExpr:
+			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
+				if err := checkConditionExpr(node.Left); err != nil {
+					return err
+				}
+				return checkConditionExpr(node.Right)
+			}
+		}
+		return nil
+	}
+	if err := checkConditionExpr(expr); err != nil {
+		return err
+	}
+
+	if scope != nil && scope.HasSchemas() {
+		if err := scope.ValidateExpr(expr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateJoinScope validates that all JOIN ON conditions have valid, unambiguous column references
+// within the scope of tables joined up to each JOIN clause.
+func ValidateJoinScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchema) error {
+	if qInfo == nil {
+		return nil
+	}
+	findSchema := func(tblName string) *storage.TableSchema {
+		cleanTbl := strings.ToLower(proc.CleanSchemaPrefix(tblName))
+		for _, sch := range schemas {
+			if sch != nil && (strings.EqualFold(sch.Name, tblName) || strings.EqualFold(proc.CleanSchemaPrefix(sch.Name), cleanTbl)) {
+				return sch
+			}
+		}
+		return nil
+	}
+
+	joinScope := planner.NewTableScope()
+	if qInfo.TableName != "" {
+		joinScope.Register(qInfo.TableName, qInfo.TableAlias, findSchema(qInfo.TableName))
+	} else if len(schemas) == 1 && qInfo.TableAlias != "" {
+		joinScope.Register("", qInfo.TableAlias, schemas[0])
+	}
+
+	validateKey := func(key string, scope *planner.TableScope) error {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return nil
+		}
+		p := proc.NewParser(proc.NewLexer(key))
+		expr := p.ParseExpr()
+		if expr != nil && scope != nil && scope.HasSchemas() {
+			if err := planner.CheckDisallowedExprs(expr, planner.ScopeJoinOn); err != nil {
+				return err
+			}
+			return scope.ValidateExpr(expr)
+		}
+		return nil
+	}
+
+	if len(qInfo.Joins) > 0 {
+		for _, j := range qInfo.Joins {
+			if j == nil {
+				continue
+			}
+			joinScope.Register(j.Table, j.Alias, findSchema(j.Table))
+			if err := validateKey(j.LeftKey, joinScope); err != nil {
+				return err
+			}
+			if err := validateKey(j.RightKey, joinScope); err != nil {
+				return err
+			}
+			if j.Filter != "" {
+				if err := ValidateJoinOnClauseWithScope(j.Filter, joinScope); err != nil {
+					return err
+				}
+			}
+		}
+	} else if qInfo.Join != nil {
+		joinScope.Register(qInfo.Join.Table, qInfo.Join.Alias, findSchema(qInfo.Join.Table))
+		if err := validateKey(qInfo.Join.LeftKey, joinScope); err != nil {
+			return err
+		}
+		if err := validateKey(qInfo.Join.RightKey, joinScope); err != nil {
+			return err
+		}
+		if qInfo.Join.Filter != "" {
+			if err := ValidateJoinOnClauseWithScope(qInfo.Join.Filter, joinScope); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateWhereClause verifies that whereStr is syntactically well-formed if non-empty.
 func ValidateWhereClause(whereStr string) error {
 	return ValidateWhereClauseWithSchemas(whereStr)
@@ -475,6 +616,9 @@ func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchem
 				return fmt.Errorf("ERROR 42P10: for SELECT DISTINCT, ORDER BY expressions must appear in select list (%s)", item.Column)
 			}
 		}
+	}
+	if err := ValidateJoinScope(qInfo, schemas); err != nil {
+		return err
 	}
 	if qInfo.WhereClause != "" {
 		if err := ValidateWhereClauseWithScope(qInfo.WhereClause, scope); err != nil {

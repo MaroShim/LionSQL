@@ -357,3 +357,89 @@ func TestBinder_Phase2_IdentifierAndScopeBinding(t *testing.T) {
 		}
 	}
 }
+
+func TestBinder_Phase3_JoinScopeAndAmbiguity(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sess := "test_sess_binder_p3"
+	_, _ = coord.GetOrCreateSession(sess)
+	defer coord.CloseSession(sess)
+
+	// Create two tables with overlapping column 'id' and 'val'
+	setupSQLs := []string{
+		"CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50), val INT);",
+		"CREATE TABLE t2 (id INT PRIMARY KEY, dept VARCHAR(50), val INT);",
+		"INSERT INTO t1 VALUES (1, 'Alice', 100);",
+		"INSERT INTO t2 VALUES (1, 'Engineering', 200);",
+	}
+	for _, sql := range setupSQLs {
+		if _, err := coord.ExecuteSessionSQL(sess, sql); err != nil {
+			t.Fatalf("setup failed for %q: %v", sql, err)
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		sql         string
+		expectedErr string
+	}{
+		{
+			name:        "JOIN ON unqualified ambiguous column rejected",
+			sql:         "SELECT * FROM t1 JOIN t2 ON id = id;",
+			expectedErr: "ambiguous",
+		},
+		{
+			name:        "JOIN ON non-existent table alias rejected",
+			sql:         "SELECT * FROM t1 JOIN t2 ON t3.id = t2.id;",
+			expectedErr: "does not exist in query scope",
+		},
+		{
+			name:        "JOIN ON non-existent column on valid table rejected",
+			sql:         "SELECT * FROM t1 JOIN t2 ON t1.ghost_col = t2.id;",
+			expectedErr: "does not exist in table or alias",
+		},
+		{
+			name:        "JOIN ON window function disallowed",
+			sql:         "SELECT * FROM t1 JOIN t2 ON ROW_NUMBER() OVER () = 1;",
+			expectedErr: "window functions are not allowed in JOIN ON",
+		},
+		{
+			name:        "JOIN ON aggregate function disallowed",
+			sql:         "SELECT * FROM t1 JOIN t2 ON count(*) > 0;",
+			expectedErr: "aggregate functions are not allowed in JOIN ON",
+		},
+		{
+			name:        "Chained JOIN referencing table not yet joined rejected",
+			sql:         "SELECT * FROM t1 JOIN t2 ON t1.id = t3.id JOIN t1 t3 ON t2.id = t3.id;",
+			expectedErr: "does not exist in query scope",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := coord.ExecuteSessionSQL(sess, tc.sql)
+			if err == nil {
+				t.Fatalf("[%s] expected error containing %q, got nil", tc.name, tc.expectedErr)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.expectedErr)) {
+				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
+			}
+		})
+	}
+
+	// Positive tests
+	positiveSQLs := []string{
+		"SELECT t1.id, t2.id FROM t1 JOIN t2 ON t1.id = t2.id;",
+		"SELECT a.id, b.dept FROM t1 a JOIN t2 b ON a.id = b.id WHERE a.val > 50;",
+	}
+	for _, sql := range positiveSQLs {
+		res, err := coord.ExecuteSessionSQL(sess, sql)
+		if err != nil {
+			t.Fatalf("valid SQL %q failed: %v", sql, err)
+		}
+		if res == nil {
+			t.Fatalf("expected non-nil result for %q", sql)
+		}
+	}
+}

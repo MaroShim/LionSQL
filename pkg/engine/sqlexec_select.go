@@ -2337,18 +2337,6 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		if err := ValidateSelectScope(qInfo, schemas); err != nil {
 			return nil, err
 		}
-		for _, j := range qInfo.Joins {
-			if j.Filter != "" {
-				if err := ValidateWhereClauseWithScope(j.Filter, scope); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if qInfo.Join != nil && qInfo.Join.Filter != "" {
-			if err := ValidateWhereClauseWithScope(qInfo.Join.Filter, scope); err != nil {
-				return nil, err
-			}
-		}
 
 		// If query has joins, table/query hints, or subqueries, execute via Volcano CBO Engine
 		if len(qInfo.Joins) > 0 || qInfo.Join != nil || len(qInfo.TableHints) > 0 || len(qInfo.QueryHints) > 0 {
