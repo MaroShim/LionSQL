@@ -2006,6 +2006,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 						}
 					}
 					_ = WriteRowDescription(bw, curCols)
+					_ = bw.Flush()
 					_ = writePgDataRows(bw, cur.Columns, curOIDs, portal.ResultFormats, cur.Rows, cur.Values, false)
 					curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
 					_ = WriteCommandComplete(bw, curTag)
@@ -2110,6 +2111,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				}
 			}
 			_ = WriteRowDescription(bw, curCols)
+			_ = bw.Flush()
 			_ = writePgDataRows(bw, cur.Columns, curOIDs, portal.ResultFormats, cur.Rows, cur.Values, false)
 			curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
 			_ = WriteCommandComplete(bw, curTag)
@@ -2297,6 +2299,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 					cols[i] = ColumnMeta{Name: c, DataType: oid, Format: fmtCode}
 				}
 				_ = WriteRowDescription(bw, cols)
+				_ = bw.Flush()
 			}
 
 			_ = writePgDataRows(bw, cur.Columns, colOIDs, resultFormats, cur.Rows, cur.Values, false)

@@ -2,6 +2,7 @@ package wire
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -138,6 +139,70 @@ func BenchmarkPGWire_ZeroAllocStream_Binary_100k(b *testing.B) {
 	b.ResetTimer()
 	for iter := 0; iter < b.N; iter++ {
 		if err := writePgDataRows(discardWriter{}, colNames, colOIDs, formats, rows, vals, false); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+type mockChunkFlusher struct {
+	writes   [][]byte
+	flushes  int
+	totalLen int
+}
+
+func (m *mockChunkFlusher) Write(p []byte) (int, error) {
+	cp := make([]byte, len(p))
+	copy(cp, p)
+	m.writes = append(m.writes, cp)
+	m.totalLen += len(p)
+	return len(p), nil
+}
+
+func (m *mockChunkFlusher) Flush() error {
+	m.flushes++
+	return nil
+}
+
+func TestPGWire_10k_StreamingChunkFlush(t *testing.T) {
+	colNames, colOIDs, rows, vals := makeBenchPgRows(10000)
+	flusher := &mockChunkFlusher{}
+
+	err := writePgDataRows(flusher, colNames, colOIDs, nil, rows, vals, false)
+	if err != nil {
+		t.Fatalf("writePgDataRows failed: %v", err)
+	}
+
+	// 10,000 rows with 512-row chunks should trigger at least 19 flushes (19 * 512 = 9728 + final flush)
+	expectedMinFlushes := 10000 / pgStreamFlushRows
+	if flusher.flushes < expectedMinFlushes {
+		t.Fatalf("expected at least %d flushes, got %d", expectedMinFlushes, flusher.flushes)
+	}
+
+	// Verify total row count across all chunks by counting MsgDataRow ('D') headers
+	totalDataRows := 0
+	for _, chunk := range flusher.writes {
+		idx := 0
+		for idx < len(chunk) {
+			if chunk[idx] != MsgDataRow {
+				t.Fatalf("expected MsgDataRow 'D' at index %d, got %c", idx, chunk[idx])
+			}
+			msgLen := int(binary.BigEndian.Uint32(chunk[idx+1 : idx+5]))
+			totalDataRows++
+			idx += 1 + msgLen
+		}
+	}
+
+	if totalDataRows != 10000 {
+		t.Fatalf("expected 10000 DataRows decoded, got %d", totalDataRows)
+	}
+}
+
+func BenchmarkPGWire_ZeroAllocStream_10k(b *testing.B) {
+	colNames, colOIDs, rows, vals := makeBenchPgRows(10000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iter := 0; iter < b.N; iter++ {
+		if err := writePgDataRows(discardWriter{}, colNames, colOIDs, nil, rows, vals, false); err != nil {
 			b.Fatal(err)
 		}
 	}

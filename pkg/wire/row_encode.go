@@ -2,24 +2,31 @@ package wire
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"io"
 	"log"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"lionsql/pkg/storage"
 )
 
 const (
-	pgStreamFlushBytes = 16 * 1024
+	pgStreamFlushBytes = 32 * 1024
 	pgStreamFlushRows  = 512
-	pgMaxPooledBufCap  = 128 * 1024
+	pgMaxPooledBufCap  = 256 * 1024
 )
+
+type flusher interface {
+	Flush() error
+}
 
 var pgChunkBufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 0, pgStreamFlushBytes)
+		b := make([]byte, 0, 64*1024)
 		return &b
 	},
 }
@@ -40,6 +47,18 @@ func putPgChunkBuf(bp *[]byte) {
 	}
 }
 
+func appendHexBytes(dst []byte, b []byte) []byte {
+	dst = append(dst, '\\', 'x')
+	curLen := len(dst)
+	needed := hex.EncodedLen(len(b))
+	if cap(dst)-curLen < needed {
+		dst = append(dst, make([]byte, needed)...)[:curLen]
+	}
+	dst = dst[:curLen+needed]
+	hex.Encode(dst[curLen:], b)
+	return dst
+}
+
 // appendColumnValueFast appends a formatted PostgreSQL column value directly into dst.
 // Returns (newDst, handled, isNull). When handled is false, callers fall back to legacy formatColumnValue.
 func appendColumnValueFast(dst []byte, val any, oid int32, isBinary bool) ([]byte, bool, bool) {
@@ -50,11 +69,20 @@ func appendColumnValueFast(dst []byte, val any, oid int32, isBinary bool) ([]byt
 	if !isBinary {
 		switch v := val.(type) {
 		case string:
+			if oid == 17 {
+				if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+					dst = append(dst, '\\', 'x')
+					return append(dst, v[2:]...), true, false
+				}
+				if strings.HasPrefix(v, "\\x") || strings.HasPrefix(v, "\\X") {
+					return append(dst, v...), true, false
+				}
+				return appendHexBytes(dst, []byte(v)), true, false
+			}
 			return append(dst, v...), true, false
 		case []byte:
-			// Delegate []byte to legacy formatColumnValue when OID requires special hex escaping.
 			if oid == 17 {
-				return dst, false, false
+				return appendHexBytes(dst, v), true, false
 			}
 			return append(dst, v...), true, false
 		case int:
@@ -75,19 +103,34 @@ func appendColumnValueFast(dst []byte, val any, oid int32, isBinary bool) ([]byt
 			return strconv.AppendUint(dst, uint64(v), 10), true, false
 		case uint16:
 			return strconv.AppendUint(dst, uint64(v), 10), true, false
+		case uint8:
+			return strconv.AppendUint(dst, uint64(v), 10), true, false
 		case float64:
 			return strconv.AppendFloat(dst, v, 'g', -1, 64), true, false
 		case float32:
 			return strconv.AppendFloat(dst, float64(v), 'g', -1, 32), true, false
 		case bool:
 			return strconv.AppendBool(dst, v), true, false
+		case time.Time:
+			if oid == 1184 { // TIMESTAMPTZ
+				return v.AppendFormat(dst, "2006-01-02 15:04:05.999999-07"), true, false
+			}
+			return v.AppendFormat(dst, "2006-01-02 15:04:05.999999"), true, false
+		case *time.Time:
+			if v == nil {
+				return dst, true, true
+			}
+			if oid == 1184 {
+				return v.AppendFormat(dst, "2006-01-02 15:04:05.999999-07"), true, false
+			}
+			return v.AppendFormat(dst, "2006-01-02 15:04:05.999999"), true, false
 		case storage.Value:
-			return appendStorageValueText(dst, v)
+			return appendStorageValueText(dst, v, oid)
 		case *storage.Value:
 			if v == nil {
 				return dst, true, true
 			}
-			return appendStorageValueText(dst, *v)
+			return appendStorageValueText(dst, *v, oid)
 		default:
 			return dst, false, false
 		}
@@ -113,6 +156,18 @@ func appendColumnValueFast(dst []byte, val any, oid int32, isBinary bool) ([]byt
 		return appendBinaryInt(dst, int64(v), oid)
 	case int16:
 		return appendBinaryInt(dst, int64(v), oid)
+	case int8:
+		return appendBinaryInt(dst, int64(v), oid)
+	case uint:
+		return appendBinaryInt(dst, int64(v), oid)
+	case uint64:
+		return appendBinaryInt(dst, int64(v), oid)
+	case uint32:
+		return appendBinaryInt(dst, int64(v), oid)
+	case uint16:
+		return appendBinaryInt(dst, int64(v), oid)
+	case uint8:
+		return appendBinaryInt(dst, int64(v), oid)
 	case float64:
 		return appendBinaryFloat(dst, v, oid)
 	case float32:
@@ -131,12 +186,17 @@ func appendColumnValueFast(dst []byte, val any, oid int32, isBinary bool) ([]byt
 			return append(dst, v...), true, false
 		}
 		return dst, false, false
+	case []byte:
+		if oid == 17 {
+			return append(dst, v...), true, false
+		}
+		return dst, false, false
 	default:
 		return dst, false, false
 	}
 }
 
-func appendStorageValueText(dst []byte, v storage.Value) ([]byte, bool, bool) {
+func appendStorageValueText(dst []byte, v storage.Value, oid int32) ([]byte, bool, bool) {
 	if v.IsNull {
 		return dst, true, true
 	}
@@ -147,10 +207,28 @@ func appendStorageValueText(dst []byte, v storage.Value) ([]byte, bool, bool) {
 		return strconv.AppendFloat(dst, v.FVal, 'f', 6, 32), true, false
 	case storage.TypeFloat:
 		return strconv.AppendFloat(dst, v.FVal, 'f', 6, 64), true, false
-	case storage.TypeVarChar, storage.TypeJSON:
+	case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
 		return append(dst, v.SVal...), true, false
 	case storage.TypeBool:
 		return strconv.AppendBool(dst, v.BVal), true, false
+	case storage.TypeDateTime:
+		if !v.TVal.IsZero() {
+			if oid == 1184 {
+				return v.TVal.AppendFormat(dst, "2006-01-02 15:04:05.999999-07"), true, false
+			}
+			return v.TVal.AppendFormat(dst, "2006-01-02 15:04:05.999999"), true, false
+		}
+		if v.SVal != "" {
+			return append(dst, v.SVal...), true, false
+		}
+		return dst, false, false
+	case storage.TypeDecimal:
+		if v.SVal != "" {
+			return append(dst, v.SVal...), true, false
+		}
+		return append(dst, v.DVal.String()...), true, false
+	case storage.TypeBinary:
+		return appendHexBytes(dst, []byte(v.BinVal)), true, false
 	default:
 		return dst, false, false
 	}
@@ -170,10 +248,15 @@ func appendStorageValueBinary(dst []byte, v storage.Value, oid int32) ([]byte, b
 			return append(dst, 0), true, false
 		}
 		return dst, false, false
-	case storage.TypeVarChar:
+	case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
 		switch oid {
 		case 25, 1043, 19, 1042:
 			return append(dst, v.SVal...), true, false
+		}
+		return dst, false, false
+	case storage.TypeBinary:
+		if oid == 17 {
+			return append(dst, v.BinVal...), true, false
 		}
 		return dst, false, false
 	default:
@@ -268,7 +351,7 @@ func appendDataRowFromRow(dst []byte, colNames []string, colOIDs []int32, format
 	return dst
 }
 
-// writePgDataRows streams query rows in bounded 16KB / 512-row pooled chunks directly to w.
+// writePgDataRows streams query rows in bounded 32KB / 512-row pooled chunks directly to w with chunk flush.
 func writePgDataRows(w io.Writer, colNames []string, colOIDs []int32, formats []int16, rows []map[string]any, rowValsSlice [][]any, devMode bool) error {
 	if len(rows) == 0 && len(rowValsSlice) == 0 {
 		return nil
@@ -324,6 +407,13 @@ func writePgDataRows(w io.Writer, colNames []string, colOIDs []int32, formats []
 				putPgChunkBuf(bp)
 				return err
 			}
+			if f, ok := w.(flusher); ok {
+				if err := f.Flush(); err != nil {
+					*bp = buf
+					putPgChunkBuf(bp)
+					return err
+				}
+			}
 			buf = buf[:0]
 			rowsInChunk = 0
 		}
@@ -331,7 +421,11 @@ func writePgDataRows(w io.Writer, colNames []string, colOIDs []int32, formats []
 
 	var writeErr error
 	if len(buf) > 0 {
-		_, writeErr = w.Write(buf)
+		if _, writeErr = w.Write(buf); writeErr == nil {
+			if f, ok := w.(flusher); ok {
+				writeErr = f.Flush()
+			}
+		}
 	}
 	*bp = buf
 	putPgChunkBuf(bp)
