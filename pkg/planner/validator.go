@@ -200,348 +200,47 @@ func validateQueryASTInternal(stmt *proc.GeneralSelectStmt, schemas map[string]*
 		return fmt.Errorf("subquery nesting depth exceeds maximum limit of 64")
 	}
 
-	// 0. Base structural invariants (Subquery Alias, Negative Limits, DISTINCT ORDER BY)
-	if stmt.From.Subquery != nil && strings.TrimSpace(stmt.From.Alias) == "" {
-		return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-	}
-	for _, j := range stmt.Joins {
-		if j.Table.Subquery != nil && strings.TrimSpace(j.Table.Alias) == "" {
-			return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-		}
-	}
-	if stmt.LimitExpr != nil && isNegativeLiteral(stmt.LimitExpr) {
-		return fmt.Errorf("LIMIT must not be negative (SQLSTATE 2201W)")
-	}
-	if stmt.OffsetExpr != nil && isNegativeLiteral(stmt.OffsetExpr) {
-		return fmt.Errorf("OFFSET must not be negative (SQLSTATE 2201X)")
-	}
-	if stmt.Distinct && len(stmt.OrderBy) > 0 {
-		if err := ValidateDistinctOrderBy(stmt.Projections, stmt.OrderBy); err != nil {
-			return err
-		}
+	// 1. LIMIT and OFFSET Clause Validation
+	if err := validateLimitOffset(stmt.LimitExpr, stmt.OffsetExpr); err != nil {
+		return err
 	}
 
-	scope := NewTableScopeWithParent(parentScope)
-	if len(schemas) > 0 {
-		if stmt.From.Subquery != nil {
-			if strings.TrimSpace(stmt.From.Alias) == "" {
-				return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-			}
-			if err := scope.Register("", stmt.From.Alias, nil); err != nil {
-				return err
-			}
-		} else if stmt.From.Name != "" {
-			sch := findSchemaFromMap(schemas, stmt.From.Name)
-			if sch == nil {
-				return fmt.Errorf("table not found: %s", stmt.From.Name)
-			}
-			if err := scope.Register(stmt.From.Name, stmt.From.Alias, sch); err != nil {
-				return err
-			}
-		}
-		for _, j := range stmt.Joins {
-			if j.Table.Subquery != nil {
-				if strings.TrimSpace(j.Table.Alias) == "" {
-					return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-				}
-				if err := scope.Register("", j.Table.Alias, nil); err != nil {
-					return err
-				}
-			} else if j.Table.Name != "" {
-				sch := findSchemaFromMap(schemas, j.Table.Name)
-				if sch == nil {
-					return fmt.Errorf("table not found: %s", j.Table.Name)
-				}
-				if err := scope.Register(j.Table.Name, j.Table.Alias, sch); err != nil {
-					return err
-				}
-			}
-		}
-		for _, p := range stmt.Projections {
-			if p.Alias != "" {
-				scope.AddProjectionAlias(p.Alias)
-			}
-		}
+	// 2. FROM and JOIN Clauses Validation & TableScope Initialization
+	scope, err := setupTableScopeAndValidateJoins(stmt, schemas, parentScope)
+	if err != nil {
+		return err
 	}
 
-	// 1. WHERE clause validation
-	if stmt.Where != nil {
-		if err := CheckDisallowedExprs(stmt.Where, ScopeWhere); err != nil {
-			return err
-		}
-		if err := ValidateNoNestedAggregates(stmt.Where); err != nil {
-			return err
-		}
-		if err := ValidateSubqueryColumnCount(stmt.Where); err != nil {
-			return err
-		}
+	// 3. WHERE Clause Validation
+	if err := validateWhereClause(stmt.Where, scope); err != nil {
+		return err
 	}
 
-	// 2. JOIN ON conditions validation
-	for _, j := range stmt.Joins {
-		if j.On != nil {
-			if err := CheckDisallowedExprs(j.On, ScopeJoinOn); err != nil {
-				return err
-			}
-			if err := ValidateNoNestedAggregates(j.On); err != nil {
-				return err
-			}
-			if err := ValidateSubqueryColumnCount(j.On); err != nil {
-				return err
-			}
-		}
+	// 4. GROUP BY Clause Validation (with Table Column Primacy)
+	resolvedGroupBy, err := validateGroupByClause(stmt, scope)
+	if err != nil {
+		return err
 	}
 
-	// 3. GROUP BY validation
-	if len(stmt.GroupBy) > 0 {
-		for _, g := range stmt.GroupBy {
-			if err := CheckDisallowedExprs(g, ScopeGroupBy); err != nil {
-				return err
-			}
-			if err := ValidateNoNestedAggregates(g); err != nil {
-				return err
-			}
-			// Check negative integer positions (e.g. GROUP BY -1, -5)
-			if un, ok := g.(*proc.UnaryExpr); ok && un.Op == proc.TokenMinus {
-				if lit, ok := un.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt {
-					ord := -int(lit.Val.IVal)
-					return fmt.Errorf("GROUP BY position %d is not in select list", ord)
-				}
-			}
-			if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
-				ord := int(lit.Val.IVal)
-				if ord < 1 || ord > len(stmt.Projections) {
-					return fmt.Errorf("GROUP BY position %d is not in select list", ord)
-				}
-				proj := stmt.Projections[ord-1]
-				if hasTopLevelAggregateExpr(proj.Expr) {
-					return fmt.Errorf("aggregate functions are not allowed in GROUP BY (cannot group by aggregate column position %d)", ord)
-				}
-			}
-		}
-		if len(schemas) > 0 {
-			for _, g := range stmt.GroupBy {
-				if err := scope.ValidateGroupByExpr(g); err != nil {
-					return err
-				}
-			}
-
-			var resolvedGroupBy []proc.Expr
-			for _, g := range stmt.GroupBy {
-				resolvedGroupBy = append(resolvedGroupBy, g)
-				if colExpr, ok := g.(*proc.CollateExpr); ok {
-					resolvedGroupBy = append(resolvedGroupBy, colExpr.Expr)
-				}
-				if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
-					ord := int(lit.Val.IVal)
-					if ord >= 1 && ord <= len(stmt.Projections) {
-						resolvedGroupBy = append(resolvedGroupBy, stmt.Projections[ord-1].Expr)
-					}
-				}
-				if colRef, ok := g.(*proc.ColumnRefExpr); ok {
-					cleanName := strings.ToLower(sqlutil.CleanIdentifier(colRef.Name))
-					for _, p := range stmt.Projections {
-						if p.Alias != "" && strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), cleanName) {
-							resolvedGroupBy = append(resolvedGroupBy, p.Expr)
-						}
-					}
-				}
-			}
-
-			// Validate that all projection columns are either in GROUP BY, aggregated, or constants
-			for _, p := range stmt.Projections {
-				if p.Expr != nil && !proc.IsConstantExpr(p.Expr) {
-					if err := ValidateProjectionUnderGroupBy(p.Expr, resolvedGroupBy, false); err != nil {
-						return err
-					}
-				}
-			}
-
-			// Validate that all ORDER BY expressions are either in GROUP BY, aggregated, constants, or valid projection aliases
-			for _, ob := range stmt.OrderBy {
-				if ob.Expr != nil && !proc.IsConstantExpr(ob.Expr) {
-					if lit, ok := ob.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
-						ord := int(lit.Val.IVal)
-						if ord >= 1 && ord <= len(stmt.Projections) {
-							continue
-						}
-					}
-					if colRef, ok := ob.Expr.(*proc.ColumnRefExpr); ok {
-						cleanName := strings.ToLower(sqlutil.CleanIdentifier(colRef.Name))
-						isTableCol := false
-						for _, inst := range scope.instances {
-							if inst.Schema != nil {
-								if _, _, found := inst.Schema.FindColumn(cleanName); found {
-									isTableCol = true
-									break
-								}
-							}
-						}
-						if !isTableCol {
-							isAlias := false
-							for _, p := range stmt.Projections {
-								if p.Alias != "" && strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), cleanName) {
-									isAlias = true
-									break
-								}
-							}
-							if isAlias {
-								continue
-							}
-						}
-					}
-					if err := ValidateProjectionUnderGroupBy(ob.Expr, resolvedGroupBy, false); err != nil {
-						return err
-					}
-				}
-			}
-		}
+	// 5. HAVING Clause Validation
+	if err := validateHavingClause(stmt.Having, scope); err != nil {
+		return err
 	}
 
-	// 4. HAVING validation
-	if stmt.Having != nil {
-		if err := CheckDisallowedExprs(stmt.Having, ScopeHaving); err != nil {
-			return err
-		}
-		if err := ValidateNoNestedAggregates(stmt.Having); err != nil {
-			return err
-		}
-		if err := ValidateSubqueryColumnCount(stmt.Having); err != nil {
-			return err
-		}
-		if len(stmt.GroupBy) == 0 {
-			for _, p := range stmt.Projections {
-				if p.Expr != nil && !proc.IsConstantExpr(p.Expr) {
-					if err := ValidateProjectionUnderHaving(p.Expr, false); err != nil {
-						return err
-					}
-				}
-			}
-			for _, ob := range stmt.OrderBy {
-				if ob.Expr != nil && !proc.IsConstantExpr(ob.Expr) {
-					if lit, ok := ob.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
-						ord := int(lit.Val.IVal)
-						if ord >= 1 && ord <= len(stmt.Projections) {
-							continue
-						}
-					}
-					if err := ValidateProjectionUnderHaving(ob.Expr, false); err != nil {
-						return err
-					}
-				}
-			}
-		}
+	hasGroupBy := len(stmt.GroupBy) > 0
+	hasHavingOnly := !hasGroupBy && stmt.Having != nil
+
+	// 6. PROJECTIONS Clause Validation
+	if err := validateProjections(stmt.Projections, resolvedGroupBy, hasGroupBy, hasHavingOnly, scope); err != nil {
+		return err
 	}
 
-	// Constant domain bounds validation (NTILE, PERCENTILE_CONT), nested aggregates, and subquery column count
-	for _, p := range stmt.Projections {
-		if p.Expr != nil {
-			if err := ValidateConstantDomainBounds(p.Expr); err != nil {
-				return err
-			}
-			if err := ValidateNoNestedAggregates(p.Expr); err != nil {
-				return err
-			}
-			if err := ValidateNoNestedWindowFunctions(p.Expr); err != nil {
-				return err
-			}
-			if err := ValidateSubqueryColumnCount(p.Expr); err != nil {
-				return err
-			}
-		}
-	}
-	if stmt.Where != nil {
-		if err := ValidateConstantDomainBounds(stmt.Where); err != nil {
-			return err
-		}
-		if err := ValidateNoNestedAggregates(stmt.Where); err != nil {
-			return err
-		}
-		if err := ValidateNoNestedWindowFunctions(stmt.Where); err != nil {
-			return err
-		}
-	}
-	if stmt.Having != nil {
-		if err := ValidateNoNestedWindowFunctions(stmt.Having); err != nil {
-			return err
-		}
-	}
-	for _, ob := range stmt.OrderBy {
-		if ob.Expr != nil {
-			if err := ValidateNoNestedWindowFunctions(ob.Expr); err != nil {
-				return err
-			}
-		}
+	// 7. ORDER BY Clause Validation
+	if err := validateOrderByClause(stmt.OrderBy, stmt.Projections, stmt.Distinct, resolvedGroupBy, hasGroupBy, hasHavingOnly, scope); err != nil {
+		return err
 	}
 
-	// 5. Ambiguous Column References across JOINs and Qualified Column Binding
-	if len(schemas) > 0 {
-		// Projections
-		for _, p := range stmt.Projections {
-			if err := scope.ValidateExpr(p.Expr); err != nil {
-				return err
-			}
-		}
-		// WHERE
-		if stmt.Where != nil {
-			if err := scope.ValidateExpr(stmt.Where); err != nil {
-				return err
-			}
-		}
-		// HAVING
-		if stmt.Having != nil {
-			if err := scope.ValidateHavingExpr(stmt.Having); err != nil {
-				return err
-			}
-		}
-		// ORDER BY
-		for _, ob := range stmt.OrderBy {
-			if err := scope.ValidateOrderByExpr(ob.Expr); err != nil {
-				return err
-			}
-		}
-		// GROUP BY
-		for _, gb := range stmt.GroupBy {
-			if err := scope.ValidateGroupByExpr(gb); err != nil {
-				return err
-			}
-		}
-		// Incremental JOIN ON Scope validation
-		joinScope := NewTableScopeWithParent(parentScope)
-		if stmt.From.Subquery != nil {
-			if strings.TrimSpace(stmt.From.Alias) == "" {
-				return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-			}
-			if err := joinScope.Register("", stmt.From.Alias, nil); err != nil {
-				return err
-			}
-		} else if stmt.From.Name != "" {
-			if err := joinScope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name)); err != nil {
-				return err
-			}
-		}
-		for _, j := range stmt.Joins {
-			if j.Table.Subquery != nil {
-				if strings.TrimSpace(j.Table.Alias) == "" {
-					return fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
-				}
-				if err := joinScope.Register("", j.Table.Alias, nil); err != nil {
-					return err
-				}
-			} else if j.Table.Name != "" {
-				if err := joinScope.Register(j.Table.Name, j.Table.Alias, findSchemaFromMap(schemas, j.Table.Name)); err != nil {
-					return err
-				}
-			}
-			if j.On != nil {
-				if err := joinScope.ValidateExpr(j.On); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	// 6. Recursively validate all nested subquery ASTs with current scope as parent
+	// 8. Recursive Subquery AST Validation
 	childSubqueries := collectSubqueriesFromQuery(stmt)
 	for _, sub := range childSubqueries {
 		if err := validateQueryASTInternal(sub, schemas, scope, depth+1); err != nil {
@@ -549,6 +248,388 @@ func validateQueryASTInternal(stmt *proc.GeneralSelectStmt, schemas map[string]*
 		}
 	}
 
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// Consolidated Clause-Level Validation Contracts
+// -----------------------------------------------------------------------------
+
+func validateLimitOffset(limit, offset proc.Expr) error {
+	if limit != nil && isNegativeLiteral(limit) {
+		return fmt.Errorf("LIMIT must not be negative (SQLSTATE 2201W)")
+	}
+	if offset != nil && isNegativeLiteral(offset) {
+		return fmt.Errorf("OFFSET must not be negative (SQLSTATE 2201X)")
+	}
+	return nil
+}
+
+func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema, parentScope *TableScope) (*TableScope, error) {
+	// Base Structural Invariant: Subqueries in FROM or JOIN must have an alias (SQLSTATE 42601)
+	if stmt.From.Subquery != nil && strings.TrimSpace(stmt.From.Alias) == "" {
+		return nil, fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
+	}
+	for _, j := range stmt.Joins {
+		if j.Table.Subquery != nil && strings.TrimSpace(j.Table.Alias) == "" {
+			return nil, fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
+		}
+	}
+
+	scope := NewTableScopeWithParent(parentScope)
+	if len(schemas) > 0 {
+		if stmt.From.Subquery != nil {
+			if err := scope.Register("", stmt.From.Alias, nil); err != nil {
+				return nil, err
+			}
+		} else if stmt.From.Name != "" {
+			sch := findSchemaFromMap(schemas, stmt.From.Name)
+			if sch == nil {
+				return nil, fmt.Errorf("table not found: %s", stmt.From.Name)
+			}
+			if err := scope.Register(stmt.From.Name, stmt.From.Alias, sch); err != nil {
+				return nil, err
+			}
+		}
+
+		for _, j := range stmt.Joins {
+			if j.Table.Subquery != nil {
+				if err := scope.Register("", j.Table.Alias, nil); err != nil {
+					return nil, err
+				}
+			} else if j.Table.Name != "" {
+				sch := findSchemaFromMap(schemas, j.Table.Name)
+				if sch == nil {
+					return nil, fmt.Errorf("table not found: %s", j.Table.Name)
+				}
+				if err := scope.Register(j.Table.Name, j.Table.Alias, sch); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		for _, p := range stmt.Projections {
+			if p.Alias != "" {
+				scope.AddProjectionAlias(p.Alias)
+			}
+		}
+
+		// Incremental JOIN ON Scope validation: each join ON condition can only see tables declared up to that join
+		joinScope := NewTableScopeWithParent(parentScope)
+		if stmt.From.Subquery != nil {
+			if err := joinScope.Register("", stmt.From.Alias, nil); err != nil {
+				return nil, err
+			}
+		} else if stmt.From.Name != "" {
+			if err := joinScope.Register(stmt.From.Name, stmt.From.Alias, findSchemaFromMap(schemas, stmt.From.Name)); err != nil {
+				return nil, err
+			}
+		}
+		for _, j := range stmt.Joins {
+			if j.Table.Subquery != nil {
+				if err := joinScope.Register("", j.Table.Alias, nil); err != nil {
+					return nil, err
+				}
+			} else if j.Table.Name != "" {
+				if err := joinScope.Register(j.Table.Name, j.Table.Alias, findSchemaFromMap(schemas, j.Table.Name)); err != nil {
+					return nil, err
+				}
+			}
+			if j.On != nil {
+				if err := CheckDisallowedExprs(j.On, ScopeJoinOn); err != nil {
+					return nil, err
+				}
+				if err := ValidateNoNestedAggregates(j.On); err != nil {
+					return nil, err
+				}
+				if err := ValidateSubqueryColumnCount(j.On); err != nil {
+					return nil, err
+				}
+				if err := joinScope.ValidateExpr(j.On); err != nil {
+					return nil, err
+				}
+			}
+		}
+	} else {
+		// Non-catalog syntactic verification for JOIN ON
+		for _, j := range stmt.Joins {
+			if j.On != nil {
+				if err := CheckDisallowedExprs(j.On, ScopeJoinOn); err != nil {
+					return nil, err
+				}
+				if err := ValidateNoNestedAggregates(j.On); err != nil {
+					return nil, err
+				}
+				if err := ValidateSubqueryColumnCount(j.On); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	return scope, nil
+}
+
+func validateWhereClause(where proc.Expr, scope *TableScope) error {
+	if where == nil {
+		return nil
+	}
+	if err := CheckDisallowedExprs(where, ScopeWhere); err != nil {
+		return err
+	}
+	if err := ValidateConstantDomainBounds(where); err != nil {
+		return err
+	}
+	if err := ValidateNoNestedAggregates(where); err != nil {
+		return err
+	}
+	if err := ValidateNoNestedWindowFunctions(where); err != nil {
+		return err
+	}
+	if err := ValidateSubqueryColumnCount(where); err != nil {
+		return err
+	}
+	if scope != nil && scope.HasSchemas() {
+		if err := scope.ValidateExpr(where); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateGroupByClause(stmt *proc.GeneralSelectStmt, scope *TableScope) ([]proc.Expr, error) {
+	if len(stmt.GroupBy) == 0 {
+		return nil, nil
+	}
+
+	for _, g := range stmt.GroupBy {
+		if err := CheckDisallowedExprs(g, ScopeGroupBy); err != nil {
+			return nil, err
+		}
+		if err := ValidateNoNestedAggregates(g); err != nil {
+			return nil, err
+		}
+		// Negative integer position check (e.g. GROUP BY -1)
+		if un, ok := g.(*proc.UnaryExpr); ok && un.Op == proc.TokenMinus {
+			if lit, ok := un.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt {
+				ord := -int(lit.Val.IVal)
+				return nil, fmt.Errorf("GROUP BY position %d is not in select list", ord)
+			}
+		}
+		if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+			ord := int(lit.Val.IVal)
+			hasNonAggTableCol := false
+			for _, p := range stmt.Projections {
+				if !hasTopLevelAggregateExpr(p.Expr) && !proc.IsConstantExpr(p.Expr) {
+					hasNonAggTableCol = true
+					break
+				}
+			}
+			if !hasNonAggTableCol {
+				// Pure aggregate/constant select list (e.g. SELECT count(*) FROM t GROUP BY 1):
+				// treat literal as single-group constant key, do not treat as projection ordinal position!
+				continue
+			}
+
+			if ord < 1 || ord > len(stmt.Projections) {
+				return nil, fmt.Errorf("GROUP BY position %d is not in select list", ord)
+			}
+			proj := stmt.Projections[ord-1]
+			if hasTopLevelAggregateExpr(proj.Expr) {
+				return nil, fmt.Errorf("aggregate functions are not allowed in GROUP BY (cannot group by aggregate column position %d)", ord)
+			}
+		}
+	}
+
+	if scope != nil && scope.HasSchemas() {
+		for _, g := range stmt.GroupBy {
+			if err := scope.ValidateGroupByExpr(g); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Resolve GROUP BY expressions for Projections and OrderBy validation
+	// Enforcing Table Column Primacy: physical table column strictly takes precedence over projection alias!
+	var resolvedGroupBy []proc.Expr
+	for _, g := range stmt.GroupBy {
+		resolvedGroupBy = append(resolvedGroupBy, g)
+		if colExpr, ok := g.(*proc.CollateExpr); ok {
+			resolvedGroupBy = append(resolvedGroupBy, colExpr.Expr)
+		}
+		if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+			ord := int(lit.Val.IVal)
+			if ord >= 1 && ord <= len(stmt.Projections) {
+				resolvedGroupBy = append(resolvedGroupBy, stmt.Projections[ord-1].Expr)
+			}
+		}
+		if colRef, ok := g.(*proc.ColumnRefExpr); ok {
+			cleanName := strings.ToLower(sqlutil.CleanIdentifier(colRef.Name))
+			isTableCol := false
+			if scope != nil {
+				for _, inst := range scope.instances {
+					if inst.Schema != nil {
+						if _, _, found := inst.Schema.FindColumn(cleanName); found {
+							isTableCol = true
+							break
+						}
+					}
+				}
+			}
+			if !isTableCol {
+				for _, p := range stmt.Projections {
+					if p.Alias != "" && strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), cleanName) {
+						resolvedGroupBy = append(resolvedGroupBy, p.Expr)
+					}
+				}
+			}
+		}
+	}
+
+	return resolvedGroupBy, nil
+}
+
+func validateHavingClause(having proc.Expr, scope *TableScope) error {
+	if having == nil {
+		return nil
+	}
+	if err := CheckDisallowedExprs(having, ScopeHaving); err != nil {
+		return err
+	}
+	if err := ValidateNoNestedAggregates(having); err != nil {
+		return err
+	}
+	if err := ValidateNoNestedWindowFunctions(having); err != nil {
+		return err
+	}
+	if err := ValidateSubqueryColumnCount(having); err != nil {
+		return err
+	}
+	if scope != nil && scope.HasSchemas() {
+		if err := scope.ValidateHavingExpr(having); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateProjections(projections []proc.Projection, resolvedGroupBy []proc.Expr, hasGroupBy bool, hasHavingOnly bool, scope *TableScope) error {
+	for _, p := range projections {
+		if p.Expr == nil {
+			continue
+		}
+		if err := ValidateConstantDomainBounds(p.Expr); err != nil {
+			return err
+		}
+		if err := ValidateNoNestedAggregates(p.Expr); err != nil {
+			return err
+		}
+		if err := ValidateNoNestedWindowFunctions(p.Expr); err != nil {
+			return err
+		}
+		if err := ValidateSubqueryColumnCount(p.Expr); err != nil {
+			return err
+		}
+
+		if hasHavingOnly {
+			if !proc.IsConstantExpr(p.Expr) {
+				if err := ValidateProjectionUnderHaving(p.Expr, false); err != nil {
+					return err
+				}
+			}
+		}
+
+		if scope != nil && scope.HasSchemas() {
+			if hasGroupBy {
+				if !proc.IsConstantExpr(p.Expr) {
+					if err := ValidateProjectionUnderGroupBy(p.Expr, resolvedGroupBy, false); err != nil {
+						return err
+					}
+				}
+			}
+
+			if err := scope.ValidateExpr(p.Expr); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateOrderByClause(orderBy []proc.OrderByItem, projections []proc.Projection, isDistinct bool, resolvedGroupBy []proc.Expr, hasGroupBy bool, hasHavingOnly bool, scope *TableScope) error {
+	if len(orderBy) == 0 {
+		return nil
+	}
+
+	// 1. DISTINCT ORDER BY invariant (SQLSTATE 42P10)
+	if isDistinct {
+		if err := ValidateDistinctOrderBy(projections, orderBy); err != nil {
+			return err
+		}
+	}
+
+	for _, ob := range orderBy {
+		if ob.Expr == nil {
+			continue
+		}
+		if err := ValidateNoNestedAggregates(ob.Expr); err != nil {
+			return err
+		}
+		if err := ValidateNoNestedWindowFunctions(ob.Expr); err != nil {
+			return err
+		}
+
+		// Positional ORDER BY integer literal (e.g. ORDER BY 1, 2)
+		isPositional := false
+		if lit, ok := ob.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+			ord := int(lit.Val.IVal)
+			if ord >= 1 && ord <= len(projections) {
+				isPositional = true
+			}
+		}
+
+		if scope != nil && scope.HasSchemas() {
+			if hasGroupBy && !isPositional && !proc.IsConstantExpr(ob.Expr) {
+				// In GROUP BY, allow projection aliases in ORDER BY if not conflicting with a table column
+				if colRef, ok := ob.Expr.(*proc.ColumnRefExpr); ok {
+					cleanName := strings.ToLower(sqlutil.CleanIdentifier(colRef.Name))
+					isTableCol := false
+					for _, inst := range scope.instances {
+						if inst.Schema != nil {
+							if _, _, found := inst.Schema.FindColumn(cleanName); found {
+								isTableCol = true
+								break
+							}
+						}
+					}
+					if !isTableCol {
+						isAlias := false
+						for _, p := range projections {
+							if p.Alias != "" && strings.EqualFold(sqlutil.CleanIdentifier(p.Alias), cleanName) {
+								isAlias = true
+								break
+							}
+						}
+						if isAlias {
+							goto validateScope
+						}
+					}
+				}
+				if err := ValidateProjectionUnderGroupBy(ob.Expr, resolvedGroupBy, false); err != nil {
+					return err
+				}
+			} else if hasHavingOnly && !isPositional && !proc.IsConstantExpr(ob.Expr) {
+				if err := ValidateProjectionUnderHaving(ob.Expr, false); err != nil {
+					return err
+				}
+			}
+
+		validateScope:
+			if err := scope.ValidateOrderByExpr(ob.Expr); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -1033,7 +1114,7 @@ func ValidateConstantDomainBounds(expr proc.Expr) error {
 		if (upperName == "PERCENTILE_CONT" || upperName == "PERCENTILE_DISC") && len(fn.Args) > 0 {
 			if lit, ok := fn.Args[0].(*proc.LiteralExpr); ok && !lit.Val.IsNull {
 				val := 0.0
-				if lit.Val.Type == storage.TypeFloat {
+				if lit.Val.Type == storage.TypeFloat || lit.Val.Type == storage.TypeDecimal {
 					val = lit.Val.FVal
 				} else if lit.Val.Type == storage.TypeInt {
 					val = float64(lit.Val.IVal)
@@ -1123,7 +1204,7 @@ func ValidateProjectionUnderHaving(expr proc.Expr, inAggregate bool) error {
 	switch e := expr.(type) {
 	case *proc.ColumnRefExpr:
 		if !inAggregate {
-			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function", e.Name)
+			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function (SQLSTATE 42803)", e.Name)
 		}
 		return nil
 	case *proc.FunctionCallExpr:
@@ -1352,7 +1433,7 @@ func ValidateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 	switch e := expr.(type) {
 	case *proc.ColumnRefExpr:
 		if !inAggregate && !exprMatchesGroupBy(e, groupByExprs) {
-			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function", e.Name)
+			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function (SQLSTATE 42803)", e.Name)
 		}
 		return nil
 	case *proc.FunctionCallExpr:

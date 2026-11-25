@@ -1376,6 +1376,14 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 		s.recordDDLDropAddedColumn(cs, tableName, c.Name)
 	}
 
+	if cs != nil {
+		if shadow := cs.GetShadowCatalog(); shadow != nil {
+			if updatedSch, err := s.engine.GetTable(tableName); err == nil && updatedSch != nil {
+				shadow.MarkTableAltered(updatedSch)
+			}
+		}
+	}
+
 	s.InvalidatePKBypassCache()
 
 	msg := fmt.Sprintf("Columns %s added to table %q", strings.Join(addedCols, ", "), tableName)

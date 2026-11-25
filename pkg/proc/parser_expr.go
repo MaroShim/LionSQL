@@ -572,7 +572,7 @@ func (p *Parser) parsePrefix() Expr {
 			if err == nil && sel != nil && p.curTokenIs(TokenRParen) {
 				p.nextToken() // eat )
 				if len(sel.Projections) > 1 {
-					p.addError("subquery must return only one column")
+					p.addError("subquery must return only one column (SQLSTATE 42601)")
 					return nil
 				}
 				sub := &ScalarSubqueryExpr{

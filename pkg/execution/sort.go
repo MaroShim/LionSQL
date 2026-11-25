@@ -224,10 +224,6 @@ func toInt64Fast(val any) (int64, bool) {
 		}
 	case float64:
 		return int64(v), true
-	case string:
-		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
-			return i, true
-		}
 	}
 	return 0, false
 }

@@ -26,11 +26,17 @@ type SeqScanIterator struct {
 	requiredCols []int
 	filterCond   string
 	filterExpr   proc.Expr
+	sessionVars  map[string]any
 }
 
 // SetArena configures an optional memory arena for zero-GC tuple allocation.
 func (s *SeqScanIterator) SetArena(a *storage.Arena) {
 	s.arena = a
+}
+
+// SetSessionVars sets session variables for evaluating variable expressions in filter predicates.
+func (s *SeqScanIterator) SetSessionVars(vars map[string]any) {
+	s.sessionVars = vars
 }
 
 // SetRequiredCols configures selective column decoding for projection pushdown.
@@ -91,7 +97,7 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena, requiredCols []int, filterExpr proc.Expr, eof *bool, dest *Chunk) error {
+func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena, requiredCols []int, filterExpr proc.Expr, sessionVars map[string]any, eof *bool, dest *Chunk) error {
 	if cursor == nil || *eof {
 		return io.EOF
 	}
@@ -130,7 +136,7 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 						Schema: schema,
 						Index:  colMap,
 					}
-					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, sessionVars)
 					if evalErr != nil {
 						return evalErr
 					}
@@ -173,7 +179,7 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 						Schema: schema,
 						Index:  colMap,
 					}
-					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(rawTuple, filterExpr, nil, sessionVars)
 					if evalErr != nil {
 						return evalErr
 					}
@@ -213,7 +219,7 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 					t = FormatRowWithArena(row, schema, alias, colMap, arena)
 				}
 				if filterExpr != nil {
-					matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+					matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, sessionVars)
 					if evalErr != nil {
 						return evalErr
 					}
@@ -234,7 +240,7 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 				t = FormatRowWithArena(row, schema, alias, colMap, arena)
 			}
 			if filterExpr != nil {
-				matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+				matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, sessionVars)
 				if evalErr != nil {
 					return evalErr
 				}
@@ -255,7 +261,7 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 		}
 		t := FormatRecord(rec, schema, alias, colMap)
 		if filterExpr != nil {
-			matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, nil)
+			matched, evalErr := EvalTupleBoolExprWithContextErr(t, filterExpr, nil, sessionVars)
 			if evalErr != nil {
 				return evalErr
 			}
@@ -323,7 +329,7 @@ func FormatRowWithSelectedCols(row storage.Row, schema *storage.TableSchema, ali
 }
 
 func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, &s.eof, dest)
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, s.sessionVars, &s.eof, dest)
 }
 
 func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
@@ -392,11 +398,17 @@ type IndexScanIterator struct {
 	requiredCols []int
 	filterCond   string
 	filterExpr   proc.Expr
+	sessionVars  map[string]any
 }
 
 // SetArena configures an optional memory arena for zero-GC tuple allocation.
 func (s *IndexScanIterator) SetArena(a *storage.Arena) {
 	s.arena = a
+}
+
+// SetSessionVars sets session variables for evaluating variable expressions in filter predicates.
+func (s *IndexScanIterator) SetSessionVars(vars map[string]any) {
+	s.sessionVars = vars
 }
 
 // SetRequiredCols configures selective column decoding for projection pushdown.
@@ -457,7 +469,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 }
 
 func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, &s.eof, dest)
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, s.requiredCols, s.filterExpr, s.sessionVars, &s.eof, dest)
 }
 
 func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {

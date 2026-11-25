@@ -1,8 +1,13 @@
-# BINDER-EVOL-PHASE-7: Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper Plan
+# VALIDATOR-AND-BINDER-EVOL: Semantic Gatekeeper First Architecture & Binder Evolution Plan
 
 ## 1. 개요 및 목적
-본 문서는 LionSQL Dedicated Semantic Binder 및 Validator(`pkg/planner/validator.go`, `pkg/planner/binder.go`, `pkg/planner/planner.go`)의 핵심 의미론적 불변식과 결함을 전면적으로 해결하기 위한 Phase 7 진화 설계 및 구현 계획을 정의합니다.
+본 문서는 LionSQL **Validator(시맨틱 유효성 검증 및 표준 SQL 방화벽)**와 **Binder(심볼 바인딩 및 슬롯 매핑)**의 핵심 의미론적 불변식과 결함을 전면적으로 해결하기 위한 통합 진화 설계 및 구현 계획을 정의합니다.
 
+> **아키텍처 대원칙: Validator First (Gatekeeper Primacy)**
+> 1. 모든 쿼리는 물리적 슬롯 오프셋 계산이나 심볼 바인딩에 진입하기 전에, **Validator가 1차 수문장(Gatekeeper)으로서 표준 SQL 시맨틱 규칙을 철저히 검사(Validate)하여 불량 쿼리를 즉각 Fail-Closed 차단**한다.
+> 2. **Binder는 Validator를 통과한 정상 쿼리만을 대상으로** 테이블/컬럼 심볼을 식별하고, Hot-path는 `TupleSlot` 오프셋을 배정하며, 복잡한 식은 `BoundGenericExpr`로 감싸 안전하게 실행기(`eval.go`)에 위임한다.
+
+### 12대 핵심 시맨틱 검증 및 바인딩 불변식 체크리스트
 1. **별칭 섀도잉 (Scope Shadowing)**: `FROM users u`처럼 별칭이 부여되었을 때 원본 테이블명 `users.id` 접근 차단.
 2. **셀프 조인 모호성 (Self-Join Ambiguity) & 무별칭 중복 차단**: `TableInstance` 기반 모호성 카운트 및 `FROM emp JOIN emp` 중복 테이블 명시 차단.
 3. **TableLookup 정합성 (TableLookup Safety)**: `cur.TableLookup`의 덮어쓰기 방지 및 별칭 섀도잉 반영.
@@ -13,8 +18,11 @@
 8. **스칼라 및 IN 서브쿼리 단일 컬럼 보장 검증 (SQLSTATE 42601)**: 단일 컬럼을 요구하는 서브쿼리에서 다중 컬럼 반환 시 컴파일 시점 차단.
 9. **알 수 없는 함수 방치 차단 (SQLSTATE 42883)**: 내장/집계/윈도우 함수 목록에 없는 함수 호출 시 조용히 통과하지 않고 즉각 에러 반환.
 10. **HAVING 절 프로젝션 별칭 참조 및 집계식 바인딩 지원**: HAVING 절에서 프로젝션 별칭(`COUNT(*) AS total_emp` -> `HAVING total_emp > 10`) 해석 및 유효성 검증.
-11. **중첩 집계함수 금지 검증 (SQLSTATE 42803)**: 집계 함수 내부에 또 다른 집계 함수 호출(`SUM(COUNT(*))`) 엄격 차단.
-12. **GROUP BY 별칭과 컬럼명의 우선순위 역전 해결 (Table Column Primacy)**: `GROUP BY` 대상 해석 시 테이블 컬럼을 프로젝션 별칭보다 항상 최우선으로 바인딩.
+11. **중첩 집계함수 금지 검증 (SQLSTATE 42803)**: 집계 함수 내부에 또 다른 집계 함수 호출(`SUM(AVG(x))`, `COUNT(MAX(y))`) 엄격 차단.
+12. **GROUP BY 별칭과 컬럼명의 우선순위 역전 해결 (Table Column Primacy)**: `GROUP BY` 대상 해석 시 테이블 물리 컬럼을 프로젝션 별칭보다 항상 최우선으로 검증/바인딩.
+13. **DISTINCT ORDER BY 프로젝션 일치 검증 (SQLSTATE 42P10)**: `SELECT DISTINCT` 시 ORDER BY 식이 프로젝션에 없으면 차단 (기완료).
+14. **음수 LIMIT 및 OFFSET 리터럴 차단 (SQLSTATE 2201W / 2201X)**: `LIMIT -1`, `OFFSET -5` 컴파일 타임 차단 (기완료).
+15. **중첩 윈도우 함수 및 집계 내 윈도우 함수 차단 (SQLSTATE 42P20)**: `ROW_NUMBER() OVER (...)` 중첩 차단 (기완료).
 
 ---
 
@@ -118,3 +126,43 @@
 12. `TestBinder_Phase7_NestedAggregateRejection`: `SELECT SUM(COUNT(*)) FROM users` -> FAIL (42803).
 13. `TestBinder_Phase7_GroupBy_TableColumnPrimacy`: 테이블 컬럼명이 프로젝션 별칭과 겹칠 때 테이블 컬럼 우선 바인딩 확인.
 14. 3-Stage Pipeline: `go build`, `go test -v -race ./...`, 커밋 및 푸시.
+
+---
+
+## 4. Phase 7 완료 요약 및 교훈 (Gatekeeper Consolidated Pass & Scan-Filter Fusion Hardening)
+
+### 4.1 Clause별 검증 계약 단일화 완료
+- `pkg/planner/validator.go` 내의 파편화된 중복 AST 순회를 제거하고, 각 SQL 절별 독립 검증 함수로 통합:
+  1. `validateLimitOffset`: 음수 리터럴 컴파일 타임 차단 (`SQLSTATE 2201W / 2201X`).
+  2. `setupTableScopeAndValidateJoins`: FROM/JOIN 서브쿼리 무별칭 차단 (`SQLSTATE 42601`), 중복 별칭 및 중복 무별칭 테이블 차단, Incremental JOIN ON 윈도우/집계 불가 검증.
+  3. `validateWhereClause`: WHERE 집계(`42803`)/윈도우(`42P20`) 불가, 스칼라/IN 서브쿼리 단일 컬럼 보장(`42601`), 도메인 바운드 검증.
+  4. `validateGroupByClause`: 집계/윈도우 불가, 음수/초과 위치 인덱스 차단, 순수 집계/상수 SELECT 시 상수 키 그룹화 허용 (`SELECT count(*) FROM t GROUP BY 1`), **Table Column Primacy (테이블 물리 컬럼이 프로젝션 별칭보다 항상 우선)**.
+  5. `validateHavingClause`: 윈도우 불가(`42P20`), 중첩 집계 불가(`42803`), 단독 HAVING 비집계 컬럼 프로젝션 차단 (`ValidateProjectionUnderHaving`).
+  6. `validateProjections`: 중첩 집계 불가(`42803`), 집계 내 윈도우 불가(`42P20`), 중첩 윈도우 불가(`42P20`), NTILE(0)/PERCENTILE_CONT(1.5) 등 도메인 바운드 초과(`22003`) 차단.
+  7. `validateOrderByClause`: DISTINCT 프로젝션 불일치(`42P10`), 중첩 집계(`42803`), 중첩 윈도우(`42P20`), GROUP BY 비집계 정렬 차단.
+  8. `validateQueryASTInternal`: 재귀 서브쿼리 AST 심층 검증.
+
+### 4.2 8대 계약 테스트 스위트 완비 (`pkg/planner/validator_contract_test.go`)
+- `TestContract_LimitOffset` (PASS)
+- `TestContract_FromJoins` (PASS)
+- `TestContract_WhereClause` (PASS)
+- `TestContract_GroupByClause` (PASS)
+- `TestContract_HavingClause` (PASS)
+- `TestContract_ProjectionsClause` (PASS)
+- `TestContract_OrderByClause` (PASS)
+- `TestContract_RecursiveSubqueries` (PASS)
+- 전수 100% PASS 및 -race 0 race 확인.
+
+### 4.3 핵심 버그 진단 및 수정 내역
+1. **Scan-Filter Fusion Pushdown의 sessionVars 유실 결함**:
+   - 증상: `sp_CopyItems` 저장 프로시저에서 `INSERT INTO dest SELECT ... WHERE qty >= @p_min_qty` 실행 시 0 row 복사 (`TestStoredProcedureInsertSelect` 실패).
+   - 원인: Scan-filter fusion이 `@p_min_qty`를 포함한 WHERE 필터 조건을 스토리지 반복자(`SeqScanIterator`, `IndexScanIterator`, `GatherIterator`)로 pushdown했으나, 해당 반복자들이 `sessionVars` 컨텍스트를 전달받지 못해 `nil`로 평가되어 모든 행을 drop함.
+   - 조치: `SeqScanIterator`, `IndexScanIterator`, `GatherIterator`에 `sessionVars` 필드 및 `SetSessionVars` 인터페이스를 추가하고, `fillScanChunk`에서 `EvalTupleBoolExprWithContextErr` 호출 시 `sessionVars`를 주입하도록 전면 보완.
+2. **HAVING without GROUP BY 비집계 검증 누락 수정**:
+   - `ValidateProjectionUnderHaving`이 `scope.HasSchemas()` 내부에만 위치하여 AST 단계에서 차단되지 않던 결함을 시정하고, `pkg/engine/sqlexec_eval.go:ValidateSelectScope`에도 가드를 추가.
+3. **ROWVERSION / Hidden / Computed 컬럼 NOT NULL 오탐지 수정**:
+   - DML 유효성 검사기(`sqlexec_dml.go`)에서 시스템 자동 관리 컬럼을 NOT NULL 필수 검사 대상에서 제외.
+4. **V2 바이너리 튜플 및 DDL 세이브포인트 스키마 동기화 수정**:
+   - 세이브포인트 DDL 트랜잭션 도중 `ShadowCatalog.MarkTableAltered` 호출을 추가하여 롤백 후 스키마 불일치 방지.
+5. **문자열 정렬 시 수치 파싱 역전 버그 수정**:
+   - `SortIterator`의 `toInt64Fast`에서 `case string:` 분기를 제거하여 문자열 컬럼(`VARCHAR`)이 사전식 정렬을 유지하도록 복원.

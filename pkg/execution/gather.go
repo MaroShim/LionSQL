@@ -51,6 +51,7 @@ type GatherIterator struct {
 	requiredCols []int
 	filterCond   string
 	filterExpr   proc.Expr
+	sessionVars  map[string]any
 	arena        *storage.Arena
 	dop          int
 	parallelJoin *ParallelJoinConfig
@@ -128,6 +129,11 @@ func (g *GatherIterator) SetFilterCond(cond string) {
 			g.filterExpr = proc.FoldConstants(expr)
 		}
 	}
+}
+
+// SetSessionVars sets session variables for evaluating variable expressions in filter predicates.
+func (g *GatherIterator) SetSessionVars(vars map[string]any) {
+	g.sessionVars = vars
 }
 
 // EffectiveDOP calculates the actual worker count honoring MAXDOP, NumCPU/2 bounds, and minimum 1.
@@ -264,7 +270,7 @@ func (g *GatherIterator) Open(ctx context.Context) error {
 								Schema: g.schema,
 								Index:  g.colIndexMap,
 							}
-							matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, g.filterExpr, nil, nil)
+							matched, _ := EvalTupleBoolExprWithContextErr(rawTuple, g.filterExpr, nil, g.sessionVars)
 							if !matched {
 								continue
 							}
@@ -318,7 +324,7 @@ func (g *GatherIterator) Open(ctx context.Context) error {
 							t = FormatRowWithArena(row, g.schema, g.alias, g.colIndexMap, g.arena)
 						}
 						if g.filterExpr != nil {
-							matched, _ := EvalTupleBoolExprWithContextErr(t, g.filterExpr, nil, nil)
+							matched, _ := EvalTupleBoolExprWithContextErr(t, g.filterExpr, nil, g.sessionVars)
 							if !matched {
 								continue
 							}
@@ -525,7 +531,7 @@ func (g *GatherIterator) probeAndAppendJoinTuple(chunk *Chunk, t Tuple) {
 }
 
 func (g *GatherIterator) evalJoinFilter(t Tuple, filter proc.Expr) bool {
-	matched, _ := EvalTupleBoolExprWithContextErr(t, filter, nil, nil)
+	matched, _ := EvalTupleBoolExprWithContextErr(t, filter, nil, g.sessionVars)
 	return matched
 }
 

@@ -734,7 +734,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken()
 			}
 			if alias == "" {
-				return nil, fmt.Errorf("subquery in FROM must have an alias")
+				return nil, fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
 			}
 			colAliases := p.parseColumnAliasList()
 			fromHints := p.parseTableHints()
@@ -983,7 +983,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 			}
 			if !isApply && jAlias == "" {
-				return nil, fmt.Errorf("subquery in FROM must have an alias")
+				return nil, fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
 			}
 			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
@@ -1066,7 +1066,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 			}
 			if !isApply && jAlias == "" {
-				return nil, fmt.Errorf("subquery in FROM must have an alias")
+				return nil, fmt.Errorf("subquery in FROM must have an alias (SQLSTATE 42601)")
 			}
 			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
@@ -1297,12 +1297,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 			if p.curTokenIs(TokenInt) {
 				n, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				if err != nil || n < 0 {
-					return nil, fmt.Errorf("syntax error: LIMIT must not be negative")
+					return nil, fmt.Errorf("syntax error: LIMIT must not be negative (SQLSTATE 2201W)")
 				}
 				stmt.Limit = n
 				p.nextToken()
 			} else if p.curTokenIs(TokenMinus) {
-				return nil, fmt.Errorf("syntax error: LIMIT must not be negative")
+				return nil, fmt.Errorf("syntax error: LIMIT must not be negative (SQLSTATE 2201W)")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.LimitExpr = p.parseExpression(precLowest)
 				if len(p.errors) > 0 {
@@ -1319,12 +1319,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 			if p.curTokenIs(TokenInt) {
 				n, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				if err != nil || n < 0 {
-					return nil, fmt.Errorf("syntax error: OFFSET must not be negative")
+					return nil, fmt.Errorf("syntax error: OFFSET must not be negative (SQLSTATE 2201X)")
 				}
 				stmt.Offset = n
 				p.nextToken()
 			} else if p.curTokenIs(TokenMinus) {
-				return nil, fmt.Errorf("syntax error: OFFSET must not be negative")
+				return nil, fmt.Errorf("syntax error: OFFSET must not be negative (SQLSTATE 2201X)")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.OffsetExpr = p.parseExpression(precLowest)
 				if len(p.errors) > 0 {

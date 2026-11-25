@@ -576,6 +576,13 @@ func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchem
 			if err := planner.ValidateConstantDomainBounds(expr); err != nil {
 				return err
 			}
+			if len(qInfo.GroupByCols) == 0 && qInfo.HavingClause != "" {
+				if !proc.IsConstantExpr(expr) {
+					if err := planner.ValidateProjectionUnderHaving(expr, false); err != nil {
+						return err
+					}
+				}
+			}
 			if scope.HasSchemas() {
 				if err := scope.ValidateExpr(expr); err != nil {
 					return err

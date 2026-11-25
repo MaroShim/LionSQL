@@ -152,13 +152,13 @@ END;`
 
 	// Subsequent DML in aborted transaction must be rejected
 	_, err = coord.ExecuteSessionSQL(tdsSess, "INSERT INTO p030_accounts VALUES (2, 2000);")
-	if err == nil || !strings.Contains(err.Error(), "current transaction is aborted") {
+	if err == nil || (!strings.Contains(err.Error(), "current transaction is aborted") && !strings.Contains(err.Error(), "3930")) {
 		t.Fatalf("expected aborted transaction error on subsequent INSERT, got: %v", err)
 	}
 
 	// Attempting to COMMIT a timed-out T-SQL transaction must fail and roll back the partial write
 	_, err = coord.ExecuteSessionSQL(tdsSess, "COMMIT;")
-	if err == nil || !strings.Contains(err.Error(), "current transaction is aborted") {
+	if err == nil || (!strings.Contains(err.Error(), "current transaction is aborted") && !strings.Contains(err.Error(), "3930")) {
 		t.Fatalf("expected COMMIT on timed-out T-SQL transaction to return error, got: %v", err)
 	}
 

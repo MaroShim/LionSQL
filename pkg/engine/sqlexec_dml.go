@@ -373,7 +373,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 					targetColsSet[strings.ToLower(cName)] = true
 				}
 				for _, col := range tblSch.Columns {
-					if !col.Nullable && col.Default == "" && !col.Identity {
+					if !col.Nullable && col.Default == "" && !col.Identity && !col.IsRowVersion && !col.Hidden && !col.HasComputedExpr() {
 						if !targetColsSet[strings.ToLower(col.Name)] {
 							return nil, fmt.Errorf("null value in column %q violates not-null constraint", col.Name)
 						}

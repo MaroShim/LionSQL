@@ -911,3 +911,81 @@ func TestValidator_Hardening_NestedWindowFunctions(t *testing.T) {
 		t.Errorf("expected 42P20 'window function calls cannot be nested' error, got: %v", err)
 	}
 }
+
+func TestValidator_Hardening_NestedAggregates(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. SUM(AVG(id)) -> Fail (42803)
+	sql1 := "SELECT SUM(AVG(id)) FROM users;"
+	parsed1, err := proc.ParseSQL(sql1)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsed1.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for SUM(AVG(id)), got nil")
+	} else if !strings.Contains(err.Error(), "aggregate function calls cannot be nested") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'cannot be nested' error, got: %v", err)
+	}
+
+	// 2. COUNT(MAX(id)) -> Fail (42803)
+	sql2 := "SELECT COUNT(MAX(id)) FROM users;"
+	parsed2, err := proc.ParseSQL(sql2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsed2.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for COUNT(MAX(id)), got nil")
+	} else if !strings.Contains(err.Error(), "aggregate function calls cannot be nested") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'cannot be nested' error, got: %v", err)
+	}
+
+	// 3. ORDER BY SUM(AVG(id)) -> Fail (42803)
+	sql3 := "SELECT id FROM users GROUP BY id ORDER BY SUM(AVG(id));"
+	parsed3, err := proc.ParseSQL(sql3)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsed3.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for ORDER BY SUM(AVG(id)), got nil")
+	} else if !strings.Contains(err.Error(), "aggregate function calls cannot be nested") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'cannot be nested' error, got: %v", err)
+	}
+
+	// 4. Normal non-nested aggregates -> Pass
+	sqlPass := "SELECT SUM(id), AVG(age) FROM users;"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected normal aggregates to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_GroupBy_TableColumnPrimacy(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. SELECT age + 100 AS id, name FROM users GROUP BY id;
+	// Here GROUP BY id must bind to physical table column users.id (Table Column Primacy).
+	// Because name is NOT aggregated and NOT in GROUP BY, this query MUST FAIL with 42803!
+	sqlFail := "SELECT age + 100 AS id, name FROM users GROUP BY id;"
+	parsedFail, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedFail.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for unaggregated 'name' under GROUP BY id, got nil")
+	} else if !strings.Contains(err.Error(), "must appear in the GROUP BY clause") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'must appear in the GROUP BY' error, got: %v", err)
+	}
+
+	// 2. If GROUP BY refers to a projection alias that does NOT conflict with any table column, it is allowed as fallback.
+	sqlPassAlias := "SELECT id, age + 100 AS bonus FROM users GROUP BY id, bonus;"
+	parsedPassAlias, err := proc.ParseSQL(sqlPassAlias)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPassAlias.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected GROUP BY with valid non-conflicting projection alias to pass, got: %v", err)
+	}
+}

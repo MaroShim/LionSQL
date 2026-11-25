@@ -74,6 +74,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if child.FilterCond != "" {
 			gIter.SetFilterCond(child.FilterCond)
 		}
+		if opts.SessionVars != nil {
+			gIter.SetSessionVars(opts.SessionVars)
+		}
 		if opts.Arena != nil {
 			gIter.SetArena(opts.Arena)
 		}
@@ -93,6 +96,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			if plan.FilterCond != "" {
 				gIter.SetFilterCond(plan.FilterCond)
 			}
+			if opts.SessionVars != nil {
+				gIter.SetSessionVars(opts.SessionVars)
+			}
 			if opts.Arena != nil {
 				gIter.SetArena(opts.Arena)
 			}
@@ -109,6 +115,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			}
 			if plan.FilterCond != "" {
 				sIter.SetFilterCond(plan.FilterCond)
+			}
+			if opts.SessionVars != nil {
+				sIter.SetSessionVars(opts.SessionVars)
 			}
 			if opts.Arena != nil {
 				sIter.SetArena(opts.Arena)
@@ -131,6 +140,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		}
 		if plan.FilterCond != "" {
 			it.SetFilterCond(plan.FilterCond)
+		}
+		if opts.SessionVars != nil {
+			it.SetSessionVars(opts.SessionVars)
 		}
 		if opts.Arena != nil {
 			it.SetArena(opts.Arena)
