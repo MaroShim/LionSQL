@@ -538,7 +538,9 @@
 | `DONE` | **`PERF-FLAT-ARRAY-HASH-JOIN-1`** | `v0.96.0` | Execution | P1 | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
+| `PENDING` | **`PERF-HASH-JOIN-DIRECT-INT-PROBE-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 단일 정수 키 직결 Flat Array 프로브 패스트패스 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
@@ -566,6 +568,8 @@
 | `DONE` | **`PERF-SCAN-FILTER-FUSION-1`** | `v0.95.0` | Execution | P2 | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) | [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.97.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `PENDING` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.96.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.96.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
@@ -5237,10 +5241,24 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] HashJoinIterator 단일 정수 키 직결 Flat Array 프로브 패스트패스 `PERF-HASH-JOIN-DIRECT-INT-PROBE-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 03:55:46
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
+
+---
+
 ### [DONE] Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 `PERF-HASH-JOIN-SMALL-BUILD-1`
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 06:03:15
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md)
+
+---
+
+### [PENDING] HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) `PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 03:55:42
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
 
@@ -5437,6 +5455,20 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-24 23:42:07
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
+### [PENDING] SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 `PERF-SORT-PREBOUND-COMPARATOR-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 03:55:33
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
+
+---
+
+### [PENDING] SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 `PERF-SORT-SPILL-BINARY-CODEC-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 03:55:38
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
 
