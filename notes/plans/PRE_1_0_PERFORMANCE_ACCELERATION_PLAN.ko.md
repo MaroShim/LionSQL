@@ -94,6 +94,7 @@ flowchart TD
 | `PERF-SCAN-FILTER-FUSION-1` | Execution | **P2** | **v0.96.0** | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) |
 | `PERF-MIN-MAX-INDEX-SEEK-1` | Execution | **P1** | **v0.96.0** | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) |
 | `PERF-RUNTIME-BLOOM-FILTER-1` | Execution | **P2** | **v0.96.0** | Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) |
+| `PERF-LIMIT-EARLY-EXIT-1` | Execution | **P2** | **v0.96.0** | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) |
 
 ---
 
