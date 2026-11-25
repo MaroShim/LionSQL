@@ -643,10 +643,19 @@ func TestContract_TriStateColumnResolution(t *testing.T) {
 	if err != nil || res != planner.ResolveDefinite {
 		t.Errorf("expected ResolveDefinite for dyn.known_col, got %v, err: %v", res, err)
 	}
-	// 1-3. Unqualified column found in closed table
-	res, err = scope.ResolveUnqualifiedColumn("name", false)
+	// 1-3. Unqualified column found in purely closed scope -> Definite
+	closedScope := planner.NewTableScope()
+	_ = closedScope.RegisterWithOpen("users", "", schemas["users"], false)
+	res, err = closedScope.ResolveUnqualifiedColumn("name", false)
 	if err != nil || res != planner.ResolveDefinite {
-		t.Errorf("expected ResolveDefinite for 'name', got %v, err: %v", res, err)
+		t.Errorf("expected ResolveDefinite for 'name' in closedScope, got %v, err: %v", res, err)
+	}
+
+	// 1-4. Unqualified column found in closed table, but scope contains open table
+	// -> Uniqueness cannot be confirmed because open table might also produce 'name' -> Indeterminate
+	res, err = scope.ResolveUnqualifiedColumn("name", false)
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for 'name' in scope with open table, got %v, err: %v", res, err)
 	}
 
 	// Case 2: ResolveNotFound (부존재 확정 -> Fail-Closed)
@@ -661,8 +670,6 @@ func TestContract_TriStateColumnResolution(t *testing.T) {
 		t.Errorf("expected ResolveNotFound for non-existent table, got %v, err: %v", res, err)
 	}
 	// 2-3. Unqualified column on purely closed scope
-	closedScope := planner.NewTableScope()
-	_ = closedScope.RegisterWithOpen("users", "", schemas["users"], false)
 	res, err = closedScope.ResolveUnqualifiedColumn("ghost_col", false)
 	if err == nil || res != planner.ResolveNotFound {
 		t.Errorf("expected ResolveNotFound for ghost_col in closedScope, got %v, err: %v", res, err)
@@ -685,6 +692,40 @@ func TestContract_TriStateColumnResolution(t *testing.T) {
 	res, err = nilScope.ResolveQualifiedColumn("nil_tbl", "any_col")
 	if err != nil || res != planner.ResolveIndeterminate {
 		t.Errorf("expected ResolveIndeterminate for nil schema table, got %v, err: %v", res, err)
+	}
+
+	// Case 4: Parent Scope Resolution Invariants
+	// 4-1. Parent scope has 'name', but inner scope has an open table
+	// -> Cannot confirm as parent column because inner open table might shadow it -> Indeterminate
+	innerScopeOpen := planner.NewTableScopeWithParent(closedScope)
+	_ = innerScopeOpen.RegisterWithOpen("", "dyn_inner", dynSch, true)
+	res, err = innerScopeOpen.ResolveUnqualifiedColumn("name", false)
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for 'name' when inner scope is open, got %v, err: %v", res, err)
+	}
+
+	// 4-2. Inner scope is closed and does not have 'name', parent scope is closed and has 'name'
+	// -> 100% confirmed as parent column -> Definite
+	ordersSch := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "order_id", Type: storage.TypeInt},
+		},
+	}
+	innerScopeClosed := planner.NewTableScopeWithParent(closedScope)
+	_ = innerScopeClosed.RegisterWithOpen("orders", "", ordersSch, false)
+	res, err = innerScopeClosed.ResolveUnqualifiedColumn("name", false)
+	if err != nil || res != planner.ResolveDefinite {
+		t.Errorf("expected ResolveDefinite for 'name' when inner and parent scopes are closed, got %v, err: %v", res, err)
+	}
+
+	// 4-3. Inner scope is closed, but parent scope has an open table
+	// -> Parent uniqueness not confirmed -> Indeterminate
+	innerScopeWithOpenParent := planner.NewTableScopeWithParent(scope)
+	_ = innerScopeWithOpenParent.RegisterWithOpen("orders", "", ordersSch, false)
+	res, err = innerScopeWithOpenParent.ResolveUnqualifiedColumn("name", false)
+	if err != nil || res != planner.ResolveIndeterminate {
+		t.Errorf("expected ResolveIndeterminate for 'name' when parent scope has open table, got %v, err: %v", res, err)
 	}
 }
 

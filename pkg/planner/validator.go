@@ -1033,16 +1033,30 @@ func (s *TableScope) ResolveUnqualifiedColumn(raw string, allowProjectionAlias b
 		return ResolveDefinite, fmt.Errorf("column reference %q is ambiguous", raw)
 	}
 	if matchCount == 1 {
+		// If there is an open or nil-schema table in scope, its full columns are unknown.
+		// It might also produce this column, causing ambiguity, so uniqueness cannot be confirmed.
+		if hasOpenInstance || hasNilSchemaInstance {
+			return ResolveIndeterminate, nil
+		}
 		return ResolveDefinite, nil
 	}
 
 	// matchCount == 0: check projection aliases if permitted
 	if allowProjectionAlias && s.projectionAliases[cleanCol] {
+		if hasOpenInstance || hasNilSchemaInstance {
+			return ResolveIndeterminate, nil
+		}
 		return ResolveDefinite, nil
 	}
 
-	// Check parent scopes
-	foundInParent := false
+	// If the current inner scope has open or nil-schema tables, we cannot confirm whether
+	// the column belongs to an inner open table (shadowing parent) or a parent scope.
+	if hasOpenInstance || hasNilSchemaInstance {
+		return ResolveIndeterminate, nil
+	}
+
+	// Inner scope is completely closed and does not have the column.
+	// Check parent scopes in ascending order.
 	for p := s.parent; p != nil; p = p.parent {
 		pmatchCount := 0
 		phasNil := false
@@ -1063,24 +1077,20 @@ func (s *TableScope) ResolveUnqualifiedColumn(raw string, allowProjectionAlias b
 			return ResolveDefinite, fmt.Errorf("column reference %q is ambiguous", raw)
 		}
 		if pmatchCount == 1 {
-			foundInParent = true
-			break
+			// Found in parent, but if parent itself has open/nil instances,
+			// parent uniqueness is not confirmed.
+			if phasOpen || phasNil {
+				return ResolveIndeterminate, nil
+			}
+			return ResolveDefinite, nil
 		}
 		if phasNil || phasOpen {
-			foundInParent = true
-			break
+			// Parent has open table which might produce this column.
+			return ResolveIndeterminate, nil
 		}
 	}
 
-	if foundInParent {
-		return ResolveDefinite, nil
-	}
-
-	// If there are open or nil-schema instances, we cannot prove non-existence from current metadata
-	if hasOpenInstance || hasNilSchemaInstance {
-		return ResolveIndeterminate, nil
-	}
-
+	// All scopes (inner and all parents) are closed, and column was not found anywhere.
 	return ResolveNotFound, fmt.Errorf("column %q does not exist", raw)
 }
 
