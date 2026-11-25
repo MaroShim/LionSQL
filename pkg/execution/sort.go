@@ -23,6 +23,10 @@ type sortItem struct {
 	descending bool
 	nullsFirst *bool
 	parsed     proc.Expr
+	colIdx     int  // Pre-bound 0-based column slot (-1 if parsed expr or position)
+	isPos      bool // True if 1-based position (e.g. ORDER BY 1)
+	posIdx     int  // 0-based position index (pos - 1)
+	fastInt    bool // True if single int64 column fast-path
 }
 
 // tupleMergeHeap implements container/heap.Interface for N-way merge of sorted run files.
@@ -87,10 +91,15 @@ type SortIterator struct {
 	spillCount int
 	spillBytes int64
 	sortMethod string // "quicksort" or "external merge"
-	peakMemory int64
-	outChunk   Chunk
-	outIdx     int
-	arena      *storage.Arena
+	peakMemory     int64
+	outChunk       Chunk
+	outIdx         int
+	arena          *storage.Arena
+	singleIntKey   bool // True if sorting by exactly 1 key which is int64
+	singleIntIdx   int  // Physical column index for single int64 column
+	singleIntDesc  bool
+	singleIntNulls *bool
+	childIndexMap  *ColumnIndexMap
 }
 
 // SetArena configures an optional memory arena for sort buffer and tuple allocations.
@@ -110,8 +119,13 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 	for _, item := range sqlutil.ParseOrderBy(orderByClause) {
 		cleanKey := sqlutil.CleanIdentifier(item.Column)
 		var parsed proc.Expr
+		colIdx := -1
+		isPos := false
+		posIdx := -1
 		if pos, err := strconv.Atoi(cleanKey); err == nil && pos >= 1 {
 			parsed = nil
+			isPos = true
+			posIdx = pos - 1
 		} else if strings.ContainsAny(cleanKey, " +-*/%()") || strings.Contains(cleanKey, "->") {
 			p := proc.NewParser(proc.NewLexer(cleanKey))
 			e := p.ParseExpr()
@@ -124,6 +138,9 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 			descending: item.Desc,
 			nullsFirst: item.NullsFirst,
 			parsed:     parsed,
+			colIdx:     colIdx,
+			isPos:      isPos,
+			posIdx:     posIdx,
 		})
 	}
 
@@ -171,24 +188,130 @@ func (s *SortIterator) PeakMemory() int64 {
 	return s.peakMemory
 }
 
+func toInt64Fast(val any) (int64, bool) {
+	switch v := val.(type) {
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	case storage.Value:
+		if v.Type == storage.TypeInt && !v.IsNull {
+			return v.IVal, true
+		}
+	case int32:
+		return int64(v), true
+	case int16:
+		return int64(v), true
+	case int8:
+		return int64(v), true
+	case uint64:
+		return int64(v), true
+	case uint32:
+		return int64(v), true
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return i, true
+		}
+	case float64:
+		return int64(v), true
+	case string:
+		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func (s *SortIterator) bindSingleIntFastPath(firstTuple Tuple) {
+	if len(s.items) != 1 {
+		return
+	}
+	item := &s.items[0]
+	targetIdx := -1
+	if item.colIdx >= 0 {
+		targetIdx = item.colIdx
+	} else if item.isPos {
+		targetIdx = item.posIdx
+	}
+	if targetIdx >= 0 {
+		val, ok := firstTuple.GetIdx(targetIdx)
+		if ok && val != nil {
+			if _, isInt := toInt64Fast(val); isInt {
+				s.singleIntKey = true
+				s.singleIntIdx = targetIdx
+				s.singleIntDesc = item.descending
+				s.singleIntNulls = item.nullsFirst
+			}
+		}
+	}
+}
+
 func (s *SortIterator) compareTuples(tA, tB Tuple) int {
-	for _, item := range s.items {
+	// [PERF-SORT-PREBOUND-COMPARATOR-1] Fast-path single int64 column comparison:
+	// Completely bypasses strconv.Atoi, lookupVal string searching, and dynamic CompareValues reflection.
+	if s.singleIntKey {
+		idx := s.singleIntIdx
+		vA, _ := tA.GetIdx(idx)
+		vB, _ := tB.GetIdx(idx)
+		if vA == nil && vB == nil {
+			return 0
+		}
+		if (vA == nil || vB == nil) && s.singleIntNulls != nil {
+			if *s.singleIntNulls {
+				if vA == nil {
+					return -1
+				}
+				return 1
+			}
+			if vA == nil {
+				return 1
+			}
+			return -1
+		}
+		if vA == nil {
+			return 1
+		}
+		if vB == nil {
+			return -1
+		}
+		iA, isIntA := toInt64Fast(vA)
+		iB, isIntB := toInt64Fast(vB)
+		if isIntA && isIntB {
+			if iA < iB {
+				if s.singleIntDesc {
+					return 1
+				}
+				return -1
+			}
+			if iA > iB {
+				if s.singleIntDesc {
+					return -1
+				}
+				return 1
+			}
+			return 0
+		}
+	}
+
+	for i := range s.items {
+		item := &s.items[i]
 		var vA, vB any
-		if item.parsed != nil {
+		if item.colIdx >= 0 {
+			vA, _ = tA.GetIdx(item.colIdx)
+			vB, _ = tB.GetIdx(item.colIdx)
+		} else if item.isPos {
+			if item.posIdx < len(tA.Values) {
+				vA = tA.Values[item.posIdx]
+			}
+			if item.posIdx < len(tB.Values) {
+				vB = tB.Values[item.posIdx]
+			}
+		} else if item.parsed != nil {
 			vA, _ = EvalTupleExpr(tA, item.parsed)
 			vB, _ = EvalTupleExpr(tB, item.parsed)
 		} else {
-			if pos, err := strconv.Atoi(item.key); err == nil && pos >= 1 {
-				if pos-1 < len(tA.Values) {
-					vA = tA.Values[pos-1]
-				}
-				if pos-1 < len(tB.Values) {
-					vB = tB.Values[pos-1]
-				}
-			} else {
-				vA, _ = lookupVal(tA, item.key)
-				vB, _ = lookupVal(tB, item.key)
-			}
+			vA, _ = lookupVal(tA, item.key)
+			vB, _ = lookupVal(tB, item.key)
 		}
 		if vA == nil && vB == nil {
 			continue
@@ -223,6 +346,21 @@ func (s *SortIterator) sortSlice(tuples []Tuple) {
 	sort.SliceStable(tuples, func(i, j int) bool {
 		return s.compareTuples(tuples[i], tuples[j]) < 0
 	})
+}
+
+func (s *SortIterator) alignDecodedTuple(t Tuple) Tuple {
+	if s.childIndexMap == nil {
+		return t
+	}
+	cols := s.childIndexMap.Columns()
+	newVals := make([]any, len(cols))
+	for i, col := range cols {
+		newVals[i] = t.Get(col)
+	}
+	return Tuple{
+		Values: newVals,
+		Index:  s.childIndexMap,
+	}
 }
 
 func (s *SortIterator) spillRun() error {
@@ -280,6 +418,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	if childIndexMap == nil && len(childCols) > 0 {
 		childIndexMap = NewColumnIndexMapFromCols(childCols)
 	}
+	s.childIndexMap = childIndexMap
 
 	if childIndexMap != nil {
 		for _, item := range s.items {
@@ -322,6 +461,24 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 				}
 			}
 		}
+
+		// [PERF-SORT-PREBOUND-COMPARATOR-1] Pre-bind column index for O(1) direct slot comparison:
+		// Avoids repetitive strconv.Atoi and lookupVal string searches during O(N log N) sort comparisons.
+		for i := range s.items {
+			item := &s.items[i]
+			if item.isPos || item.parsed != nil {
+				continue
+			}
+			cleanKey := strings.TrimSpace(cleanIdentifierParts(item.key))
+			if idx, ok := childIndexMap.Index(cleanKey); ok && idx >= 0 {
+				item.colIdx = idx
+			} else if dot := strings.Index(cleanKey, "."); dot != -1 {
+				bare := cleanKey[dot+1:]
+				if idx, ok2 := childIndexMap.Index(bare); ok2 && idx >= 0 {
+					item.colIdx = idx
+				}
+			}
+		}
 	}
 
 	if s.workMem <= 0 {
@@ -354,6 +511,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	if s.limit > 0 {
 		h := &topNHeap{cmp: s.compareTuples}
 		heap.Init(h)
+		firstBound := false
 
 		for {
 			select {
@@ -371,6 +529,10 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 			}
 
 			for _, tuple := range inChunk.Tuples {
+				if !firstBound {
+					s.bindSingleIntFastPath(tuple)
+					firstBound = true
+				}
 				tSize := EstimateTupleSize(tuple)
 				if int64(h.Len()) < s.limit {
 					heap.Push(h, tuple)
@@ -398,6 +560,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	}
 
 	// Materialize incoming child tuples in chunks
+	firstBound := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -414,6 +577,10 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 		}
 
 		for _, tuple := range inChunk.Tuples {
+			if !firstBound {
+				s.bindSingleIntFastPath(tuple)
+				firstBound = true
+			}
 			tSize := EstimateTupleSize(tuple)
 			if curMem+tSize > s.workMem && len(s.tuples) > 0 {
 				if err := s.spillRun(); err != nil {
@@ -436,6 +603,9 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 
 	// Case 1: In-Memory Fast Path (all data fits in workMem)
 	if len(s.runFiles) == 0 {
+		if len(s.tuples) > 0 {
+			s.bindSingleIntFastPath(s.tuples[0])
+		}
 		s.sortSlice(s.tuples)
 		s.sortMethod = "quicksort"
 		return nil
@@ -472,6 +642,7 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 				return fmt.Errorf("sort merge decode run file %q failed: %w", runPath, err)
 			}
 		} else {
+			firstTuple = s.alignDecodedTuple(firstTuple)
 			heap.Push(s.mHeap, heapItem{tuple: firstTuple, runIdx: i})
 		}
 	}
@@ -515,6 +686,7 @@ func (s *SortIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 				return fmt.Errorf("sort merge decode run file failed: %w", err)
 			}
 		} else {
+			nextTuple = s.alignDecodedTuple(nextTuple)
 			heap.Push(s.mHeap, heapItem{tuple: nextTuple, runIdx: top.runIdx})
 		}
 	}

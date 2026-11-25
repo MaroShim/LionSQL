@@ -574,36 +574,55 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				}
 			}
 		} else {
-			keyVal, ok := getTupleValFast(probeTuple, probeKeyIdx, probeKey)
-			if ok && keyVal != nil {
-				found = true
-				if iKey, isInt := extractIntKey(keyVal); isInt {
-					if h.isFlatIntTable {
-						hasMatch = h.probeFlatInt(iKey)
-					} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
-						hasMatch = true
-						h.currentMatches = matches
-					} else if len(h.hashTable) > 0 {
-						kStr := strconv.FormatInt(iKey, 10)
-						if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+			// [PERF-HASH-JOIN-DIRECT-INT-PROBE-1] Direct flat integer array probe fast-path:
+			// If build side is flatIntTable or intHashTable and probeKeyIdx >= 0, directly read int64
+			// via probeTuple.GetIdx without strings.Contains, formatKeyVal, or string map lookups.
+			if (h.isFlatIntTable || len(h.intHashTable) > 0) && probeKeyIdx >= 0 {
+				if val, ok := probeTuple.GetIdx(probeKeyIdx); ok && val != nil {
+					if iKey, isInt := extractIntKey(val); isInt {
+						found = true
+						if h.isFlatIntTable {
+							hasMatch = h.probeFlatInt(iKey)
+						} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
 							hasMatch = true
 							h.currentMatches = matches
 						}
 					}
-				} else {
-					kStr := formatKeyVal(keyVal)
-					if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
-						hasMatch = true
-						h.currentMatches = matches
-					} else if h.isFlatIntTable {
-						if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
-							hasMatch = h.probeFlatInt(pInt)
-						}
-					} else if len(h.intHashTable) > 0 {
-						if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
-							if matches, exists := h.intHashTable[pInt]; exists && len(matches) > 0 {
+				}
+			}
+
+			if !found {
+				keyVal, ok := getTupleValFast(probeTuple, probeKeyIdx, probeKey)
+				if ok && keyVal != nil {
+					found = true
+					if iKey, isInt := extractIntKey(keyVal); isInt {
+						if h.isFlatIntTable {
+							hasMatch = h.probeFlatInt(iKey)
+						} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
+							hasMatch = true
+							h.currentMatches = matches
+						} else if len(h.hashTable) > 0 {
+							kStr := strconv.FormatInt(iKey, 10)
+							if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 								hasMatch = true
 								h.currentMatches = matches
+							}
+						}
+					} else {
+						kStr := formatKeyVal(keyVal)
+						if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+							hasMatch = true
+							h.currentMatches = matches
+						} else if h.isFlatIntTable {
+							if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
+								hasMatch = h.probeFlatInt(pInt)
+							}
+						} else if len(h.intHashTable) > 0 {
+							if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
+								if matches, exists := h.intHashTable[pInt]; exists && len(matches) > 0 {
+									hasMatch = true
+									h.currentMatches = matches
+								}
 							}
 						}
 					}

@@ -202,6 +202,9 @@ func (t Tuple) GetIdx(idx int) (any, bool) {
 		}
 	}
 	if idx >= len(t.Values) {
+		if t.Index != nil && idx < len(t.Index.cols) {
+			return nil, true
+		}
 		return nil, false
 	}
 	return t.Values[idx], true
@@ -882,6 +885,11 @@ func toInt64(v any) (int64, bool) {
 
 func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
+	case json.Number:
+		if f, err := n.Float64(); err == nil {
+			return f, true
+		}
+		return 0, false
 	case float64:
 		return n, true
 	case float32:

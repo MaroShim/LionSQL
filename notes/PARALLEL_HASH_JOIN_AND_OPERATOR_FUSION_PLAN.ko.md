@@ -94,4 +94,4 @@ flowchart TD
 | :---: | :--- | :---: | :---: | :---: | :--- |
 | 1 | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | Execution | `v0.96.0` | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) |
 | 2 | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | Execution | `v0.96.0` | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) |
-| 3 | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | Storage | `v0.96.0` | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) |
+| 3 | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | Storage | `v0.99.0` | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) [v0.99.0 이관] |
