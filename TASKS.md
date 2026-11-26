@@ -312,7 +312,7 @@
 | `PENDING` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v0.96.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-STAT-ACTIVITY-AND-SETTINGS-1`** | `v1.2.0` | Catalog | P2 | pg_stat_activity, pg_settings 가상 뷰 확충 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `PENDING` | **`FEAT-REDIS-PRIMITIVES-AND-TTL-1`** |  | --priority | P3 | Game Server Primitives: Native Sorted Set (ZSET), Auto-TTL Tables, and Atomic INCRBY/SETNX |  |  |
 | `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `Post-1.0` | Storage | P3 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
@@ -3600,8 +3600,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) `FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:46:03
+### [DONE] Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) `FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 06:17:30
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
