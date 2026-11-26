@@ -107,6 +107,7 @@ type HashJoinIterator struct {
 	hasJoinFilter       bool
 	parallelProbeActive bool
 	fusedWithParentAgg  bool
+	bloomFilter         *FastBloomFilter
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -317,6 +318,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	h.valSlabOffset = 0
 
 	var flatItems []flatIntMatch
+	h.bloomFilter = NewFastBloomFilter(1024)
 
 	inChunk := GetChunk()
 	defer PutChunk(inChunk)
@@ -370,6 +372,9 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 					continue
 				}
 				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
+				if h.bloomFilter != nil {
+					h.bloomFilter.AddString(kStr)
+				}
 			} else if strings.Contains(buildKey, ",") {
 				kStr, found := extractTupleKey(bTuple, buildKey, h.arena)
 				if !found {
@@ -377,6 +382,9 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 					continue
 				}
 				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
+				if h.bloomFilter != nil {
+					h.bloomFilter.AddString(kStr)
+				}
 			} else {
 				keyVal, found := getTupleValFast(bTuple, buildKeyIdx, buildKey)
 				if !found || keyVal == nil {
@@ -386,12 +394,22 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				if iKey, isInt := extractIntKey(keyVal); isInt {
 					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: bTuple, idx: rIdx})
 					flatItems = append(flatItems, flatIntMatch{key: iKey, tuple: bTuple, idx: rIdx})
+					if h.bloomFilter != nil {
+						h.bloomFilter.AddInt(iKey)
+						h.bloomFilter.AddString(strconv.FormatInt(iKey, 10))
+					}
 				} else {
 					kStr := formatKeyVal(keyVal)
 					if h.arena != nil {
 						kStr = h.arena.AllocString(kStr)
 					}
 					h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
+					if h.bloomFilter != nil {
+						h.bloomFilter.AddString(kStr)
+						if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
+							h.bloomFilter.AddInt(pInt)
+						}
+					}
 				}
 			}
 		}
@@ -744,7 +762,10 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				if val, ok := probeTuple.GetIdx(probeKeyIdx); ok && val != nil {
 					if iKey, isInt := extractIntKey(val); isInt {
 						found = true
-						if h.isFlatIntTable {
+						// Runtime Bloom Filter: reject immediately if int key cannot exist in build table
+						if h.bloomFilter != nil && !h.bloomFilter.MayContainInt(iKey) {
+							hasMatch = false
+						} else if h.isFlatIntTable {
 							hasMatch = h.probeFlatInt(iKey)
 						} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
 							hasMatch = true
@@ -759,7 +780,10 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				if ok && keyVal != nil {
 					found = true
 					if iKey, isInt := extractIntKey(keyVal); isInt {
-						if h.isFlatIntTable {
+						// Runtime Bloom Filter: reject immediately if int key cannot exist in build table
+						if h.bloomFilter != nil && !h.bloomFilter.MayContainInt(iKey) {
+							hasMatch = false
+						} else if h.isFlatIntTable {
 							hasMatch = h.probeFlatInt(iKey)
 						} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
 							hasMatch = true
@@ -773,7 +797,10 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 						}
 					} else {
 						kStr := formatKeyVal(keyVal)
-						if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+						// Runtime Bloom Filter: reject string key immediately
+						if h.bloomFilter != nil && !h.bloomFilter.MayContainString(kStr) {
+							hasMatch = false
+						} else if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 							hasMatch = true
 							h.currentMatches = matches
 						} else if h.isFlatIntTable {

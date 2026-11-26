@@ -17,9 +17,44 @@ const (
 	TupleFlagNone       byte = 0x00
 	TupleFlagNoNulls    byte = 0x01 // Reserved: No NULL values exist (null bitmap omitted)
 	TupleFlagCompressed byte = 0x02 // Reserved: Row payload is compressed
-	TupleFlagToast      byte = 0x04 // Reserved: Out-of-line TOAST pointer present
+	TupleFlagToast      byte = 0x04 // Out-of-line TOAST pointer present
 	TupleFlagExtended   byte = 0x08 // Reserved: Extended header metadata present
+
+	// TOAST Chunk Architecture Constants (ARCH-TOAST-OUT-OF-ROW-CHUNKS-1)
+	ToastThreshold = 2048 // Maximum inline payload size before considering out-of-line TOAST
+	ToastChunkSize = 4000 // Size of each individual chunk stored in _toast_<Table> (4KB page aligned)
 )
+
+// ToastPointer represents an out-of-line pointer to a chunked LOB value (16 bytes).
+type ToastPointer struct {
+	ChunkID    uint64 // Global unique chunk ID
+	TotalSize  uint32 // Original uncompressed byte length (max 16MB)
+	ChunkCount uint16 // ceil(TotalSize / ToastChunkSize)
+	Flags      uint16 // Flags (0x01: LZ4 compressed, 0x00: raw)
+}
+
+// EncodeToastPointer encodes a ToastPointer into a fixed 16-byte slice.
+func (tp ToastPointer) Encode() [16]byte {
+	var buf [16]byte
+	binary.LittleEndian.PutUint64(buf[0:8], tp.ChunkID)
+	binary.LittleEndian.PutUint32(buf[8:12], tp.TotalSize)
+	binary.LittleEndian.PutUint16(buf[12:14], tp.ChunkCount)
+	binary.LittleEndian.PutUint16(buf[14:16], tp.Flags)
+	return buf
+}
+
+// DecodeToastPointer decodes a fixed 16-byte slice into a ToastPointer.
+func DecodeToastPointer(buf []byte) (ToastPointer, error) {
+	if len(buf) < 16 {
+		return ToastPointer{}, ErrTupleBufferTooShort
+	}
+	return ToastPointer{
+		ChunkID:    binary.LittleEndian.Uint64(buf[0:8]),
+		TotalSize:  binary.LittleEndian.Uint32(buf[8:12]),
+		ChunkCount: binary.LittleEndian.Uint16(buf[12:14]),
+		Flags:      binary.LittleEndian.Uint16(buf[14:16]),
+	}, nil
+}
 
 // IsTupleCodec reports whether the byte matches the LionSQL binary tuple codec header version.
 func IsTupleCodec(b byte) bool {
