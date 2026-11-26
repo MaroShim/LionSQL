@@ -2664,35 +2664,23 @@ func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error 
 	defer tx.lockMu.Unlock()
 
 	sh := &eng.lockShards[sIdx]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
-	for spin := 0; spin < 3; spin++ {
-		sh.mu.Lock()
-		if sh.activeWriters == nil {
-			sh.activeWriters = make(map[string]uint64)
-		}
-		owner, exists := sh.activeWriters[lockKey]
-		if !exists || owner == tx.txID {
-			if !exists {
-				sh.activeWriters[lockKey] = tx.txID
-				tx.acquiredLocks = append(tx.acquiredLocks, wtLockRef{
-					shardIdx: sIdx,
-					key:      lockKey,
-				})
-			}
-			sh.mu.Unlock()
-			return nil
-		}
-		sh.mu.Unlock()
-
-		// Allow the active owner transaction a brief window to commit and release its locks
-		if spin == 0 {
-			runtime.Gosched()
-		} else {
-			time.Sleep(time.Duration(spin*25) * time.Microsecond)
-		}
+	if sh.activeWriters == nil {
+		sh.activeWriters = make(map[string]uint64)
 	}
-
-	return storage.ErrSerializationFailure
+	if owner, exists := sh.activeWriters[lockKey]; exists && owner != tx.txID {
+		return storage.ErrSerializationFailure
+	}
+	if _, exists := sh.activeWriters[lockKey]; !exists {
+		sh.activeWriters[lockKey] = tx.txID
+		tx.acquiredLocks = append(tx.acquiredLocks, wtLockRef{
+			shardIdx: sIdx,
+			key:      lockKey,
+		})
+	}
+	return nil
 }
 
 func (tx *WTTx) releaseAcquiredLocksLocked() {
@@ -3586,6 +3574,104 @@ func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) e
 	if err != nil {
 		return err
 	}
+
+	// Fast-path for tables without secondary indexes and without foreign keys
+	if len(tbl.Indexes) == 0 && len(tbl.ForeignKeys) == 0 {
+		if err := tx.sess.engine.checkTainted(); err != nil {
+			return err
+		}
+		pkStr := pk.String()
+		if err := tx.tryAcquireWriteLockLocked(tbl.Name, pkStr); err != nil {
+			return err
+		}
+
+		if len(row.Values) > 0 {
+			vals := make([]storage.Value, len(row.Values))
+			copy(vals, row.Values)
+			row.Values = vals
+		}
+
+		var normErr error
+		row, normErr = storage.ValidateAndNormalizeRow(tbl, row)
+		if normErr != nil {
+			return normErr
+		}
+
+		if _, rvIdx, hasRV := tbl.RowVersionColumn(); hasRV {
+			if rvIdx >= 0 && rvIdx < len(row.Values) {
+				row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+			}
+		}
+
+		uri := tbl.TableURI()
+		cur, err := tx.sess.acquireCursor(uri)
+		if err != nil {
+			return err
+		}
+		defer tx.sess.releaseCursor(uri, cur)
+
+		bufPtr := storage.GetTupleBuffer()
+		defer storage.PutTupleBuffer(bufPtr)
+
+		recBytes, err := storage.EncodeRowToBuffer(tbl, row, *bufPtr)
+		if err != nil {
+			return err
+		}
+
+		var keyBuf [256]byte
+		cKey, cleanup := fastCString(pkStr, keyBuf[:])
+		if cleanup != nil {
+			defer cleanup()
+		}
+
+		var pData unsafe.Pointer
+		if len(recBytes) > 0 {
+			pData = unsafe.Pointer(&recBytes[0])
+		}
+
+		var oldData []byte
+		if len(tx.savepoints) > 0 {
+			oldData, err = tx.getRawBytesLocked(tableName, pk)
+			if err != nil {
+				return err
+			}
+		}
+
+		if ret := C.go_wt_cursor_update_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
+			return wtOpError("cursor_update", int(ret))
+		}
+
+		var physRec *storage.PhysiologicalRecord
+		if len(tx.savepoints) > 0 {
+			newDataCopy := make([]byte, len(recBytes))
+			copy(newDataCopy, recBytes)
+			oldDataCopy := make([]byte, len(oldData))
+			copy(oldDataCopy, oldData)
+			physRec = storage.AcquirePhysRecord(storage.OpUpdate, tbl.Name, pk, oldDataCopy, newDataCopy)
+		}
+
+		tx.hasWrites = true
+		if physRec != nil {
+			tx.undoLog = append(tx.undoLog, physRec)
+		}
+		if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
+			recCopy := make([]byte, len(recBytes))
+			copy(recCopy, recBytes)
+			tx.walOps = append(tx.walOps, memengine.WALOp{
+				Type:  memengine.OpUpdate,
+				Table: tableName,
+				Key:   pkStr,
+				Data:  recCopy,
+			})
+		}
+
+		if tx.readCache != nil {
+			tx.readCache.PutRow(tableName, pkStr, row, 0)
+		}
+
+		return nil
+	}
+
 	rec := tbl.RowToRecord(row)
 	return tx.updateLocked(tableName, tbl, pk, rec)
 }

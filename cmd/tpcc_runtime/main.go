@@ -59,6 +59,7 @@ func main() {
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 10, "Maximum transaction retries with exponential backoff on serialization conflict")
+	cacheSizeFlag := flag.String("cache-size", "1G", "WiredTiger heap cache allocation (e.g. 500M, 1G, 2G)")
 	flag.Parse()
 	execution.InitRuntimeTuning(0, 0)
 
@@ -107,6 +108,9 @@ func main() {
 		fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
 		fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 		wtEng = wiredtiger.New()
+		if *cacheSizeFlag != "" {
+			wtEng.SetCacheSize(*cacheSizeFlag)
+		}
 		if err := wtEng.Open(subDir); err != nil {
 			cleanup()
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
