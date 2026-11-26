@@ -554,7 +554,7 @@
 | `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.95.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-JOIN-MINMAX-ZONE-PRUNING-1`** | `v0.95.0` | Execution | P2 | Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `PENDING` | **`PERF-JOIN-RADIX-PARTITIONED-1`** | `Post-1.0` | Execution | P3 | L2-Cache-Fit Radix Partitioned Hash Join for Out-of-L3 In-Memory Datasets | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `PENDING` | **`PERF-JOIN-SWISS-TABLE-1`** | `v0.98.0` | Execution | P2 | Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-JOIN-SWISS-TABLE-1`** | `Post-1.0` | Execution | P2 | Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.95.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.95.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
@@ -5370,10 +5370,11 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing `PERF-JOIN-SWISS-TABLE-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:48:07
-- **Milestone**: `v0.98.0`
+### [DONE] Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing `PERF-JOIN-SWISS-TABLE-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 05:52:40
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+- **통합 및 종결 사유**: Go 1.24+ (현재 런타임 `go1.27.4`)에서 표준 `runtime.map`이 이미 C++ Abseil Swiss Table 기반으로 재작성되어 있으므로 범용 Swiss Table 래핑은 불필요(Spec-Out). 본 태스크의 본질인 "포인터 추적 및 GC 스캔 제거를 위한 평면 배열 기반 해시 조인"은 Post-1.0의 **`PERF-COMPLEX-QUERY-2` (Open-Addressing 정수 플랫 해시 조인)**로 단일화 및 통합 완료됨.
 
 ---
 

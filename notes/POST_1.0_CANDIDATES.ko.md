@@ -182,9 +182,12 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 #### 8. `PERF-COMPLEX-QUERY-2`: Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join)
 - **상세 설계서**: [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
+- **연관/통합 태스크**: `PERF-JOIN-SWISS-TABLE-1` (Flat Swiss-Table Robin-Hood Hash Join Engine) 흡수 및 일원화
+  - *통합 사유*: Go 1.24+ (현재 엔진 런타임 `go1.27.4`)에서 Go 표준 `runtime.map`이 이미 C++ Abseil Swiss Table 알고리즘(Control bytes 및 16바이트 SIMD 그룹 탐색)을 채택하고 있어 범용 Swiss Table 래핑은 불필요(Spec-Out). 본 태스크의 본질은 "조인 핫패스에서 `[]storage.Tuple` 슬라이스 헤더 및 포인터 추적을 제거하여 Go GC 스캔 오버헤드를 0으로 만드는 조인 전용 평면 배열(Flat Array) 해시 조인"으로 단일화됨.
 - **주요 구현 내용**:
-  1. Go 맵 기반 해시 조인을 CPU 캐시 친화적인 단일 연속 메모리 슬라이스 오픈 어드레싱 해시 테이블로 전환.
+  1. Go 맵 기반 해시 조인을 CPU 캐시 친화적인 단일 연속 메모리 슬라이스 오픈 어드레싱 해시 테이블(`keys []uint64`, `heads []int32`, `next []int32`)로 전환.
   2. 정수 조인 키에 대해 해시 계산을 바이패스하고 비트 연산으로 슬롯 직결.
+  3. 1:N 조인 매칭 시에도 포인터 힙 할당 없이 정수 인덱스 체인(`next`)으로 $O(1)$ 즉시 순회.
 - **난이도 및 영향도**:
   - **난이도**: **높음 (★★★)** — 선형 탐색 해시 충돌 해결 및 동적 리사이징 구현.
   - **영향도**: **중간 (Volcano Engine)** — `pkg/execution/hash_join.go` 내부 루프 중심 교체.
