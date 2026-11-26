@@ -827,9 +827,29 @@ func (e *Engine) loadCatalog() error {
 					canonicalIdxFile := filepath.Join(e.homeDir, "_idx_"+t.Name+".wt")
 					if _, statCanonicalIdxErr := os.Stat(canonicalIdxFile); statCanonicalIdxErr != nil {
 						if os.IsNotExist(statCanonicalIdxErr) {
-							return fmt.Errorf("catalog integrity verification failed: index file missing for table %q with %d indexes (checked %q and %q) - aborting server start to prevent silent index loss", t.Name, len(t.Indexes), idxFile, canonicalIdxFile)
+							// Before failing closed, check if legacy per-index file(s) exist on disk.
+							// In older versions, indexes were stored in individual _idx_<Table>_<Index>.wt files.
+							// If any legacy index file exists, e.migrateIndexFiles() will migrate it to
+							// the multiplexed file and drop the legacy file (ARCH-WT-FILE-LAYOUT-1).
+							hasLegacyIndex := false
+							for _, idx := range t.Indexes {
+								legacyFile := filepath.Join(e.homeDir, "_idx_"+t.PhysicalTableName()+"_"+idx.Name+".wt")
+								if _, err := os.Stat(legacyFile); err == nil {
+									hasLegacyIndex = true
+									break
+								}
+								canonicalLegacyFile := filepath.Join(e.homeDir, "_idx_"+t.Name+"_"+idx.Name+".wt")
+								if _, err := os.Stat(canonicalLegacyFile); err == nil {
+									hasLegacyIndex = true
+									break
+								}
+							}
+							if !hasLegacyIndex {
+								return fmt.Errorf("catalog integrity verification failed: index file missing for table %q with %d indexes (checked %q and %q) - aborting server start to prevent silent index loss", t.Name, len(t.Indexes), idxFile, canonicalIdxFile)
+							}
+						} else {
+							return fmt.Errorf("inspect index file %s failed: %w", canonicalIdxFile, statCanonicalIdxErr)
 						}
-						return fmt.Errorf("inspect index file %s failed: %w", canonicalIdxFile, statCanonicalIdxErr)
 					}
 				} else {
 					return fmt.Errorf("inspect index file %s failed: %w", idxFile, statIdxErr)
@@ -2127,6 +2147,30 @@ func migrateLegacyIndex(sess *C.WT_SESSION, t *storage.TableSchema, idx *storage
 		// The data is already safely migrated; a leftover legacy file only wastes disk space
 		// and the idempotent migration retries the drop on the next start.
 		fmt.Fprintf(os.Stderr, "wiredtiger: WARNING: failed to drop legacy index file %s after migration (code %d)\n", legacyURI, ret)
+	}
+	return nil
+}
+
+// CreateLegacyIndexForTesting creates a pre-multiplexing per-index table in WiredTiger
+// solely for verifying legacy migration compatibility in tests.
+func (e *Engine) CreateLegacyIndexForTesting(tableName, indexName string) error {
+	e.mu.RLock()
+	conn := e.conn
+	e.mu.RUnlock()
+	if conn == nil {
+		return errors.New("engine not open")
+	}
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+	uri := C.CString(fmt.Sprintf("table:_idx_%s_%s", tableName, indexName))
+	defer C.free(unsafe.Pointer(uri))
+	cfg := C.CString("key_format=u,value_format=u")
+	defer C.free(unsafe.Pointer(cfg))
+	if ret := C.go_wt_session_create(sess, uri, cfg); ret != 0 {
+		return fmt.Errorf("create legacy index table failed: %d", ret)
 	}
 	return nil
 }

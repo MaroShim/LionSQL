@@ -326,14 +326,11 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	trimmed := strings.TrimSpace(expr)
 
-	// Check for PostgreSQL ::type cast operator at top-level
+	// Check for PostgreSQL ::type cast operator at top-level using context-aware tokenizer (Invariant 12)
 	var castType string
-	if castIdx := strings.LastIndex(trimmed, "::"); castIdx != -1 {
-		suffix := trimmed[castIdx+2:]
-		if !strings.Contains(suffix, "'") && !strings.Contains(suffix, "\"") && !strings.Contains(suffix, ")") {
-			castType = strings.TrimSpace(strings.ToLower(suffix))
-			trimmed = strings.TrimSpace(trimmed[:castIdx])
-		}
+	if baseExpr, targetType, ok := sqlutil.FindLastTopLevelPgCast(trimmed); ok {
+		trimmed = baseExpr
+		castType = strings.ToLower(targetType)
 	}
 
 	val, defAlias := s.evalScalarExprCore(trimmed, cs)
@@ -1084,48 +1081,67 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return false, "pg_terminate_backend"
 	}
 
-	// current_setting('setting_name')
+	// current_setting('setting_name' [, missing_ok])
 	if strings.HasPrefix(upper, "CURRENT_SETTING(") && strings.HasSuffix(upper, ")") {
-		arg := strings.TrimSpace(trimmed[len("CURRENT_SETTING(") : len(trimmed)-1])
-		arg = strings.Trim(arg, "'\"")
-		paramLower := strings.ToLower(arg)
-		paramNorm := strings.ReplaceAll(paramLower, " ", "_")
-
-		if cs != nil {
-			cs.Mu.Lock()
-			v, exists := cs.LocalVars[paramNorm]
-			if !exists {
-				v, exists = cs.LocalVars[paramLower]
-			}
-			if !exists {
-				v, exists = cs.Vars[paramNorm]
-				if !exists {
-					v, exists = cs.Vars[paramLower]
+		inner := strings.TrimSpace(trimmed[len("CURRENT_SETTING(") : len(trimmed)-1])
+		parts := sqlutil.SplitTopLevel(inner, ',')
+		if len(parts) >= 1 {
+			param := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+			paramLower := strings.ToLower(param)
+			paramNorm := strings.ReplaceAll(paramLower, " ", "_")
+			missingOk := false
+			if len(parts) >= 2 {
+				rawMissing := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+				if strings.EqualFold(rawMissing, "true") || strings.EqualFold(rawMissing, "t") || rawMissing == "1" || strings.EqualFold(rawMissing, "on") {
+					missingOk = true
 				}
 			}
-			cs.Mu.Unlock()
-			if exists && v != nil {
-				return fmt.Sprintf("%v", v), "current_setting"
-			}
-		}
 
-		switch paramNorm {
-		case "server_version":
-			return "15.0", "current_setting"
-		case "server_version_num":
-			return "150000", "current_setting"
-		case "search_path":
-			return "public", "current_setting"
-		case "timezone", "time_zone":
-			return "UTC", "current_setting"
-		case "is_superuser":
-			return "on", "current_setting"
-		case "standard_conforming_strings":
-			return "on", "current_setting"
-		case "transaction_isolation", "default_transaction_isolation":
-			return "read committed", "current_setting"
-		default:
-			return "", "current_setting"
+			if cs != nil {
+				cs.Mu.Lock()
+				v, exists := cs.LocalVars[paramNorm]
+				if !exists {
+					v, exists = cs.LocalVars[paramLower]
+				}
+				if !exists {
+					v, exists = cs.Vars[paramNorm]
+					if !exists {
+						v, exists = cs.Vars[paramLower]
+					}
+				}
+				cs.Mu.Unlock()
+				if exists && v != nil {
+					return fmt.Sprintf("%v", v), "current_setting"
+				}
+			}
+
+			switch paramNorm {
+			case "server_version":
+				return "15.0", "current_setting"
+			case "server_version_num":
+				return "150000", "current_setting"
+			case "search_path":
+				return "public", "current_setting"
+			case "timezone", "time_zone":
+				return "UTC", "current_setting"
+			case "is_superuser":
+				return "on", "current_setting"
+			case "standard_conforming_strings":
+				return "on", "current_setting"
+			case "integer_datetimes":
+				return "on", "current_setting"
+			case "bytea_output":
+				return "hex", "current_setting"
+			case "extra_float_digits":
+				return "1", "current_setting"
+			case "transaction_isolation", "default_transaction_isolation":
+				return "read committed", "current_setting"
+			default:
+				if missingOk {
+					return nil, "current_setting"
+				}
+				return fmt.Errorf("ERROR 42704: unrecognized configuration parameter %q", param), "current_setting"
+			}
 		}
 	}
 

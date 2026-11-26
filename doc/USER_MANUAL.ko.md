@@ -806,8 +806,14 @@ LionSQL은 PostgreSQL 클라이언트 생태계(psql, Prisma, DBeaver, GORM, Typ
    - `set_config(name, value [, is_local])`:
      - 2개 인자 지원: `set_config('param', 'val')` 호출 시 표준 기본값인 `is_local = false`로 동작합니다.
      - 3개 인자 지원: `set_config('param', 'val', true)` 또는 `SET LOCAL param = val;` 지정 시 **트랜잭션 로컬 설정(Transaction-Local)**으로 동작하여, 현재 트랜잭션 블록 안에서만 우선 적용되고 `COMMIT` 또는 `ROLLBACK` 시 세션 원래 설정으로 자동 롤백됩니다.
-   - `current_setting(name)`: 트랜잭션 로컬 설정(`LocalVars`)이 활성화되어 있을 경우 로컬 설정을 최우선 반환하며, 종료 시 세션 변수(`Vars`) 및 기본값으로 자동 전환됩니다.
-   - `SHOW param`: 현재 세션/트랜잭션에 유효한 파라미터 값을 실시간 단일 행 결과셋으로 출력합니다.
+   - `current_setting(name [, missing_ok])`:
+     - 트랜잭션 로컬 설정(`LocalVars`)이 활성화되어 있을 경우 로컬 설정을 최우선 반환하며, 종료 시 세션 변수(`Vars`) 및 기본값으로 자동 전환됩니다.
+     - `missing_ok = true`: 설정이 존재하지 않을 때 에러 없이 `NULL`을 반환합니다.
+     - `missing_ok = false` (기본값): 미등록 설정 조회 시 PostgreSQL 표준 `ERROR 42704: unrecognized configuration parameter` 에러를 반환합니다.
+   - `SHOW param`:
+     - 현재 세션/트랜잭션에 유효한 파라미터 값을 실시간 단일 행 결과셋으로 출력합니다.
+     - `custom.app_timeout`과 같은 점(`.`) 표기법 확장 네임스페이스 설정을 완전하게 지원합니다.
+     - 등록되지 않은 파라미터 조회 시 침묵하지 않고 명시적인 `ERROR 42704` 에러를 반환합니다.
 
 ---
 

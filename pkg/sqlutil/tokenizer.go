@@ -1538,6 +1538,157 @@ func FindTopLevelChar(s string, target byte) int {
 	return -1
 }
 
+// FindLastTopLevelPgCast finds the outermost PostgreSQL ::type cast operator outside quotes,
+// comments, brackets, and parentheses (at depth 0).
+func FindLastTopLevelPgCast(s string) (base string, castType string, ok bool) {
+	n := len(s)
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	lastCastIdx := -1
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 && ch == ':' && i+1 < n && s[i+1] == ':' {
+			lastCastIdx = i
+			i++ // skip adjacent ':'
+		}
+	}
+
+	if lastCastIdx == -1 {
+		return "", "", false
+	}
+
+	rawBase := strings.TrimSpace(s[:lastCastIdx])
+	rawType := strings.TrimSpace(s[lastCastIdx+2:])
+	if rawBase == "" || rawType == "" {
+		return "", "", false
+	}
+
+	if !isValidCastType(rawType) {
+		return "", "", false
+	}
+
+	return rawBase, rawType, true
+}
+
+func isValidCastType(t string) bool {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return false
+	}
+	depth := 0
+	for i := 0; i < len(t); i++ {
+		ch := t[i]
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth <= 0 {
+				return false
+			}
+			depth--
+			continue
+		}
+		if depth == 0 {
+			switch ch {
+			case '\'', '"', ';', ',', '+', '*', '/', '=', '<', '>', '!', '%', '&', '|', '^', ':':
+				return false
+			case '-':
+				return false
+			}
+		}
+	}
+	return depth == 0
+}
+
+
 // IsWordBoundary returns true if ch represents a word boundary separator in SQL.
 func IsWordBoundary(ch byte) bool {
 	return isWordBoundary(ch)

@@ -182,3 +182,86 @@ func TestWiredTiger_CatalogIntegrity_IndexLossProhibitsStartup(t *testing.T) {
 		t.Errorf("expected error to mention missing index file for 'orders', got: %v", openErr)
 	}
 }
+
+// TestWiredTiger_CatalogIntegrity_LegacyIndexMigrationAllowed verifies that when an older version
+// has per-index files (e.g. _idx_orders_idx_cust.wt) and the multiplexed file _idx_orders.wt does not
+// yet exist, loadCatalog allows startup to proceed so migrateIndexFiles() can cleanly perform
+// the ARCH-WT-FILE-LAYOUT-1 migration without false-positive fail-closed aborts.
+func TestWiredTiger_CatalogIntegrity_LegacyIndexMigrationAllowed(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wt_legacy_idx_mig_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	eng := New()
+	if err := eng.Open(dir); err != nil {
+		t.Fatalf("eng.Open failed: %v", err)
+	}
+
+	// 1. Create table WITHOUT indexes (no multiplexed file _idx_orders.wt created)
+	tblSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "customer_id", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(tblSchema); err != nil {
+		eng.Close()
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// 2. Create legacy per-index table in WiredTiger directly (ARCH-WT-FILE-LAYOUT-1 migration test)
+	if err := eng.CreateLegacyIndexForTesting("orders", "idx_cust"); err != nil {
+		eng.Close()
+		t.Fatalf("CreateLegacyIndexForTesting failed: %v", err)
+	}
+
+	eng.Close()
+
+	// 3. Update catalog.json to register idx_cust under orders.Indexes (simulating legacy upgrade state)
+	catPath := filepath.Join(dir, "catalog.json")
+	catData, err := os.ReadFile(catPath)
+	if err != nil {
+		t.Fatalf("ReadFile catalog.json failed: %v", err)
+	}
+	var tables []*storage.TableSchema
+	if err := json.Unmarshal(catData, &tables); err != nil {
+		t.Fatalf("Unmarshal catalog failed: %v", err)
+	}
+	tables[0].Indexes = []storage.IndexSchema{
+		{Name: "idx_cust", TableName: "orders", Columns: []string{"customer_id"}},
+	}
+	updatedCat, _ := json.MarshalIndent(tables, "", "  ")
+	if err := os.WriteFile(catPath, updatedCat, 0644); err != nil {
+		t.Fatalf("WriteFile catalog failed: %v", err)
+	}
+
+	multiIdxFile := filepath.Join(dir, "_idx_orders.wt")
+	legacyIdxFile := filepath.Join(dir, "_idx_orders_idx_cust.wt")
+
+	// Ensure preconditions: legacy file exists, multiplexed file does NOT exist
+	if _, err := os.Stat(legacyIdxFile); err != nil {
+		t.Fatalf("expected legacy index file %s to exist before restart, got: %v", legacyIdxFile, err)
+	}
+	if _, err := os.Stat(multiIdxFile); err == nil {
+		t.Fatalf("multiplexed index file %s should not exist prior to migration", multiIdxFile)
+	}
+
+	// 4. Re-open engine: should succeed, migrate legacy file to multiplexed file, and drop legacy file
+	eng2 := New()
+	if err := eng2.Open(dir); err != nil {
+		t.Fatalf("eng2.Open with legacy index file should have succeeded and migrated, but failed: %v", err)
+	}
+	defer eng2.Close()
+
+	// Verify multiplexed file was created and legacy file was cleaned up
+	if _, err := os.Stat(multiIdxFile); err != nil {
+		t.Errorf("expected multiplexed index file %s to exist after migration, got err: %v", multiIdxFile, err)
+	}
+	if _, err := os.Stat(legacyIdxFile); err == nil {
+		t.Errorf("expected legacy index file %s to be dropped after migration, but still exists", legacyIdxFile)
+	}
+}
+

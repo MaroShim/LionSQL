@@ -122,7 +122,7 @@ func parseSetConfigRest(rest string) (param string, val string, isLocal bool, ok
 		s = strings.TrimSpace(s[len("SESSION"):])
 	}
 	idx := 0
-	for idx < len(s) && isIdentChar(s[idx]) {
+	for idx < len(s) && (isIdentChar(s[idx]) || s[idx] == '.') {
 		idx++
 	}
 	if idx == 0 {
@@ -1710,6 +1710,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				valStr = "on"
 			case "integer_datetimes":
 				valStr = "on"
+			case "is_superuser":
+				valStr = "on"
+			case "bytea_output":
+				valStr = "hex"
+			case "extra_float_digits":
+				valStr = "1"
 			case "max_connections":
 				valStr = strconv.Itoa(s.MaxConnections())
 			case "idle_in_transaction_session_timeout", "tx_idle_timeout":
@@ -1729,7 +1735,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					valStr = fmt.Sprintf("%dms", ttl.Milliseconds())
 				}
 			default:
-				valStr = "off"
+				return nil, fmt.Errorf("ERROR 42704: unrecognized configuration parameter %q", param)
 			}
 		}
 

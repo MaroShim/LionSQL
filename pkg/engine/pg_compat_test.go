@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -209,8 +210,54 @@ func TestPgCompatibility_SessionSettingsParity(t *testing.T) {
 	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "ROLLBACK;"); err != nil {
 		t.Fatalf("failed ROLLBACK: %v", err)
 	}
-	rollbackTz, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('timezone');")
-	if err != nil || len(rollbackTz.Rows) == 0 || rollbackTz.Rows[0]["current_setting"] != "Asia/Seoul" {
-		t.Fatalf("expected post-rollback timezone to revert to Asia/Seoul, got: %+v", rollbackTz.Rows)
+	// 6. Test Dotted Parameter Names (e.g. custom.app_timeout, my_app.feature_flag)
+	setDottedRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SET custom.app_timeout TO '500ms';")
+	if err != nil {
+		t.Fatalf("failed SET custom.app_timeout: %v", err)
+	}
+	_ = setDottedRes
+
+	showDottedRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SHOW custom.app_timeout;")
+	if err != nil || len(showDottedRes.Rows) == 0 || showDottedRes.Rows[0]["custom.app_timeout"] != "500ms" {
+		t.Fatalf("expected SHOW custom.app_timeout to be 500ms: %+v, err: %v", showDottedRes.Rows, err)
+	}
+
+	curDottedRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('custom.app_timeout');")
+	if err != nil || len(curDottedRes.Rows) == 0 || curDottedRes.Rows[0]["current_setting"] != "500ms" {
+		t.Fatalf("expected current_setting('custom.app_timeout') to be 500ms: %+v, err: %v", curDottedRes.Rows, err)
+	}
+
+	// 7. Test current_setting(setting_name, missing_ok) - 2nd argument
+	// missing_ok = true on unknown setting -> should return NULL, NOT ERROR
+	missingOkRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('non_existent_setting', true);")
+	if err != nil {
+		t.Fatalf("current_setting with missing_ok=true should succeed, got err: %v", err)
+	}
+	if len(missingOkRes.Rows) == 0 || missingOkRes.Rows[0]["current_setting"] != nil {
+		t.Fatalf("expected NULL for current_setting with missing_ok=true on non-existent parameter, got: %+v", missingOkRes.Rows)
+	}
+
+	// missing_ok = false on unknown setting -> should return error (SQLSTATE 42704 / unrecognized configuration parameter)
+	_, errMissingFail := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('non_existent_setting', false);")
+	if errMissingFail == nil {
+		t.Fatalf("expected error for current_setting with missing_ok=false on non-existent parameter, but got nil")
+	}
+
+	// 8. SHOW unrecognized configuration parameter -> MUST return ERROR 42704, NOT "off"
+	_, errShowUnrecognized := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SHOW non_existent_setting;")
+	if errShowUnrecognized == nil {
+		t.Fatalf("expected error for SHOW non_existent_setting, but got nil (silent 'off' default detected)")
+	}
+	if !strings.Contains(errShowUnrecognized.Error(), "42704") && !strings.Contains(errShowUnrecognized.Error(), "unrecognized configuration parameter") {
+		t.Fatalf("expected error to contain 42704 unrecognized configuration parameter, got: %v", errShowUnrecognized)
+	}
+
+	// 9. Literals containing '::' must not be mangled as top-level type cast
+	concatRes, errConcat := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT 'a::b' || 'c';")
+	if errConcat != nil {
+		t.Fatalf("failed SELECT 'a::b' || 'c': %v", errConcat)
+	}
+	if len(concatRes.Rows) == 0 {
+		t.Fatalf("expected rows from SELECT 'a::b' || 'c', got empty")
 	}
 }

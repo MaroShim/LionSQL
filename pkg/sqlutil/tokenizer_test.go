@@ -835,4 +835,32 @@ func TestCleanIdentifierParts_EscapedDelimiters(t *testing.T) {
 	}
 }
 
+func TestFindLastTopLevelPgCast(t *testing.T) {
+	tests := []struct {
+		input        string
+		wantBase     string
+		wantCastType string
+		wantOk       bool
+	}{
+		{"123::int", "123", "int", true},
+		{"'hello'::text", "'hello'", "text", true},
+		{"(1 + 2)::bigint", "(1 + 2)", "bigint", true},
+		{"'hello::world'", "", "", false},
+		{"'2024-01-01 10::00::00'", "", "", false},
+		{"1::int + 2", "", "", false},
+		{"col::numeric(10, 2)", "col", "numeric(10, 2)", true},
+		{"'1'::text::int", "'1'::text", "int", true},
+		{"'a::b' || 'c'", "", "", false},
+	}
+
+	for _, tt := range tests {
+		base, castType, ok := FindLastTopLevelPgCast(tt.input)
+		if ok != tt.wantOk || base != tt.wantBase || castType != tt.wantCastType {
+			t.Errorf("FindLastTopLevelPgCast(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				tt.input, base, castType, ok, tt.wantBase, tt.wantCastType, tt.wantOk)
+		}
+	}
+}
+
+
 
