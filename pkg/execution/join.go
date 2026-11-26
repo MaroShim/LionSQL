@@ -108,6 +108,12 @@ type HashJoinIterator struct {
 	parallelProbeActive bool
 	fusedWithParentAgg  bool
 	bloomFilter         *FastBloomFilter
+	hasIntZoneMap       bool
+	minIntKey           int64
+	maxIntKey           int64
+	hasStrZoneMap       bool
+	minStrKey           string
+	maxStrKey           string
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -382,6 +388,18 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 					continue
 				}
 				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
+				if !h.hasStrZoneMap {
+					h.minStrKey = kStr
+					h.maxStrKey = kStr
+					h.hasStrZoneMap = true
+				} else {
+					if kStr < h.minStrKey {
+						h.minStrKey = kStr
+					}
+					if kStr > h.maxStrKey {
+						h.maxStrKey = kStr
+					}
+				}
 				if h.bloomFilter != nil {
 					h.bloomFilter.AddString(kStr)
 				}
@@ -394,6 +412,18 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				if iKey, isInt := extractIntKey(keyVal); isInt {
 					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: bTuple, idx: rIdx})
 					flatItems = append(flatItems, flatIntMatch{key: iKey, tuple: bTuple, idx: rIdx})
+					if !h.hasIntZoneMap {
+						h.minIntKey = iKey
+						h.maxIntKey = iKey
+						h.hasIntZoneMap = true
+					} else {
+						if iKey < h.minIntKey {
+							h.minIntKey = iKey
+						}
+						if iKey > h.maxIntKey {
+							h.maxIntKey = iKey
+						}
+					}
 					if h.bloomFilter != nil {
 						h.bloomFilter.AddInt(iKey)
 						h.bloomFilter.AddString(strconv.FormatInt(iKey, 10))
@@ -404,6 +434,32 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 						kStr = h.arena.AllocString(kStr)
 					}
 					h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: bTuple, idx: rIdx})
+					if !h.hasStrZoneMap {
+						h.minStrKey = kStr
+						h.maxStrKey = kStr
+						h.hasStrZoneMap = true
+					} else {
+						if kStr < h.minStrKey {
+							h.minStrKey = kStr
+						}
+						if kStr > h.maxStrKey {
+							h.maxStrKey = kStr
+						}
+					}
+					if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
+						if !h.hasIntZoneMap {
+							h.minIntKey = pInt
+							h.maxIntKey = pInt
+							h.hasIntZoneMap = true
+						} else {
+							if pInt < h.minIntKey {
+								h.minIntKey = pInt
+							}
+							if pInt > h.maxIntKey {
+								h.maxIntKey = pInt
+							}
+						}
+					}
 					if h.bloomFilter != nil {
 						h.bloomFilter.AddString(kStr)
 						if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
@@ -780,8 +836,11 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				if ok && keyVal != nil {
 					found = true
 					if iKey, isInt := extractIntKey(keyVal); isInt {
-						// Runtime Bloom Filter: reject immediately if int key cannot exist in build table
-						if h.bloomFilter != nil && !h.bloomFilter.MayContainInt(iKey) {
+						// Runtime Min/Max Zone Map: reject immediately if outside build table key boundaries
+						if h.hasIntZoneMap && (iKey < h.minIntKey || iKey > h.maxIntKey) {
+							hasMatch = false
+						} else if h.bloomFilter != nil && !h.bloomFilter.MayContainInt(iKey) {
+							// Runtime Bloom Filter: reject immediately if int key cannot exist in build table
 							hasMatch = false
 						} else if h.isFlatIntTable {
 							hasMatch = h.probeFlatInt(iKey)
@@ -797,21 +856,28 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 						}
 					} else {
 						kStr := formatKeyVal(keyVal)
-						// Runtime Bloom Filter: reject string key immediately
-						if h.bloomFilter != nil && !h.bloomFilter.MayContainString(kStr) {
+						// Runtime Min/Max Zone Map: check string boundaries if available
+						if h.hasStrZoneMap && (kStr < h.minStrKey || kStr > h.maxStrKey) {
+							hasMatch = false
+						} else if h.bloomFilter != nil && !h.bloomFilter.MayContainString(kStr) {
+							// Runtime Bloom Filter: reject string key immediately
 							hasMatch = false
 						} else if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 							hasMatch = true
 							h.currentMatches = matches
 						} else if h.isFlatIntTable {
 							if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
-								hasMatch = h.probeFlatInt(pInt)
+								if !h.hasIntZoneMap || (pInt >= h.minIntKey && pInt <= h.maxIntKey) {
+									hasMatch = h.probeFlatInt(pInt)
+								}
 							}
 						} else if len(h.intHashTable) > 0 {
 							if pInt, err := strconv.ParseInt(kStr, 10, 64); err == nil {
-								if matches, exists := h.intHashTable[pInt]; exists && len(matches) > 0 {
-									hasMatch = true
-									h.currentMatches = matches
+								if !h.hasIntZoneMap || (pInt >= h.minIntKey && pInt <= h.maxIntKey) {
+									if matches, exists := h.intHashTable[pInt]; exists && len(matches) > 0 {
+										hasMatch = true
+										h.currentMatches = matches
+									}
 								}
 							}
 						}

@@ -530,6 +530,7 @@
 | `PENDING` | **`P2-BACKLOG`** | `v1.99.0` | Engine | P3 | Post-1.0 P2 Deferred Audit Items (92 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`P2-STABILIZE-AB-1`** |  | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** |  | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
+| `DONE` | **`PERF-AGG-SCALAR-ACCUMULATOR-1`** | `v0.97.0` | Execution | P2 | Zero-Allocation Scalar Accumulator for High-Frequency Group By Aggregations | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** |  | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
 | `DONE` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.96.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -540,6 +541,7 @@
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CURSOR-ZERO-COPY-SCAN-1`** | `v0.95.0` | Storage | P1 | WiredTiger 커서 Zero-Copy 버퍼 재사용 및 Scan 힙 메모리 할당 제거 | [`notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md`](notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `PENDING` | **`PERF-EXEC-VECTORIZED-BATCH-1`** | `v1.0-GA` | Execution | P2 | Vectorized 1024-Row Batch Processing Pipeline across Volcano Operators | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-FLAT-ARRAY-HASH-JOIN-1`** | `v0.96.0` | Execution | P1 | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
@@ -549,6 +551,9 @@
 | `DONE` | **`PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-JOIN-MINMAX-ZONE-PRUNING-1`** | `v0.97.0` | Execution | P2 | Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `PENDING` | **`PERF-JOIN-RADIX-PARTITIONED-1`** | `Post-1.0` | Execution | P3 | L2-Cache-Fit Radix Partitioned Hash Join for Out-of-L3 In-Memory Datasets | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `PENDING` | **`PERF-JOIN-SWISS-TABLE-1`** | `v0.98.0` | Execution | P2 | Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.95.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
@@ -5173,6 +5178,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [DONE] Zero-Allocation Scalar Accumulator for High-Frequency Group By Aggregations `PERF-AGG-SCALAR-ACCUMULATOR-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:50:29
+- **Milestone**: `v0.97.0`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
 ### [DONE] WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 `PERF-BENCH-WT-RESTORE-1`
 - **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
 
@@ -5254,6 +5266,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Vectorized 1024-Row Batch Processing Pipeline across Volcano Operators `PERF-EXEC-VECTORIZED-BATCH-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:48:07
+- **Milestone**: `v1.0-GA`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
 ### [DONE] EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) `PERF-EXISTS-SUBQUERY-LIMIT-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
@@ -5327,6 +5346,27 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:48:30
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
+
+---
+
+### [DONE] Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization `PERF-JOIN-MINMAX-ZONE-PRUNING-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:50:29
+- **Milestone**: `v0.97.0`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
+### [PENDING] L2-Cache-Fit Radix Partitioned Hash Join for Out-of-L3 In-Memory Datasets `PERF-JOIN-RADIX-PARTITIONED-1`
+- **Domain**: Execution | **Priority**: P3 | **Updated**: 2026-11-26 01:48:07
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
+### [PENDING] Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing `PERF-JOIN-SWISS-TABLE-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:48:07
+- **Milestone**: `v0.98.0`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 
