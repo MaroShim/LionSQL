@@ -34,7 +34,7 @@
 | `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.99.0` | Planner | P3 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.98.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `Post-1.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.95.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.97.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
@@ -587,7 +587,7 @@
 | `DONE` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.95.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.95.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | `v0.99.0` | Storage | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | `Post-1.0` | Storage | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -882,8 +882,8 @@
 ---
 
 ### [PENDING] Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket `ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`
-- **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-24 10:55:35
-- **Milestone**: `v0.98.0`
+- **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-26 02:07:57
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md)
 
 ---
@@ -5610,8 +5610,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) `PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-25 04:05:35
-- **Milestone**: `v0.99.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-26 02:07:57
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
 
 ---
