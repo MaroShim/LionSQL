@@ -315,7 +315,7 @@
 | `PENDING` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `PENDING` | **`FEAT-REDIS-PRIMITIVES-AND-TTL-1`** |  | --priority | P3 | Game Server Primitives: Native Sorted Set (ZSET), Auto-TTL Tables, and Atomic INCRBY/SETNX |  |  |
-| `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `v0.96.0` | Storage | P2 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `Post-1.0` | Storage | P3 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `DONE` | **`FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
@@ -3617,9 +3617,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) `FEAT-ROW-LOCK-WAIT-MANAGER-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 10:44:16
-- **Milestone**: `v0.96.0`
+- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-24 10:44:16
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md)
+
+**Details & Resolution**:
+WiredTiger C MVCC(WT_ROLLBACK)와의 물리적 불일치 및 In-Memory OCC 락프리 정체성 보호를 위해 1.0 이후로 연기
 
 ---
 

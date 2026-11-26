@@ -18,7 +18,7 @@
 | `FIX-COMPUTED-COLUMN-SELECT-EVAL-1` | **P1 (High)** | Engine | v0.94.0 | 계산된 열(Computed Column) SELECT 시 동적 수식 평가 | `create table #t (qty INT, price INT, total AS (qty * price));` 조회 시 `NULL` 대신 행 컨텍스트 기반 수식 동적 계산 |
 | `FIX-CURSOR-DECLARE-OPEN-LIFECYCLE-1` | **P1 (High)** | Engine | v0.94.0 | 커서 DECLARE 및 OPEN 생명주기 분리 | `DECLARE cur CURSOR` 시점에는 선언만 유지하고 `OPEN cur` 시점에 쿼리를 실행하여 `already open` 에러 방지 |
 | `FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1` | **P1 (High)** | Engine | v0.94.0 | 트리거 `INSERTED`/`DELETED` 숨김 컬럼(`_row_id`) 필터링 | 트리거 내에서 `INSERTED` 테이블 컬럼 수 조회 시 내부 관리용 숨김 컬럼이 노출되어 컬럼 수가 불일치하는 결함 수정 |
-| `FEAT-ROW-LOCK-WAIT-MANAGER-1` | **P2** | Storage | v1.1.0 | `WITH (UPDLOCK)` 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 | Step 2: `WITH (UPDLOCK/XLOCK)` 또는 `FOR UPDATE` 지정 시 표준 블로킹 대기(채널 알림 + LOCK_TIMEOUT) 및 데드락 방지 |
+| `FEAT-ROW-LOCK-WAIT-MANAGER-1` | **P3** | Storage | Post-1.0 (v1.1.0) | `WITH (UPDLOCK)` 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 | 1.0 이후 연기: WiredTiger C MVCC(`WT_ROLLBACK`)와의 물리적 불일치 및 In-Memory OCC 락프리 정체성 보호 (Step 2 상세 분석 참조) |
 | `FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1` | **P2** | Storage | v1.1.0 | `ALTER TABLE ALTER COLUMN` 가변길이 컬럼 온라인 확장 | `VARCHAR(100)` -> `VARCHAR(200)` 등 크기 확장을 $O(1)$ 온라인 메타데이터 갱신으로 지원 |
 | `FEAT-TSQL-GOTO-LABEL-1` | **P3** | Engine | v1.1.0 | T-SQL `LABEL` 및 `GOTO` 흐름 제어 구문 지원 | 프로시저 내 레이블 점프 지원 |
 | `FEAT-TSQL-CREATE-SYNONYM-1` | **P3** | Engine | v1.2.0 | T-SQL `CREATE SYNONYM` 동의어 객체 지원 | 객체 별칭 가상 라우팅 지원 |
@@ -52,7 +52,24 @@
 3. **Autocommit 안전 가드**:
    - 미커밋 락 충돌 시 단일 문장(Autocommit)이 무차별 재시도로 선행 세션의 커밋 직후 데이터를 덮어쓰는 Lost Update 방지.
 
-### 3.2 Step 2 (v1.1.0): `WITH (UPDLOCK)` 명시 힌트 기반 2PL 블로킹 대기
+### 3.2 Step 2 (Post-1.0 / v1.1.0으로 연기): `WITH (UPDLOCK)` 2PL 블로킹 대기 검토 및 아키텍처 한계 분석
+
+> **[2026-11-26 1.0 안정화 판정: 1.0 이후(Post-1.0)로 연기 확정]**
+> `FEAT-ROW-LOCK-WAIT-MANAGER-1`은 T-SQL 편의성 관점에서 기획되었으나, 다음과 같은 4가지 핵심 아키텍처 우려점으로 인해 1.0 코어 안정성을 위해 1.0 이후로 연기하여 재검토한다.
+>
+> 1. **WiredTiger(WT)와의 물리적 불일치 (Dual-Engine Invariance 위반)**:
+>    - WiredTiger는 C 커널 수준에서 MVCC + 낙관적 롤백 아키텍처를 채택하여, 동일 키 동시 충돌 시 `WT_ROLLBACK (-31800)`을 즉시 발생시킵니다.
+>    - WT 자체에 비관적 "대기열(Wait Queue)" API가 존재하지 않으므로, 상위 Go 레이어에서 대기 루프를 두더라도 대기가 풀린 후 WT C 커널에 쓰기를 시도하는 순간 스냅샷 타임스탬프 불일치로 인해 결국 `WT_ROLLBACK`이 발생하여 대기 효과가 무력화됩니다.
+>    - OCC만 대기하고 WT는 즉시 롤백되는 스토리지 엔진별 동작 파편화가 발생합니다.
+> 2. **In-Memory OCC 초고속 처리량 정체성 훼손**:
+>    - In-Memory OCC 엔진의 핵심 강점은 읽기/쓰기 상호 비차단 및 원자적 버전 번호 기반의 Lock-Free 초고속 처리량(150,000+ TPS)입니다.
+>    - 블로킹 대기 도입 시 비관적 2PL로 퇴행하여 락 경합, 컨텍스트 스위칭, 워커 풀 기아(Starvation)가 발생합니다.
+> 3. **고루틴 누출(Orphan Waiters) 및 데드락 오버헤드**:
+>    - 클라이언트가 트랜잭션을 미완료한 채 소켓을 끊거나 네트워크 타임아웃 발생 시 대기 중인 워커 고루틴이 영구 고립될 위험이 있습니다.
+>    - 상호 대기 탐색을 위한 Wait-For Graph 및 전역 락이 엔진 핫패스의 새로운 병목이 됩니다.
+> 4. **1.0 정책**:
+>    - 1.0에서는 `WITH (UPDLOCK)` 구문을 파서/플래너에서 친절히 수용(Tolerant Accept)하되, 트랜잭션 충돌 시 즉시 Fail-Closed 롤백 후 클라이언트/드라이버의 지터 백오프 재시도를 유도하는 현대 분산/고성능 OLTP 표준을 유지합니다.
+
 1. **의도와 철학 (`[RULE:RadicalKISS]`, `[RULE:LatencyBudget]`)**:
    - 평소 모든 쿼리에 무거운 잠금 관리자를 거치게 하면 14만~15만 TPS를 유지하는 고동시성 엔진 성능이 심각하게 훼손됨.
    - 금융/재고 등 순차 대기가 반드시 필요한 쿼리에 대해 개발자가 명시적으로 `SELECT ... WITH (UPDLOCK, ROWLOCK)` 또는 `SELECT ... FOR UPDATE` 힌트를 지정했을 때만 2PL Lock-Wait 경로를 활성화.
