@@ -989,3 +989,158 @@ func TestValidator_Hardening_GroupBy_TableColumnPrimacy(t *testing.T) {
 		t.Errorf("expected GROUP BY with valid non-conflicting projection alias to pass, got: %v", err)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Round 2 Validator Gatekeeper Hardening Tests (TDD Red -> Green)
+// -----------------------------------------------------------------------------
+
+func TestValidator_Hardening_Having_UnaggregatedColumnMustAppearInGroupBy(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. HAVING salary > 50000 when GROUP BY is only id -> FAIL (SQLSTATE 42803)
+	sqlFail := "SELECT id, COUNT(*) FROM users GROUP BY id HAVING age > 30;"
+	parsedFail, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedFail.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for unaggregated/non-group column 'age' in HAVING, got nil")
+	} else if !strings.Contains(err.Error(), "must appear in the GROUP BY clause or be used in an aggregate function") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 'must appear in the GROUP BY clause' error, got: %v", err)
+	}
+
+	// 2. HAVING column is in GROUP BY -> PASS
+	sqlPass1 := "SELECT id, COUNT(*) FROM users GROUP BY id HAVING id > 10;"
+	parsedPass1, err := proc.ParseSQL(sqlPass1)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass1.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected HAVING with group column 'id' to pass, got: %v", err)
+	}
+
+	// 3. HAVING column is inside aggregate function -> PASS
+	sqlPass2 := "SELECT id, COUNT(*) FROM users GROUP BY id HAVING AVG(age) > 25.0;"
+	parsedPass2, err := proc.ParseSQL(sqlPass2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass2.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected HAVING with aggregated 'AVG(age)' to pass, got: %v", err)
+	}
+
+	// 4. HAVING with unaggregated column when no GROUP BY exists -> FAIL (SQLSTATE 42803)
+	sqlFailNoGroup := "SELECT COUNT(*) FROM users HAVING age > 30;"
+	parsedFailNoGroup, err := proc.ParseSQL(sqlFailNoGroup)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedFailNoGroup.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for unaggregated 'age' in HAVING without GROUP BY, got nil")
+	} else if !strings.Contains(err.Error(), "must appear in the GROUP BY clause or be used in an aggregate function") || !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected 42803 error, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_DivisionByZeroConstant(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Division by literal integer zero in SELECT projection -> FAIL (SQLSTATE 22012)
+	sqlProjDiv := "SELECT 1 / 0 FROM users;"
+	parsedProjDiv, err := proc.ParseSQL(sqlProjDiv)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedProjDiv.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for 1 / 0 in projection, got nil")
+	} else if !strings.Contains(err.Error(), "division by zero") || !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected 22012 division by zero error, got: %v", err)
+	}
+
+	// 2. Modulo by literal zero in WHERE filter -> FAIL (SQLSTATE 22012)
+	sqlWhereMod := "SELECT id FROM users WHERE id % 0 = 0;"
+	parsedWhereMod, err := proc.ParseSQL(sqlWhereMod)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedWhereMod.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for id %% 0 in WHERE, got nil")
+	} else if !strings.Contains(err.Error(), "division by zero") || !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected 22012 division by zero error, got: %v", err)
+	}
+
+	// 3. Normal division -> PASS
+	sqlPass := "SELECT 10 / 2, id % 3 FROM users;"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected normal division to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_SubqueryWildcardArity(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Scalar subquery with SELECT * on users (which has 3 columns: id, name, age) -> FAIL (SQLSTATE 42601)
+	sqlFail := "SELECT order_id FROM orders WHERE user_id = (SELECT * FROM users WHERE id = 1);"
+	parsedFail, err := proc.ParseSQL(sqlFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedFail.(*proc.GeneralSelectStmt), schemas); err == nil {
+		t.Errorf("expected arity mismatch error for subquery SELECT * on 3-column table from ValidateQueryAST, got nil")
+	} else if !strings.Contains(err.Error(), "subquery must return only one column, returned 3") || !strings.Contains(err.Error(), "42601") {
+		t.Errorf("expected 42601 'returned 3' arity mismatch error, got: %v", err)
+	}
+
+	// 2. Single column subquery -> PASS
+	sqlPass := "SELECT order_id FROM orders WHERE user_id = (SELECT id FROM users WHERE id = 1);"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected single-column subquery to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_LikeEscapeSingleChar(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Multi-character ESCAPE literal -> FAIL (SQLSTATE 22019)
+	sqlMulti := "SELECT id FROM users WHERE name LIKE '%x%' ESCAPE 'abc';"
+	parsedMulti, err := proc.ParseSQL(sqlMulti)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedMulti.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for multi-char ESCAPE 'abc', got nil")
+	} else if !strings.Contains(err.Error(), "escape character must be a single character") || !strings.Contains(err.Error(), "22019") {
+		t.Errorf("expected 22019 escape character error, got: %v", err)
+	}
+
+	// 2. Empty ESCAPE literal -> FAIL (SQLSTATE 2200C)
+	sqlEmpty := "SELECT id FROM users WHERE name LIKE '%x%' ESCAPE '';"
+	parsedEmpty, err := proc.ParseSQL(sqlEmpty)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedEmpty.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected error for empty ESCAPE '', got nil")
+	} else if !strings.Contains(err.Error(), "escape character must be a single character") || !strings.Contains(err.Error(), "2200C") {
+		t.Errorf("expected 2200C escape character error, got: %v", err)
+	}
+
+	// 3. Single character ESCAPE literal -> PASS
+	sqlPass := "SELECT id FROM users WHERE name LIKE '%!_%' ESCAPE '!';"
+	parsedPass, err := proc.ParseSQL(sqlPass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected single-char ESCAPE to pass, got: %v", err)
+	}
+}
+

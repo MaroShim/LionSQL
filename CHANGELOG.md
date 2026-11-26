@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- harden Semantic Validator Gatekeeper defense lines with Round 2 standard SQL invariants (`FEAT-VALIDATOR-GATEKEEPER-ROUND2-1`):
+  - enforce unaggregated column rejection in HAVING clauses with full support for aggregate projection aliases (`SQLSTATE 42803`)
+  - enforce compile-time literal zero division and modulo rejection across expressions (`SQLSTATE 22012`)
+  - enforce single-column arity on subquery wildcard expansions (`SELECT *`) against multi-column tables (`SQLSTATE 42601`)
+  - enforce single-character constraint on `LIKE ... ESCAPE` literals (`SQLSTATE 22019 / 2200C`)
 - implement tri-state column resolution (`ResolveDefinite`, `ResolveNotFound`, `ResolveIndeterminate`) and closed vs open dynamic schema derivation for derived tables (`FEAT-TRI-STATE-COLUMN-RESOLUTION-1`):
   - classify column references into 3 deterministic outcomes: Definite Existence (`ResolveDefinite`), Definite Absence (`ResolveNotFound` -> Fail-Closed), and Indeterminate (`ResolveIndeterminate` -> Defer to Binder)
   - support single-table wildcard expansions (`*`, `u.*`) from catalog schemas while maintaining closed schema isolation
