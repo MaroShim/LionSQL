@@ -112,10 +112,13 @@ func parseUseCommand(query string) (string, bool) {
 	return arg, true
 }
 
-// parseSetConfigRest parses [SESSION] <param> [= | TO] <val>.
-func parseSetConfigRest(rest string) (param string, val string, ok bool) {
+// parseSetConfigRest parses [SESSION | LOCAL] <param> [= | TO] <val>.
+func parseSetConfigRest(rest string) (param string, val string, isLocal bool, ok bool) {
 	s := strings.TrimSpace(rest)
-	if sqlutil.HasPrefixKeyword(s, "SESSION") {
+	if sqlutil.HasPrefixKeyword(s, "LOCAL") {
+		isLocal = true
+		s = strings.TrimSpace(s[len("LOCAL"):])
+	} else if sqlutil.HasPrefixKeyword(s, "SESSION") {
 		s = strings.TrimSpace(s[len("SESSION"):])
 	}
 	idx := 0
@@ -123,17 +126,17 @@ func parseSetConfigRest(rest string) (param string, val string, ok bool) {
 		idx++
 	}
 	if idx == 0 {
-		return "", "", false
+		return "", "", false, false
 	}
 	param = s[:idx]
 	rem := strings.TrimSpace(s[idx:])
 	if strings.HasPrefix(rem, "=") {
-		return param, strings.TrimSpace(rem[1:]), true
+		return param, strings.TrimSpace(rem[1:]), isLocal, true
 	}
 	if sqlutil.HasPrefixKeyword(rem, "TO") {
-		return param, strings.TrimSpace(rem[2:]), true
+		return param, strings.TrimSpace(rem[2:]), isLocal, true
 	}
-	return "", "", false
+	return "", "", false, false
 }
 
 // parseDescTableCommand parses (DESC|DESCRIBE) <table> [;].
@@ -896,6 +899,7 @@ func (s *Coordinator) commitSessionTxUnderTxMgrLock(cs *ClientSession) error {
 	cs.Mu.Lock()
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
+	cs.LocalVars = nil
 	delete(cs.Vars, "transaction_read_only")
 	// Server Cursors: WITHOUT HOLD cursors are closed on COMMIT; WITH HOLD cursors remain open in session!
 	if cs.Cursors != nil {
@@ -953,6 +957,7 @@ func (s *Coordinator) rollbackSessionTxUnderTxMgrLock(cs *ClientSession) error {
 	cs.Mu.Lock()
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
+	cs.LocalVars = nil
 	delete(cs.Vars, "transaction_read_only")
 	// Close all server cursors on ROLLBACK (per SQL standard lifecycle)
 	if cs.Cursors != nil {
@@ -1467,9 +1472,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 		}
 
-		// F. Standard SET [SESSION] param [= | TO] value
-		if rawParam, rawVal, ok := parseSetConfigRest(rest); ok {
+		// F. Standard SET [SESSION | LOCAL] param [= | TO] value
+		if rawParam, rawVal, isLocal, ok := parseSetConfigRest(rest); ok {
 			param := strings.ToLower(cleanIdentifier(rawParam))
+			paramNorm := strings.ReplaceAll(param, " ", "_")
 			valStr := strings.Trim(strings.TrimSpace(rawVal), "';\"")
 			if param == "dialect" || param == "sql_dialect" {
 				valNorm := strings.ToLower(strings.TrimSpace(valStr))
@@ -1531,7 +1537,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter \"work_mem\": %q", valStr)
 				}
 				cs.Mu.Lock()
-				cs.Vars["work_mem"] = bytes
+				if isLocal {
+					if cs.LocalVars == nil {
+						cs.LocalVars = make(map[string]any)
+					}
+					cs.LocalVars["work_mem"] = bytes
+				} else {
+					cs.Vars["work_mem"] = bytes
+				}
 				cs.Mu.Unlock()
 				return &QueryResult{
 					Success:    true,
@@ -1549,7 +1562,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter %q: %q", param, valStr)
 				}
 				cs.Mu.Lock()
-				cs.Vars[param] = valStr
+				if isLocal {
+					if cs.LocalVars == nil {
+						cs.LocalVars = make(map[string]any)
+					}
+					cs.LocalVars[param] = valStr
+				} else {
+					cs.Vars[param] = valStr
+				}
 				cs.Mu.Unlock()
 				return &QueryResult{
 					Success:    true,
@@ -1568,7 +1588,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				}
 				cs.SetIdleInTxTimeout(d)
 				cs.Mu.Lock()
-				cs.Vars[param] = valStr
+				if isLocal {
+					if cs.LocalVars == nil {
+						cs.LocalVars = make(map[string]any)
+					}
+					cs.LocalVars[param] = valStr
+				} else {
+					cs.Vars[param] = valStr
+				}
 				cs.Mu.Unlock()
 				return &QueryResult{
 					Success:    true,
@@ -1578,7 +1605,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				}, nil
 			}
 			cs.Mu.Lock()
-			cs.Vars[param] = valStr
+			if isLocal {
+				if cs.LocalVars == nil {
+					cs.LocalVars = make(map[string]any)
+				}
+				cs.LocalVars[paramNorm] = valStr
+				cs.LocalVars[param] = valStr
+			} else {
+				cs.Vars[paramNorm] = valStr
+				cs.Vars[param] = valStr
+			}
 			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
@@ -1614,9 +1650,15 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		param := strings.ToLower(strings.TrimSpace(rawParam))
 		paramNorm := strings.ReplaceAll(param, " ", "_")
 		cs.Mu.Lock()
-		val, exists := cs.Vars[paramNorm]
+		val, exists := cs.LocalVars[paramNorm]
 		if !exists {
-			val, exists = cs.Vars[param]
+			val, exists = cs.LocalVars[param]
+		}
+		if !exists {
+			val, exists = cs.Vars[paramNorm]
+			if !exists {
+				val, exists = cs.Vars[param]
+			}
 		}
 		cs.Mu.Unlock()
 

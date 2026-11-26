@@ -800,11 +800,14 @@ LionSQL은 PostgreSQL 클라이언트 생태계(psql, Prisma, DBeaver, GORM, Typ
    - 지원 타입: `::int`, `::integer`, `::int4`, `::bigint`, `::int8`, `::smallint`, `::float`, `::numeric`, `::decimal`, `::varchar`, `::text`, `::boolean`, `::timestamp` 등.
    - 연쇄 캐스팅 지원: `SELECT col::varchar::int FROM tbl;`
 
-2. **세션 환경 파라미터 제어 (`SET`, `SHOW`, `current_setting()`, `set_config()`)**:
+2. **세션 환경 파라미터 제어 (`SET`, `SET LOCAL`, `SHOW`, `current_setting()`, `set_config()`)**:
    - `search_path`: `SET search_path TO myschema, public;` 설정 시 즉시 세션 변수에 반영되며, `SHOW search_path;` 및 `SELECT current_setting('search_path');`로 일관되게 조회됩니다.
    - `timezone`: `SET timezone TO 'Asia/Seoul';` 또는 `SELECT set_config('timezone', 'Asia/Seoul', false);`로 세션 시간대를 동적으로 변경할 수 있습니다.
-   - `set_config(name, value, is_local)`: 표준 PostgreSQL 동적 설정 함수로 세션 변수를 실시간 갱신하고 변경된 값을 반환합니다.
-   - `current_setting(name)`: `server_version`, `server_version_num`, `search_path`, `timezone`, `work_mem`, `standard_conforming_strings` 등 현재 세션의 파라미터 값을 반환합니다.
+   - `set_config(name, value [, is_local])`:
+     - 2개 인자 지원: `set_config('param', 'val')` 호출 시 표준 기본값인 `is_local = false`로 동작합니다.
+     - 3개 인자 지원: `set_config('param', 'val', true)` 또는 `SET LOCAL param = val;` 지정 시 **트랜잭션 로컬 설정(Transaction-Local)**으로 동작하여, 현재 트랜잭션 블록 안에서만 우선 적용되고 `COMMIT` 또는 `ROLLBACK` 시 세션 원래 설정으로 자동 롤백됩니다.
+   - `current_setting(name)`: 트랜잭션 로컬 설정(`LocalVars`)이 활성화되어 있을 경우 로컬 설정을 최우선 반환하며, 종료 시 세션 변수(`Vars`) 및 기본값으로 자동 전환됩니다.
+   - `SHOW param`: 현재 세션/트랜잭션에 유효한 파라미터 값을 실시간 단일 행 결과셋으로 출력합니다.
 
 ---
 

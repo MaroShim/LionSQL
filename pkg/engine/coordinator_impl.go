@@ -832,6 +832,7 @@ func (c *Coordinator) ResetSessionWithOptions(id string, opts SessionResetOption
 	// 1-5. Reset user variables and restore default system variables
 	if opts.ClearVars {
 		cs.Vars = make(map[string]any)
+		cs.LocalVars = nil
 		cs.Vars["transaction_isolation"] = "read committed"
 		cs.Vars["search_path"] = `"$user", public`
 		cs.Vars["timezone"] = "UTC"

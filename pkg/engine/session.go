@@ -74,6 +74,7 @@ type ClientSession struct {
 	Session         storage.Session
 	TxMgr           *tx.Manager // dedicated transaction manager and command serializer (SSOT)
 	Vars            map[string]any
+	LocalVars       map[string]any              // transaction-local variables (set via set_config(..., true) or SET LOCAL), wiped on COMMIT/ROLLBACK
 	VarTypes        map[string]storage.DataType // @var -> declared storage data type (e.g. TypeInt)
 	VarLengths      map[string]int              // @var -> max length constraint (e.g. VARCHAR(1))
 	TableVars       map[string]string           // @table_var -> physical table name

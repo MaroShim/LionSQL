@@ -118,7 +118,20 @@ func TestPgCompatibility_SessionSettingsParity(t *testing.T) {
 		t.Fatalf("unexpected current_setting('search_path'): %+v", curRes.Rows)
 	}
 
-	// 3. SET_CONFIG('timezone', 'Asia/Seoul', false) updates session variable
+	// 3. SET_CONFIG with 2 arguments (defaults to is_local = false)
+	setCfg2Res, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT set_config('work_mem', '64MB');")
+	if err != nil {
+		t.Fatalf("failed set_config with 2 args: %v", err)
+	}
+	if len(setCfg2Res.Rows) == 0 || setCfg2Res.Rows[0]["set_config"] != "64MB" {
+		t.Fatalf("unexpected set_config with 2 args result: %+v", setCfg2Res.Rows)
+	}
+	wmRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('work_mem');")
+	if err != nil || len(wmRes.Rows) == 0 || wmRes.Rows[0]["current_setting"] != "64MB" {
+		t.Fatalf("expected current_setting('work_mem') to be 64MB: %+v, err: %v", wmRes.Rows, err)
+	}
+
+	// 4. SET_CONFIG('timezone', 'Asia/Seoul', false) updates session variable
 	setCfgRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT set_config('timezone', 'Asia/Seoul', false);")
 	if err != nil {
 		t.Fatalf("failed set_config: %v", err)
@@ -143,5 +156,61 @@ func TestPgCompatibility_SessionSettingsParity(t *testing.T) {
 	}
 	if len(showTzRes.Rows) == 0 || showTzRes.Rows[0]["timezone"] != "Asia/Seoul" {
 		t.Fatalf("unexpected SHOW timezone: %+v", showTzRes.Rows)
+	}
+
+	// 5. Transaction-Local Configuration (is_local = true and SET LOCAL)
+	// Begin transaction
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "BEGIN;"); err != nil {
+		t.Fatalf("failed BEGIN: %v", err)
+	}
+
+	// Set local timezone via set_config(..., true)
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT set_config('timezone', 'Europe/Paris', true);"); err != nil {
+		t.Fatalf("failed set_config local: %v", err)
+	}
+
+	// Inside transaction, timezone should be Europe/Paris
+	inTxTz, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('timezone');")
+	if err != nil || len(inTxTz.Rows) == 0 || inTxTz.Rows[0]["current_setting"] != "Europe/Paris" {
+		t.Fatalf("expected in-tx timezone Europe/Paris, got: %+v", inTxTz.Rows)
+	}
+
+	// Also test SET LOCAL search_path
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SET LOCAL search_path TO test_schema;"); err != nil {
+		t.Fatalf("failed SET LOCAL search_path: %v", err)
+	}
+	inTxSp, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SHOW search_path;")
+	if err != nil || len(inTxSp.Rows) == 0 || inTxSp.Rows[0]["search_path"] != "test_schema" {
+		t.Fatalf("expected in-tx search_path test_schema, got: %+v", inTxSp.Rows)
+	}
+
+	// Commit transaction: local variables should be discarded and revert to session defaults
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "COMMIT;"); err != nil {
+		t.Fatalf("failed COMMIT: %v", err)
+	}
+
+	postTz, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('timezone');")
+	if err != nil || len(postTz.Rows) == 0 || postTz.Rows[0]["current_setting"] != "Asia/Seoul" {
+		t.Fatalf("expected post-commit timezone to revert to Asia/Seoul, got: %+v", postTz.Rows)
+	}
+
+	postSp, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SHOW search_path;")
+	if err != nil || len(postSp.Rows) == 0 || postSp.Rows[0]["search_path"] != "myschema, public" {
+		t.Fatalf("expected post-commit search_path to revert to myschema, public, got: %+v", postSp.Rows)
+	}
+
+	// Also verify ROLLBACK discards local variables
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "BEGIN;"); err != nil {
+		t.Fatalf("failed BEGIN 2: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT set_config('timezone', 'America/New_York', true);"); err != nil {
+		t.Fatalf("failed set_config local: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "ROLLBACK;"); err != nil {
+		t.Fatalf("failed ROLLBACK: %v", err)
+	}
+	rollbackTz, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, "SELECT current_setting('timezone');")
+	if err != nil || len(rollbackTz.Rows) == 0 || rollbackTz.Rows[0]["current_setting"] != "Asia/Seoul" {
+		t.Fatalf("expected post-rollback timezone to revert to Asia/Seoul, got: %+v", rollbackTz.Rows)
 	}
 }

@@ -1093,9 +1093,15 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 
 		if cs != nil {
 			cs.Mu.Lock()
-			v, exists := cs.Vars[paramNorm]
+			v, exists := cs.LocalVars[paramNorm]
 			if !exists {
-				v, exists = cs.Vars[paramLower]
+				v, exists = cs.LocalVars[paramLower]
+			}
+			if !exists {
+				v, exists = cs.Vars[paramNorm]
+				if !exists {
+					v, exists = cs.Vars[paramLower]
+				}
 			}
 			cs.Mu.Unlock()
 			if exists && v != nil {
@@ -1130,11 +1136,26 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		if len(parts) >= 2 {
 			param := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
 			newVal := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			isLocal := false
+			if len(parts) >= 3 {
+				rawLocal := strings.Trim(strings.TrimSpace(parts[2]), "'\"")
+				if strings.EqualFold(rawLocal, "true") || strings.EqualFold(rawLocal, "t") || rawLocal == "1" || strings.EqualFold(rawLocal, "on") {
+					isLocal = true
+				}
+			}
 			paramNorm := strings.ReplaceAll(strings.ToLower(param), " ", "_")
 			if cs != nil {
 				cs.Mu.Lock()
-				cs.Vars[paramNorm] = newVal
-				cs.Vars[param] = newVal
+				if isLocal {
+					if cs.LocalVars == nil {
+						cs.LocalVars = make(map[string]any)
+					}
+					cs.LocalVars[paramNorm] = newVal
+					cs.LocalVars[param] = newVal
+				} else {
+					cs.Vars[paramNorm] = newVal
+					cs.Vars[param] = newVal
+				}
 				cs.Mu.Unlock()
 			}
 			return newVal, "set_config"
