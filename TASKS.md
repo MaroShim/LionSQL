@@ -36,7 +36,7 @@
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `Post-1.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.95.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.97.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `Post-1.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-WT-FILE-LAYOUT-1`** | `v0.94.0` | Storage | P2 | WiredTiger 물리 파일 레이아웃(테이블별 파일 vs 단일 파일) 및 세컨더리 인덱스 멀티플렉싱(인덱스별 vs 테이블당 1개 vs 테이블 파일 합본) 아키텍처 설계 및 전환 | [`notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md`](notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md) |  |
@@ -329,7 +329,7 @@
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.97.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.97.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `COMPLETED` | **`FEAT-TRI-STATE-COLUMN-RESOLUTION-1`** |  | Planner | P1 | Validator 삼가 상태 컬럼 결정(존재 확정, 부존재 확정, 판단 불가) 및 파생 테이블 Closed/Open 스키마 구축 |  |  |
 | `PENDING` | **`FEAT-TSQL-CREATE-SYNONYM-1`** | `v1.2.0` | Engine | P3 | T-SQL CREATE SYNONYM 동의어 객체 지원 |  |  |
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
@@ -795,8 +795,7 @@
 ### [DONE] 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 `ARCH-AST-ROUTING-REFACTORING-1`
 - **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-26 06:02:57
 - **Milestone**: `v0.98.0`
-- **Plan Doc**: [`notes/plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)
-- **완료 및 종결 내용**: Commit `03d0457` (`ROUTING-AST-CATALOG-1`) 및 `04999d94` (`ARCH-VDBE-ROUTING-1`)를 통해 `proc.ExtractQueryCharacteristics` 및 `virtual.IsVirtualTable` 심볼 테이블을 구축하여 엔진/와이어 전역의 45개 문자열 휴리스틱을 완전 제거하고 AST 기반 통합 라우팅을 100% 기구현 완료함.
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
 
@@ -898,8 +897,8 @@
 ---
 
 ### [PENDING] 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 `ARCH-UNIFIED-TUPLE-PROTOCOL-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 10:46:03
-- **Milestone**: `v0.97.0`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-26 06:06:37
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
 
 ---
@@ -3722,8 +3721,8 @@ WiredTiger C MVCC(WT_ROLLBACK)와의 물리적 불일치 및 In-Memory OCC 락�
 
 ---
 
-### [PENDING] Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 `FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:53:04
+### [DONE] Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 `FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 06:12:30
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
@@ -5374,8 +5373,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing `PERF-JOIN-SWISS-TABLE-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 05:52:40
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
-- **통합 및 종결 사유**: Go 1.24+ (현재 런타임 `go1.27.4`)에서 표준 `runtime.map`이 이미 C++ Abseil Swiss Table 기반으로 재작성되어 있으므로 범용 Swiss Table 래핑은 불필요(Spec-Out). 본 태스크의 본질인 "포인터 추적 및 GC 스캔 제거를 위한 평면 배열 기반 해시 조인"은 Post-1.0의 `PERF-COMPLEX-QUERY-2` (Open-Addressing 정수 플랫 해시 조인)로 단일화 및 통합 완료됨.
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 
