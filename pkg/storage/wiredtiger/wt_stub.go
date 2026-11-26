@@ -11,7 +11,7 @@ import (
 )
 
 // WiredTigerOpenConfig defines the canonical, verified configuration passed to wiredtiger_open.
-const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)"
+const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),eviction_dirty_target=80,eviction_dirty_trigger=95,checkpoint=(wait=60),log=(enabled=true)"
 
 // BuildWiredTigerOpenConfig dynamically constructs a verified configuration passed to wiredtiger_open.
 func BuildWiredTigerOpenConfig(cacheSize string, sessionMax int) string {
@@ -21,7 +21,7 @@ func BuildWiredTigerOpenConfig(cacheSize string, sessionMax int) string {
 	if sessionMax <= 0 {
 		sessionMax = 2000
 	}
-	cfg := fmt.Sprintf("create,cache_size=%s,session_max=%d,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)", cacheSize, sessionMax)
+	cfg := fmt.Sprintf("create,cache_size=%s,session_max=%d,eviction=(threads_min=4,threads_max=8),eviction_dirty_target=80,eviction_dirty_trigger=95,checkpoint=(wait=60),log=(enabled=true)", cacheSize, sessionMax)
 	if strings.Contains(cfg, "transaction_sync") {
 		panic("ILLEGAL WIREDTIGER CONFIG: 'transaction_sync' is strictly prohibited in LionSQL")
 	}

@@ -460,6 +460,11 @@ func TestWiredTiger_CursorPoolingAndReset(t *testing.T) {
 		}
 	}
 
+	// Within active tx, cursor is cached on tx; closing tx returns it to session pool
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
 	// Pool should have 1 idle cursor for table:items
 	wtSess.mu.Lock()
 	poolCount := len(wtSess.cursorPool["table:items"])
@@ -468,6 +473,12 @@ func TestWiredTiger_CursorPoolingAndReset(t *testing.T) {
 	if poolCount != 1 || allCount != 1 {
 		t.Fatalf("expected 1 pooled cursor and 1 total cursor, got pool=%d, all=%d", poolCount, allCount)
 	}
+
+	tx2, err = sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx2.Rollback()
 
 	// 2. Verify Scan cursor pooling and release
 	for loop := 0; loop < 5; loop++ {

@@ -632,7 +632,7 @@ func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
 // (146,000 TPS -> 4,800 TPS). Full ACID crash durability is 100% guaranteed via log=(enabled=true),
 // automatic 60s checkpoints, and LionSQL's startPeriodicSync / syncUpTo group commit architecture
 // (verified across 10/10 rounds of abrupt SIGKILL crash tests with zero acknowledged data loss).
-const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)"
+const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),eviction_dirty_target=80,eviction_dirty_trigger=95,checkpoint=(wait=60),log=(enabled=true)"
 
 // BuildWiredTigerOpenConfig dynamically constructs a verified configuration passed to wiredtiger_open
 // with custom cache_size and session_max, strictly maintaining Invariant 10 ([RULE:RadicalKISS / Invariant 10]).
@@ -643,7 +643,7 @@ func BuildWiredTigerOpenConfig(cacheSize string, sessionMax int) string {
 	if sessionMax <= 0 {
 		sessionMax = 2000
 	}
-	cfg := fmt.Sprintf("create,cache_size=%s,session_max=%d,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)", cacheSize, sessionMax)
+	cfg := fmt.Sprintf("create,cache_size=%s,session_max=%d,eviction=(threads_min=4,threads_max=8),eviction_dirty_target=80,eviction_dirty_trigger=95,checkpoint=(wait=60),log=(enabled=true)", cacheSize, sessionMax)
 	if strings.Contains(cfg, "transaction_sync") {
 		panic("ILLEGAL WIREDTIGER CONFIG: 'transaction_sync' is strictly prohibited in LionSQL (causes 96% concurrency throughput collapse)")
 	}
@@ -2642,6 +2642,35 @@ type WTTx struct {
 	openCursors       []storage.Cursor
 	testFailIndexOp   func(op string, idxName string) error
 	readCache         *storage.TxReadCache
+	txCursors         map[string]*C.WT_CURSOR
+}
+
+// getTxCursor returns a cached cursor for uri within this transaction, acquiring one from
+// the session pool on first access and keeping it alive until tx commit/rollback.
+func (tx *WTTx) getTxCursor(uri string) (*C.WT_CURSOR, error) {
+	if cur, ok := tx.txCursors[uri]; ok {
+		return cur, nil
+	}
+	cur, err := tx.sess.acquireCursor(uri)
+	if err != nil {
+		return nil, err
+	}
+	if tx.txCursors == nil {
+		tx.txCursors = make(map[string]*C.WT_CURSOR, 4)
+	}
+	tx.txCursors[uri] = cur
+	return cur, nil
+}
+
+// releaseTxCursors resets all transaction-cached cursors and returns them to the session pool.
+func (tx *WTTx) releaseTxCursors() {
+	if len(tx.txCursors) == 0 {
+		return
+	}
+	for uri, cur := range tx.txCursors {
+		tx.sess.releaseCursor(uri, cur)
+	}
+	tx.txCursors = nil
 }
 
 func (tx *WTTx) closeOpenCursorsLocked() {
@@ -3231,11 +3260,10 @@ func (tx *WTTx) insertRowLocked(tableName string, tbl *storage.TableSchema, row 
 
 	pkStr := pkVal.String()
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -3304,18 +3332,16 @@ func (tx *WTTx) insertRowLocked(tableName string, tbl *storage.TableSchema, row 
 				}
 			}
 			idxURI := tbl.IndexFileURI()
-			idxCur, err := tx.sess.acquireCursor(idxURI)
+			idxCur, err := tx.getTxCursor(idxURI)
 			if err != nil {
 				rollbackInserted()
 				return err
 			}
 			k, v, _ := formatIndexKeyValueFromRow(tbl, row, &idx, pkStr)
 			if err := insertIndexEntry(idxCur, k, v); err != nil {
-				tx.sess.releaseCursor(idxURI, idxCur)
 				rollbackInserted()
 				return err
 			}
-			tx.sess.releaseCursor(idxURI, idxCur)
 			img := storage.IndexImage{
 				URI:   idxURI,
 				Key:   k,
@@ -3405,11 +3431,10 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 
 	pkStr := pkVal.String()
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -3478,18 +3503,16 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 				}
 			}
 			idxURI := tbl.IndexFileURI()
-			idxCur, err := tx.sess.acquireCursor(idxURI)
+			idxCur, err := tx.getTxCursor(idxURI)
 			if err != nil {
 				rollbackInserted()
 				return err
 			}
 			k, v, _ := formatIndexKeyValue(record, &idx, pkStr)
 			if err := insertIndexEntry(idxCur, k, v); err != nil {
-				tx.sess.releaseCursor(idxURI, idxCur)
 				rollbackInserted()
 				return err
 			}
-			tx.sess.releaseCursor(idxURI, idxCur)
 			img := storage.IndexImage{
 				URI:   idxURI,
 				Key:   k,
@@ -3605,11 +3628,10 @@ func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) e
 		}
 
 		uri := tbl.TableURI()
-		cur, err := tx.sess.acquireCursor(uri)
+		cur, err := tx.getTxCursor(uri)
 		if err != nil {
 			return err
 		}
-		defer tx.sess.releaseCursor(uri, cur)
 
 		bufPtr := storage.GetTupleBuffer()
 		defer storage.PutTupleBuffer(bufPtr)
@@ -3724,11 +3746,10 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	}
 
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -3803,38 +3824,33 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 				continue
 			}
 			idxURI := tbl.IndexFileURI()
-			idxCur, err := tx.sess.acquireCursor(idxURI)
+			idxCur, err := tx.getTxCursor(idxURI)
 			if err != nil {
 				rollbackUpdated()
 				return err
 			}
 			if tx.testFailIndexOp != nil {
 				if err := tx.testFailIndexOp("remove", idx.Name); err != nil {
-					tx.sess.releaseCursor(idxURI, idxCur)
 					rollbackUpdated()
 					return err
 				}
 			}
 			if err := removeIndexEntry(idxCur, oldKey); err != nil {
-				tx.sess.releaseCursor(idxURI, idxCur)
 				rollbackUpdated()
 				return err
 			}
 			if tx.testFailIndexOp != nil {
 				if err := tx.testFailIndexOp("insert", idx.Name); err != nil {
 					_ = insertIndexEntry(idxCur, oldKey, oldVal)
-					tx.sess.releaseCursor(idxURI, idxCur)
 					rollbackUpdated()
 					return err
 				}
 			}
 			if err := insertIndexEntry(idxCur, newKey, newVal); err != nil {
 				_ = insertIndexEntry(idxCur, oldKey, oldVal)
-				tx.sess.releaseCursor(idxURI, idxCur)
 				rollbackUpdated()
 				return err
 			}
-			tx.sess.releaseCursor(idxURI, idxCur)
 			undos = append(undos, idxUpdateUndo{
 				uri:    idxURI,
 				oldKey: oldKey,
@@ -3936,11 +3952,10 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	}
 
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	pkStr := pk.String()
 	var keyBuf [256]byte
@@ -3994,18 +4009,16 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 				}
 			}
 			idxURI := tbl.IndexFileURI()
-			idxCur, err := tx.sess.acquireCursor(idxURI)
+			idxCur, err := tx.getTxCursor(idxURI)
 			if err != nil {
 				rollbackDeleted()
 				return err
 			}
 			k, v, _ := formatIndexKeyValue(existingRec, &idx, pkStr)
 			if err := removeIndexEntry(idxCur, k); err != nil {
-				tx.sess.releaseCursor(idxURI, idxCur)
 				rollbackDeleted()
 				return err
 			}
-			tx.sess.releaseCursor(idxURI, idxCur)
 			img := storage.IndexImage{
 				URI:   idxURI,
 				Key:   k,
@@ -4059,7 +4072,7 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 		}
 
 		idxURI := tbl.IndexFileURI()
-		cur, err := tx.sess.acquireCursor(idxURI)
+		cur, err := tx.getTxCursor(idxURI)
 		if err != nil {
 			return err
 		}
@@ -4078,13 +4091,11 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 				existingPK := string(unsafe.Slice((*byte)(pValData), int(valSz)))
 				if existingPK != pkStr {
 					C.go_wt_cursor_reset(cur)
-					tx.sess.releaseCursor(idxURI, cur)
 					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 				}
 			}
 		}
 		C.go_wt_cursor_reset(cur)
-		tx.sess.releaseCursor(idxURI, cur)
 	}
 	return nil
 }
@@ -4107,7 +4118,7 @@ func (tx *WTTx) checkUniqueIndexesFromRowLocked(tableName string, tbl *storage.T
 		}
 
 		idxURI := tbl.IndexFileURI()
-		cur, err := tx.sess.acquireCursor(idxURI)
+		cur, err := tx.getTxCursor(idxURI)
 		if err != nil {
 			return err
 		}
@@ -4126,13 +4137,11 @@ func (tx *WTTx) checkUniqueIndexesFromRowLocked(tableName string, tbl *storage.T
 				existingPK := string(unsafe.Slice((*byte)(pValData), int(valSz)))
 				if existingPK != pkStr {
 					C.go_wt_cursor_reset(cur)
-					tx.sess.releaseCursor(idxURI, cur)
 					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 				}
 			}
 		}
 		C.go_wt_cursor_reset(cur)
-		tx.sess.releaseCursor(idxURI, cur)
 	}
 	return nil
 }
@@ -4351,11 +4360,10 @@ func (tx *WTTx) getRawBytesToBufferLocked(tableName string, pk storage.Value, ta
 	}
 
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	pkStr := pk.String()
 	var keyBuf [256]byte
@@ -5000,6 +5008,7 @@ func (tx *WTTx) Commit() error {
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
 	defer tx.closeOpenCursorsLocked()
+	defer tx.releaseTxCursors()
 	if tx.readCache != nil {
 		tx.readCache.Reset()
 	}
@@ -5016,6 +5025,7 @@ func (tx *WTTx) Commit() error {
 		if tempTx != nil {
 			_ = tempTx.Rollback()
 		}
+		tx.releaseTxCursors()
 		_ = C.go_wt_session_rollback(tx.sess.sess, nil)
 		_ = C.go_wt_session_reset(tx.sess.sess)
 		tx.sess.mu.Lock()
@@ -5032,6 +5042,7 @@ func (tx *WTTx) Commit() error {
 			tempTx := tx.tempTx
 			tx.tempTx = nil
 			_ = tempTx.Rollback()
+			tx.releaseTxCursors()
 			_ = C.go_wt_session_rollback(tx.sess.sess, nil)
 			_ = C.go_wt_session_reset(tx.sess.sess)
 			tx.sess.mu.Lock()
@@ -5060,6 +5071,7 @@ func (tx *WTTx) Commit() error {
 				if tempTx != nil {
 					_ = tempTx.Rollback()
 				}
+				tx.releaseTxCursors()
 				_ = C.go_wt_session_rollback(tx.sess.sess, nil)
 				_ = C.go_wt_session_reset(tx.sess.sess)
 				tx.sess.mu.Lock()
@@ -5086,6 +5098,7 @@ func (tx *WTTx) Commit() error {
 	tempTx := tx.tempTx
 	tx.tempTx = nil
 
+	tx.releaseTxCursors()
 	tx.sess.resetCursors()
 
 	var commitCfg *C.char
@@ -5161,6 +5174,7 @@ func (tx *WTTx) Rollback() error {
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
 	defer tx.closeOpenCursorsLocked()
+	defer tx.releaseTxCursors()
 	if tx.readCache != nil {
 		tx.readCache.Reset()
 	}
@@ -5181,6 +5195,7 @@ func (tx *WTTx) Rollback() error {
 	tempTx := tx.tempTx
 	tx.tempTx = nil
 
+	tx.releaseTxCursors()
 	tx.sess.resetCursors()
 
 	ret := C.go_wt_session_rollback(tx.sess.sess, nil)
@@ -5429,11 +5444,10 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 		return err
 	}
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	pkStr := pk.String()
 	var keyBuf [256]byte
@@ -5502,11 +5516,10 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 		return err
 	}
 	uri := tbl.TableURI()
-	cur, err := tx.sess.acquireCursor(uri)
+	cur, err := tx.getTxCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer tx.sess.releaseCursor(uri, cur)
 
 	pkStr := pk.String()
 	var keyBuf [256]byte
