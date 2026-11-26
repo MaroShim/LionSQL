@@ -558,11 +558,8 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 				cs.Mu.Lock()
 				cs.sessInUse = false
 				cs.lastUsedAt = time.Now()
-				drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+				drainSess, drainFn := cs.checkAndDrainClosedLocked()
 				cs.Mu.Unlock()
-				if drainTx != nil {
-					_ = drainTx.Rollback()
-				}
 				if drainFn != nil {
 					drainFn(drainSess)
 				}
@@ -719,10 +716,8 @@ func (c *Coordinator) CloseSession(id string) {
 
 		cs.Mu.Lock()
 		inFlight := cs.activeQueries > 0 || cs.sessInUse
-		var immediateTx storage.Transaction
 		var immediateTxMgr *tx.Manager
 		if !inFlight {
-			immediateTx = cs.Tx()
 			immediateTxMgr = cs.TxMgr
 		}
 
@@ -752,11 +747,9 @@ func (c *Coordinator) CloseSession(id string) {
 		}
 		cs.Mu.Unlock()
 
-		// Rollback immediate transaction outside lock ([RULE:LockHierarchy])
+		// Rollback immediate transaction outside lock strictly via TxMgr (SSOT)
 		if immediateTxMgr != nil {
 			_ = immediateTxMgr.Rollback(context.Background())
-		} else if immediateTx != nil {
-			_ = immediateTx.Rollback()
 		}
 
 		// 3. Drop tables outside cs.Mu lock to prevent lock hierarchy deadlocks
@@ -811,13 +804,9 @@ func (c *Coordinator) ResetSessionWithOptions(id string, opts SessionResetOption
 		clear(cs.Cursors)
 	}
 
-	// 1-2. Snapshot transaction handle to rollback outside lock ([RULE:LockHierarchy])
-	var (
-		txToRollback    storage.Transaction
-		txMgrToRollback *tx.Manager
-	)
+	// 1-2. Snapshot transaction manager to rollback outside lock ([RULE:LockHierarchy])
+	var txMgrToRollback *tx.Manager
 	if opts.ResetTx && cs.Tx() != nil {
-		txToRollback = cs.Tx()
 		txMgrToRollback = cs.TxMgr
 		cs.ResetTranCount()
 		cs.ClearTxFailed()
@@ -863,11 +852,9 @@ func (c *Coordinator) ResetSessionWithOptions(id string, opts SessionResetOption
 
 	cs.Mu.Unlock()
 
-	// Step 3: Rollback transaction outside lock ([RULE:LockHierarchy])
+	// Step 3: Rollback transaction outside lock strictly via TxMgr (SSOT)
 	if txMgrToRollback != nil {
 		_ = txMgrToRollback.Rollback(context.Background())
-	} else if txToRollback != nil {
-		_ = txToRollback.Rollback()
 	}
 
 	// Step 4: Drop physical temp tables outside lock

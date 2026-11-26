@@ -296,12 +296,16 @@ func SubstituteParamsSinglePass(query string, bindings map[string]string) string
 			closeIdx := -1
 			for j := i + 1; j < len(runes); j++ {
 				if runes[j] == ']' {
+					if j+1 < len(runes) && runes[j+1] == ']' {
+						j++
+						continue
+					}
 					closeIdx = j
 					break
 				}
 			}
 			if closeIdx != -1 {
-				ident := strings.ToLower(string(runes[i+1 : closeIdx]))
+				ident := strings.ToLower(strings.ReplaceAll(string(runes[i+1:closeIdx]), "]]", "]"))
 				if rep, ok := normBindings[ident]; ok {
 					b.WriteString(rep)
 					i = closeIdx + 1
@@ -404,12 +408,16 @@ func SubstituteIdentsSinglePass(query string, bindings map[string]string) string
 			closeIdx := -1
 			for j := i + 1; j < len(runes); j++ {
 				if runes[j] == ']' {
+					if j+1 < len(runes) && runes[j+1] == ']' {
+						j++
+						continue
+					}
 					closeIdx = j
 					break
 				}
 			}
 			if closeIdx != -1 {
-				ident := strings.ToLower(string(runes[i+1 : closeIdx]))
+				ident := strings.ToLower(strings.ReplaceAll(string(runes[i+1:closeIdx]), "]]", "]"))
 				if rep, ok := normBindings[ident]; ok {
 					b.WriteString(rep)
 				} else {

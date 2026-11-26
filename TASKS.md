@@ -444,7 +444,7 @@
 | `DONE` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-USE-ENVCHANGE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-TOKENIZER-ESCAPED-BRACKET-DOLLAR-QUOTE-1`** | `v0.95.0` | Parser | P1 | MSSQL 이스케이프 대괄호(]]) 및 PG 달러 쿼트($$) 파서 토크나이저 정합성 지원 |  |  |
+| `DONE` | **`FIX-TOKENIZER-ESCAPED-BRACKET-DOLLAR-QUOTE-1`** | `v0.95.0` | Parser | P1 | MSSQL 이스케이프 대괄호(]]) 및 PG 달러 쿼트($$) 파서 토크나이저 정합성 지원 |  |  |
 | `DONE` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `v0.94.0` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1`** | `v0.94.0` | Engine | P1 | 트리거 INSERTED/DELETED 가상 테이블 시스템 숨김 컬럼(_row_id) 필터링 |  |  |
@@ -4481,8 +4481,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] MSSQL 이스케이프 대괄호(]]) 및 PG 달러 쿼트($$) 파서 토크나이저 정합성 지원 `FIX-TOKENIZER-ESCAPED-BRACKET-DOLLAR-QUOTE-1`
-- **Domain**: Parser | **Priority**: P1 | **Updated**: 2026-11-26 00:30:58
+### [DONE] MSSQL 이스케이프 대괄호(]]) 및 PG 달러 쿼트($$) 파서 토크나이저 정합성 지원 `FIX-TOKENIZER-ESCAPED-BRACKET-DOLLAR-QUOTE-1`
+- **Domain**: Parser | **Priority**: P1 | **Updated**: 2026-11-26 00:39:43
 - **Milestone**: `v0.95.0`
 
 ---

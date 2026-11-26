@@ -528,13 +528,10 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 				cs.QueryCtx = nil
 				cs.RunningQuery = ""
 			}
-			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
 			if lastActive {
 				cs.ClearCancel()
-			}
-			if drainTx != nil {
-				_ = drainTx.Rollback()
 			}
 			if drainFn != nil {
 				drainFn(drainSess)
@@ -757,8 +754,19 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if err := s.ensureClientStorageSession(cs); err != nil {
 		return err
 	}
+
+	// Canonical Lock Hierarchy: Layer 1 (TxMgr.Lock) -> Layer 2 (cs.Mu.Lock)
+	if cs.TxMgr != nil {
+		cs.TxMgr.Lock()
+		defer cs.TxMgr.Unlock()
+	}
+	return s.beginSessionTxUnderTxMgrLock(cs, opts)
+}
+
+func (s *Coordinator) beginSessionTxUnderTxMgrLock(cs *ClientSession, opts storage.TxOptions) error {
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
+
 	cs.lastUsedAt = time.Now()
 	if cs.closed {
 		return fmt.Errorf("session %s is closed", cs.ID)
@@ -799,9 +807,19 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	if err != nil {
 		return err
 	}
+
+	// Canonical Lock Hierarchy: Layer 1 (TxMgr.Lock) -> Layer 2 (cs.Mu.Lock)
+	if cs.TxMgr != nil {
+		cs.TxMgr.Lock()
+		defer cs.TxMgr.Unlock()
+	}
+	return s.commitSessionTxUnderTxMgrLock(cs)
+}
+
+func (s *Coordinator) commitSessionTxUnderTxMgrLock(cs *ClientSession) error {
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
-	if cs.Tx() == nil {
+	if cs.Tx() == nil && (cs.TxMgr == nil || !cs.TxMgr.InTransaction()) {
 		cs.Mu.Unlock()
 		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 	}
@@ -843,12 +861,43 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return nil
 	}
 
+	// Unlock cs.Mu during TxMgr.Commit to avoid holding session mutex during physical I/O/fsync,
+	// while keeping cs.TxMgr.Lock held (Layer 1) to guarantee strict session command serialization.
 	tx := cs.Tx()
 	txMgr := cs.TxMgr
+	cs.Mu.Unlock()
+
+	var commitErr error
+	if txMgr != nil {
+		commitErr = txMgr.Commit(context.Background())
+	} else if tx != nil {
+		defer tx.Rollback()
+		commitErr = tx.Commit()
+	}
+
+	if commitErr != nil {
+		cs.Mu.Lock()
+		if cs.TxMgr != nil {
+			cs.TxMgr.SetInError(commitErr)
+		}
+		cs.Mu.Unlock()
+
+		if s.Metrics() != nil {
+			if errors.Is(commitErr, storage.ErrSerializationFailure) {
+				s.Metrics().RecordTransaction("conflict")
+			} else {
+				s.Metrics().RecordTransaction("rollback")
+			}
+		}
+		return fmt.Errorf("commit error: %w", commitErr)
+	}
+
+	// Commit succeeded: atomically transition session state under cs.Mu.Lock
+	cs.Mu.Lock()
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
 	delete(cs.Vars, "transaction_read_only")
-	// Close non-WITH HOLD cursors on COMMIT
+	// Server Cursors: WITHOUT HOLD cursors are closed on COMMIT; WITH HOLD cursors remain open in session!
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
 			if !cur.WithHold {
@@ -860,23 +909,6 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		}
 	}
 	cs.Mu.Unlock()
-
-	if txMgr != nil {
-		err = txMgr.Commit(context.Background())
-	} else if tx != nil {
-		defer tx.Rollback()
-		err = tx.Commit()
-	}
-	if err != nil {
-		if s.Metrics() != nil {
-			if errors.Is(err, storage.ErrSerializationFailure) {
-				s.Metrics().RecordTransaction("conflict")
-			} else {
-				s.Metrics().RecordTransaction("rollback")
-			}
-		}
-		return fmt.Errorf("commit error: %w", err)
-	}
 
 	if s.Metrics() != nil {
 		s.Metrics().RecordTransaction("commit")
@@ -890,18 +922,39 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	if err != nil {
 		return err
 	}
+
+	// Canonical Lock Hierarchy: Layer 1 (TxMgr.Lock) -> Layer 2 (cs.Mu.Lock)
+	if cs.TxMgr != nil {
+		cs.TxMgr.Lock()
+		defer cs.TxMgr.Unlock()
+	}
+	return s.rollbackSessionTxUnderTxMgrLock(cs)
+}
+
+func (s *Coordinator) rollbackSessionTxUnderTxMgrLock(cs *ClientSession) error {
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
-	if cs.Tx() == nil {
+	if cs.Tx() == nil && (cs.TxMgr == nil || !cs.TxMgr.InTransaction()) {
 		cs.Mu.Unlock()
 		return fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 	}
+
 	tx := cs.Tx()
 	txMgr := cs.TxMgr
+	cs.Mu.Unlock()
+
+	var rollErr error
+	if txMgr != nil {
+		rollErr = txMgr.Rollback(context.Background())
+	} else if tx != nil {
+		rollErr = tx.Rollback()
+	}
+
+	cs.Mu.Lock()
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
 	delete(cs.Vars, "transaction_read_only")
-	// Close all cursors on ROLLBACK (per SQL standard lifecycle)
+	// Close all server cursors on ROLLBACK (per SQL standard lifecycle)
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
 			cur.IsOpen = false
@@ -912,13 +965,8 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	cs.Mu.Unlock()
 
-	if txMgr != nil {
-		err = txMgr.Rollback(context.Background())
-	} else if tx != nil {
-		err = tx.Rollback()
-	}
-	if err != nil {
-		return fmt.Errorf("rollback error: %w", err)
+	if rollErr != nil {
+		return fmt.Errorf("rollback error: %w", rollErr)
 	}
 	if s.Metrics() != nil {
 		s.Metrics().RecordTransaction("rollback")
@@ -1045,7 +1093,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 			opts.ReadOnly = false
 		}
-		if err := s.BeginSessionTx(cs.ID, opts); err != nil {
+		if err := s.beginSessionTxUnderTxMgrLock(cs, opts); err != nil {
 			return nil, err
 		}
 		return &QueryResult{
@@ -1057,7 +1105,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	if sqlutil.HasPrefixKeyword(trimmed, "COMMIT") {
-		if err := s.CommitSessionTx(cs.ID); err != nil {
+		if err := s.commitSessionTxUnderTxMgrLock(cs); err != nil {
 			return nil, err
 		}
 		return &QueryResult{
@@ -1164,7 +1212,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}, nil
 		}
 
-		if err := s.RollbackSessionTx(cs.ID); err != nil {
+		if err := s.rollbackSessionTxUnderTxMgrLock(cs); err != nil {
 			return nil, err
 		}
 		return &QueryResult{

@@ -559,6 +559,10 @@ func HasTopLevelOr(s string) bool {
 		}
 		if inBracket {
 			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
 				inBracket = false
 			}
 			continue
@@ -1326,11 +1330,29 @@ func SplitJoinCond(cond string) (string, string) {
 	return "", ""
 }
 
-// CleanIdentifier strips quotes (`"`, `'`), backticks (```), and brackets (`[`, `]`) from an identifier.
+// CleanIdentifier strips quotes (`"`, `'`), backticks (```), and brackets (`[`, `]`) from an identifier,
+// unescaping doubled delimiters (`]]` -> `]`, `""` -> `"`, `''` -> `'`).
 func CleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
 	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'") || strings.HasPrefix(s, "E'") || strings.HasPrefix(s, "e'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
 		s = s[2 : len(s)-1]
+		return strings.ReplaceAll(s, "''", "'")
+	}
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") && len(s) >= 2 {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "]]", "]")
+	}
+	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, `""`, `"`)
+	}
+	if strings.HasPrefix(s, "`") && strings.HasSuffix(s, "`") && len(s) >= 2 {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "``", "`")
+	}
+	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "''", "'")
 	}
 	return strings.Trim(s, "\"`'[]")
 }
@@ -2171,10 +2193,15 @@ func ReplaceCorrelatedTokens(s string, replacements map[string]string) string {
 				c := s[i]
 				if c == '[' {
 					i++
-					for i < n && s[i] != ']' {
-						i++
-					}
-					if i < n {
+					for i < n {
+						if s[i] == ']' {
+							if i+1 < n && s[i+1] == ']' {
+								i += 2
+								continue
+							}
+							i++
+							break
+						}
 						i++
 					}
 				} else if c == '"' || c == '`' {
@@ -2437,10 +2464,15 @@ func IsVolatileSubquery(sql string) bool {
 				c := sql[i]
 				if c == '[' {
 					i++
-					for i < n && sql[i] != ']' {
-						i++
-					}
-					if i < n {
+					for i < n {
+						if sql[i] == ']' {
+							if i+1 < n && sql[i+1] == ']' {
+								i += 2
+								continue
+							}
+							i++
+							break
+						}
 						i++
 					}
 				} else if c == '"' || c == '`' {
@@ -2470,9 +2502,10 @@ func IsVolatileSubquery(sql string) bool {
 	return false
 }
 
-// CleanIdentifierParts strips quotes from each dot-separated segment of an identifier.
+// CleanIdentifierParts strips quotes from each dot-separated segment of an identifier,
+// respecting dot characters inside brackets/quotes.
 func CleanIdentifierParts(name string) string {
-	parts := strings.Split(name, ".")
+	parts := SplitTopLevel(name, '.')
 	for i, p := range parts {
 		parts[i] = CleanIdentifier(p)
 	}

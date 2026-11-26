@@ -154,7 +154,7 @@ func CleanIdentifier(s string) string {
 	if dot := strings.LastIndex(raw, "."); dot != -1 {
 		raw = raw[dot+1:]
 	}
-	return strings.ToLower(strings.Trim(raw, "\"`[]"))
+	return strings.ToLower(sqlutil.CleanIdentifier(raw))
 }
 
 // SplitOnAnd splits a WHERE clause on top-level AND keywords,

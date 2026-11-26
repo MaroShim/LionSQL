@@ -274,3 +274,74 @@ func TestArch_LexerEncapsulation(t *testing.T) {
 	}
 }
 
+func TestLexer_BracketIdentifierEscaping(t *testing.T) {
+	input := "SELECT [id], [user]]name], [col]]]]val], [db].[schema].[tbl]]name] FROM [accounts]]archive];"
+	l := NewLexer(input)
+
+	expected := []struct {
+		typ TokenType
+		lit string
+	}{
+		{TokenSelect, "SELECT"},
+		{TokenIdent, "[id]"},
+		{TokenComma, ","},
+		{TokenIdent, "[user]]name]"},
+		{TokenComma, ","},
+		{TokenIdent, "[col]]]]val]"},
+		{TokenComma, ","},
+		{TokenIdent, "[db].[schema].[tbl]]name]"},
+		{TokenFrom, "FROM"},
+		{TokenIdent, "[accounts]]archive]"},
+		{TokenSemicolon, ";"},
+		{TokenEOF, ""},
+	}
+
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.typ {
+			t.Fatalf("[%d] expected token type %v, got %v (lit: %q)", i, exp.typ, tok.Type, tok.Literal)
+		}
+		if tok.Literal != exp.lit {
+			t.Fatalf("[%d] expected literal %q, got %q", i, exp.lit, tok.Literal)
+		}
+	}
+}
+
+func TestLexer_UnclosedBracketIdentifier(t *testing.T) {
+	input := "SELECT [unclosed_ident"
+	l := NewLexer(input)
+
+	_ = l.NextToken() // SELECT
+	tok := l.NextToken()
+	if tok.Type != TokenIllegal {
+		t.Fatalf("expected TokenIllegal for unclosed bracket identifier, got %v (lit: %q)", tok.Type, tok.Literal)
+	}
+	if tok.Literal != "[unclosed_ident" {
+		t.Fatalf("expected literal %q, got %q", "[unclosed_ident", tok.Literal)
+	}
+}
+
+func TestLexer_DollarQuotedString(t *testing.T) {
+	// 1. Properly closed dollar-quoted string
+	input := "$$hello world$$"
+	l := NewLexer(input)
+	tok := l.NextToken()
+	if tok.Type != TokenString {
+		t.Fatalf("expected TokenString, got %v", tok.Type)
+	}
+	if tok.Literal != "hello world" {
+		t.Fatalf("expected 'hello world', got %q", tok.Literal)
+	}
+
+	// 2. Unclosed dollar-quoted string must return TokenIllegal
+	inputUnclosed := "$$unclosed string literal"
+	l2 := NewLexer(inputUnclosed)
+	tok2 := l2.NextToken()
+	if tok2.Type != TokenIllegal {
+		t.Fatalf("expected TokenIllegal for unclosed $$, got %v (lit: %q)", tok2.Type, tok2.Literal)
+	}
+	if tok2.Literal != "$$unclosed string literal" {
+		t.Fatalf("expected literal %q, got %q", "$$unclosed string literal", tok2.Literal)
+	}
+}
+

@@ -464,11 +464,8 @@ func TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain(t *t
 		defer func() {
 			cs.Mu.Lock()
 			cs.activeQueries--
-			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
-			if drainTx != nil {
-				_ = drainTx.Rollback()
-			}
 			if drainFn != nil {
 				drainFn(drainSess)
 			}

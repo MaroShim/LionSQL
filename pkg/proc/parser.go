@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -216,10 +217,10 @@ func CleanSchemaPrefix(name string) string {
 			return s
 		}
 	}
-	parts := strings.Split(s, ".")
+	parts := sqlutil.SplitTopLevel(s, '.')
 	var cleanedParts []string
 	for _, p := range parts {
-		trimmed := strings.Trim(strings.TrimSpace(p), "[]\"'`")
+		trimmed := sqlutil.CleanIdentifier(p)
 		if trimmed != "" {
 			cleanedParts = append(cleanedParts, trimmed)
 		}

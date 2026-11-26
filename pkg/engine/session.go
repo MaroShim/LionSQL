@@ -129,23 +129,24 @@ func (cs *ClientSession) SetLastUsedAtForTest(t time.Time) {
 }
 
 // checkAndDrainClosedLocked checks whether the session was marked closed while queries were in-flight,
-// and if all queries have completed, detaches the session, clears any active transaction, and returns
-// the transaction to roll back, the storage session, and the drain release callback.
+// and if all queries have completed, detaches the session, rolls back any active transaction via TxMgr (SSOT),
+// and returns the storage session and the drain release callback.
 // MUST be called while holding cs.Mu.
-func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Transaction, storage.Session, func(storage.Session)) {
+func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Session, func(storage.Session)) {
 	if cs.closed && cs.activeQueries <= 0 && !cs.sessInUse {
-		drainTx := cs.Tx()
 		if cs.TxMgr != nil {
 			_ = cs.TxMgr.Rollback(context.Background())
+		} else if tx := cs.Tx(); tx != nil {
+			_ = tx.Rollback()
 		}
 
 		drainSess := cs.Session
 		drainFn := cs.releaseOnDrain
 		cs.Session = nil
 		cs.releaseOnDrain = nil
-		return drainTx, drainSess, drainFn
+		return drainSess, drainFn
 	}
-	return nil, nil, nil
+	return nil, nil
 }
 
 // GetQueryContext safely returns the active query context for this session, or context.Background() if none is set.
@@ -1018,11 +1019,8 @@ func (cs *ClientSession) ExecuteProgram(
 				}
 			}
 		}
-		drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+		drainSess, drainFn := cs.checkAndDrainClosedLocked()
 		cs.Mu.Unlock()
-		if drainTx != nil {
-			_ = drainTx.Rollback()
-		}
 		if drainFn != nil {
 			drainFn(drainSess)
 		}
@@ -1039,11 +1037,8 @@ func (cs *ClientSession) ExecuteProgram(
 			cs.sessInUse = false
 			cs.lastUsedAt = time.Now()
 			syncIdentity(res)
-			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
-			if drainTx != nil {
-				_ = drainTx.Rollback()
-			}
 			if drainFn != nil {
 				drainFn(drainSess)
 			}

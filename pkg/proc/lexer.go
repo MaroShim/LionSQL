@@ -224,7 +224,7 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 	case '[':
 		lit, closed := l.readBracketedIdentifier()
 		if !closed {
-			return Token{Type: TokenIllegal, Literal: "[" + lit, Line: tokLine, Col: tokCol}
+			return Token{Type: TokenIllegal, Literal: lit, Line: tokLine, Col: tokCol}
 		}
 		return Token{Type: TokenIdent, Literal: lit, Line: tokLine, Col: tokCol}
 	case '`':
@@ -380,7 +380,7 @@ func (l *Lexer) readDollarToken(tokLine, tokCol int) Token {
 			}
 			l.readChar()
 		}
-		return Token{Type: TokenString, Literal: l.input[startPos:l.pos], Line: tokLine, Col: tokCol}
+		return Token{Type: TokenIllegal, Literal: "$$" + l.input[startPos:l.pos], Line: tokLine, Col: tokCol}
 	}
 	if isDigit(l.peekChar()) {
 		startPos := l.pos
@@ -447,12 +447,17 @@ func (l *Lexer) readBracketedIdentifier() (string, bool) {
 
 func (l *Lexer) readBracketedSegment() bool {
 	l.readChar() // skip '['
-	for l.ch != ']' && l.ch != 0 {
+	for l.ch != 0 {
+		if l.ch == ']' {
+			if l.peekChar() == ']' {
+				l.readChar() // skip first ']'
+				l.readChar() // skip second ']'
+				continue
+			}
+			l.readChar() // skip closing ']'
+			return true
+		}
 		l.readChar()
-	}
-	if l.ch == ']' {
-		l.readChar() // skip ']'
-		return true
 	}
 	return false
 }

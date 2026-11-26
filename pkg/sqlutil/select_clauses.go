@@ -103,6 +103,10 @@ func SplitSelectClauses(sql string) SelectClauses {
 		}
 		if inBracket {
 			if ch == ']' {
+				if i+1 < n && sql[i+1] == ']' {
+					i++
+					continue
+				}
 				inBracket = false
 			}
 			continue

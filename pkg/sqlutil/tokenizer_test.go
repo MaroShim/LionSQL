@@ -794,4 +794,45 @@ func TestUnwrapOuterParens(t *testing.T) {
 	}
 }
 
+func TestCleanIdentifier_EscapedDelimiters(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"[simple]", "simple"},
+		{"[user]]name]", "user]name"},
+		{"[col]]]]val]", "col]]val"},
+		{`"quoted""name"`, `quoted"name`},
+		{"`back``tick`", "back`tick"},
+		{"'single''quote'", "single'quote"},
+		{"[col, with, commas]]and]brackets]", "col, with, commas]and]brackets"},
+	}
+
+	for _, tt := range tests {
+		got := CleanIdentifier(tt.input)
+		if got != tt.expected {
+			t.Errorf("CleanIdentifier(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestCleanIdentifierParts_EscapedDelimiters(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"[dbo].[tbl]", "dbo.tbl"},
+		{"[db].[schema].[table]]name]", "db.schema.table]name"},
+		{`"my""db"."schema"."tbl"`, `my"db.schema.tbl`},
+		{"[a.b].[c]]d]", "a.b.c]d"},
+	}
+
+	for _, tt := range tests {
+		got := CleanIdentifierParts(tt.input)
+		if got != tt.expected {
+			t.Errorf("CleanIdentifierParts(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
 

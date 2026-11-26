@@ -345,6 +345,10 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 		}
 		if inBracket {
 			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
 				inBracket = false
 			}
 			continue
@@ -661,6 +665,10 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 		}
 		if inBracket {
 			if ch == ']' {
+				if i+1 < n && sql[i+1] == ']' {
+					i++
+					continue
+				}
 				inBracket = false
 			}
 			continue
