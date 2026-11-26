@@ -58,7 +58,7 @@ func main() {
 	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
-	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
+	maxRetries := flag.Int("max-retries", 10, "Maximum transaction retries with exponential backoff on serialization conflict")
 	flag.Parse()
 	execution.InitRuntimeTuning(0, 0)
 
@@ -774,16 +774,16 @@ func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	fmt.Printf(" [Conflict Retries]     %10d total retries\n", totalRetries)
 	fmt.Println("--------------------------------------------------------------------------------")
 	fmt.Println(" Transaction Breakdown:")
-	fmt.Printf("   1. New-Order (45%%)    : %8d committed (%6.1f TPS) | %s\n",
-		noSuccess, float64(noSuccess)/elapsedSec, formatLatencies(no))
-	fmt.Printf("   2. Payment (43%%)      : %8d committed (%6.1f TPS) | %s\n",
-		paySuccess, float64(paySuccess)/elapsedSec, formatLatencies(pay))
-	fmt.Printf("   3. Order-Status (4%%)  : %8d committed (%6.1f TPS) | %s\n",
-		osSuccess, float64(osSuccess)/elapsedSec, formatLatencies(osStat))
-	fmt.Printf("   4. Delivery (4%%)      : %8d committed (%6.1f TPS) | %s\n",
-		delSuccess, float64(delSuccess)/elapsedSec, formatLatencies(del))
-	fmt.Printf("   5. Stock-Level (4%%)    : %8d committed (%6.1f TPS) | %s\n",
-		slSuccess, float64(slSuccess)/elapsedSec, formatLatencies(sl))
+	fmt.Printf("   1. New-Order (45%%)    : %8d committed (%6.1f TPS) | Abort: %6d | %s\n",
+		noSuccess, float64(noSuccess)/elapsedSec, no.abort.Load(), formatLatencies(no))
+	fmt.Printf("   2. Payment (43%%)      : %8d committed (%6.1f TPS) | Abort: %6d | %s\n",
+		paySuccess, float64(paySuccess)/elapsedSec, pay.abort.Load(), formatLatencies(pay))
+	fmt.Printf("   3. Order-Status (4%%)  : %8d committed (%6.1f TPS) | Abort: %6d | %s\n",
+		osSuccess, float64(osSuccess)/elapsedSec, osStat.abort.Load(), formatLatencies(osStat))
+	fmt.Printf("   4. Delivery (4%%)      : %8d committed (%6.1f TPS) | Abort: %6d | %s\n",
+		delSuccess, float64(delSuccess)/elapsedSec, del.abort.Load(), formatLatencies(del))
+	fmt.Printf("   5. Stock-Level (4%%)    : %8d committed (%6.1f TPS) | Abort: %6d | %s\n",
+		slSuccess, float64(slSuccess)/elapsedSec, sl.abort.Load(), formatLatencies(sl))
 	fmt.Println("================================================================================")
 }
 
