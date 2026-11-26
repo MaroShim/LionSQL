@@ -187,9 +187,9 @@ flowchart TD
 | 2 | `BINDER-EVOL-PHASE-2` | Architecture | **v0.95.0** | Qualified Column 및 미존재 테이블 별칭(`t3.id`) 사전 검증 통합 (완료) |
 | 3 | `BINDER-EVOL-PHASE-3` | Architecture | **v0.95.0** | JOIN ON 절 비한정 컬럼 모호성(`id = id`) 검증 및 스코프 확립 (완료) |
 | 4 | `BINDER-EVOL-PHASE-4` | Architecture | **v0.95.0** | DML Contract 실제 실행 경로 직결 (`NOT NULL`, `UPDATE SET` 대상/우변 검증) (완료) |
-| 5 | `BINDER-EVOL-PHASE-5` | Architecture | **v0.96.0** | `BoundAST` (`BoundSelectStmt`, `BoundExpr`) 아키텍처 공식 도입 및 플랫/조인 O(1) 슬롯 바인딩 |
-| 6 | `BINDER-EVOL-PHASE-6` | Architecture | **v0.96.0** | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (`ScopeContext` & `OuterLevel` 연동) |
-| 7 | `BINDER-EVOL-PHASE-7` | Architecture | **v0.97.0** | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 |
+| 5 | `BINDER-EVOL-PHASE-5` | Architecture | **Post-1.0 연기** | `BoundAST` 전면 도입 및 Volcano 연산자 전체 O(1) 정수 슬롯 치환 (2-Tier Hybrid 아키텍처 원칙에 따라 Post-1.0 후보 과제로 연기) |
+| 6 | `BINDER-EVOL-PHASE-6` | Architecture | **Post-1.0 연기** | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (`ScopeContext` & `OuterLevel` 연동) |
+| 7 | `BINDER-EVOL-PHASE-7` | Architecture | **Post-1.0 연기** | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 |
 
 ---
 

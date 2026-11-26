@@ -1,8 +1,9 @@
 # Bound AST & O(1) 정수 슬롯 바인딩 구현 계획서 (`notes/BOUND_AST_AND_INTEGER_SLOT_BINDING_PLAN.ko.md`)
 
-> **문서 상태**: Approved  
-> **관련 마일스톤**: `v0.96.0`  
+> **문서 상태**: Post-1.0 Deferred (후보 과제 연기)  
+> **관련 마일스톤**: `Post-1.0` (2-Tier Hybrid 실행 아키텍처 원칙에 따라 Volcano 전체 슬롯화는 1.0 이후로 연기)  
 > **관련 태스크**: `BINDER-EVOL-PHASE-5`  
+> **아키텍처 결정**: LionSQL은 이미 OLTP/프로시저/스칼라 경로에 $O(1)$ 정수 레지스터 기반의 VDBE VM(Tier 1)을 보유하고 있습니다. 복합 관계형 쿼리(Tier 2 Volcano)의 `map[string]any` 전체를 무리하게 갈아엎는 것은 과도한 회귀 리스크를 초래하므로, 0.96에서는 정렬/해시 조인의 내부 키 비교 국소 최적화 및 병렬 스캔(`ARCH-PARALLEL-SCAN-1`)에 집중하고, 전면 슬롯 바인딩은 1.0 이후 성능 고도화 후보 과제로 연기합니다.  
 > **불변식 원칙**: `[RULE:PlanPersistence]`, `[RULE:PipelineVerification]`, `[RULE:RadicalKISS]`, `[RULE:ModularAbstraction]`, `[RULE:ZeroAllocation]`
 
 ---

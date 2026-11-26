@@ -1,10 +1,10 @@
 # ORDER BY 성능 가속 및 정렬 생략(Order Bypass) 아키텍처 설계서 (`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`)
 
-> **문서 상태**: Approved  
+> **문서 상태**: 완료 (Completed)  
 > **관련 마일스톤**: `v0.96.0` (Performance Acceleration)  
 > **관련 태스크**:  
-> - `PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`  
-> - `PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`  
+> - `PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1` (완료)  
+> - `PERF-ORDER-BY-INDEX-SCAN-BYPASS-1` (완료)  
 > **불변식 원칙**: `[RULE:PlanPersistence]`, `[RULE:ContinuousBacklog]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:LatencyBudget]`
 
 ---
@@ -107,10 +107,10 @@ flowchart TD
 
 ## 3. 백로그 태스크 매핑
 
-| 순서 | 태스크 ID | 도메인 | 마일스톤 | 우선순위 | 작업 내용 |
-| :---: | :--- | :---: | :---: | :---: | :--- |
-| 1 | **`PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`** | Execution | `v0.96.0` | P1 | Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 구현 |
-| 2 | **`PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`** | Planner | `v0.96.0` | P1 | B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass 구현 |
+| 순서 | 태스크 ID | 도메인 | 마일스톤 | 우선순위 | 작업 내용 | 상태 |
+| :---: | :--- | :---: | :---: | :---: | :--- | :---: |
+| 1 | **`PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`** | Execution | `v0.96.0` | P1 | Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 구현 | **완료 (`75a83551`)** |
+| 2 | **`PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`** | Planner | `v0.96.0` | P1 | B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass 구현 | **완료 (`75a83551`)** |
 
 ---
 

@@ -46,6 +46,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | **16**| **`PERF-RESULT-ROW-STREAM-1`** | 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` 직결 | **중간 (★★☆)** | **중간 (Med)** | **매우 높음** | REST JSON API 및 레거시 호출부의 `res.Rows` 참조 하위 호환성 보장 | **Candidate (`v1.10.0`)** |
 | **17**| **`PERF-TDS-ZEROCOPY-FRAME-1`** | TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 패킷 프레이밍 | **중간 (★★☆)** | **국소 (Low)** | **중간~높음** | 다중 패킷 분할 시 EOM 상태 플래그 및 패킷 경계 오프셋 무결성 | **Candidate (`v1.10.0`)** |
 | **18**| **`PERF-CACHE-SHARD-1`** | `PlanCache` 및 세션 레지스트리 32-Shard 분할 (캐시라인 바운싱 제거) | **낮음~중간 (★☆☆~★★☆)** | **국소 (Low)** | **중간** | 샤드별 LRU 용량 배분 및 전체 캐시 플러시(`Clear`) 시 순차 락 획득 | **Candidate (`v1.10.0`)** |
+| **19**| **`BINDER-EVOL-PHASE-5`** | `BoundAST` 전면 도입 및 Volcano 연산자 전체 O(1) 정수 슬롯 치환 | **매우 높음 (★★★★)** | **광범위 (Critical)** | **중간 (VDBE 대체)** | 2-Tier Hybrid 실행 아키텍처에 따라 OLTP는 VDBE VM이 이미 O(1) 레지스터로 실행하므로, Volcano 전체 슬롯화는 1.0 이후 성능 고도화 단계로 연기 | **Candidate (`v1.10.0`)** |
 | **-** | **`FRIENDLY-SQL`** | DuckDB 스타일 편의 SQL (`* EXCLUDE`, `FROM tbl;` 등) | **낮음 (★☆☆)** | **국소 (Low)** | **기각 (Spec-Out)** | 오타 침묵 위험 및 RDBMS 엄격성 훼손 (LionSQL is NOT DuckDB 철학) | **영구 보류 (Spec-Out)** |
 
 ---
