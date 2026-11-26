@@ -99,7 +99,20 @@ To maintain engineering discipline, every wire protocol implementation in LionSQ
 - Layer 2 (Catalog Handshake): 30+ virtual system tables (`pg_class`, `pg_attribute`, `pg_namespace`, `pg_type`, `pg_index`, `pg_constraint`, `pg_proc`, `pg_stat_user_tables`) fully virtualized.
 - Verified Client Tools: DBeaver, Beekeeper Studio, Navicat, DataGrip, DbGate, HeidiSQL.
 
-### 4.2. Implementation Stopping Criteria
+### 4.2. Pragmatic Superset Dialect & Semantic Switching (`SET DIALECT`)
+Rather than rigid port-based silos (Babelfish model) or silent dialect mixing, LionSQL adopts the **Pragmatic Superset Architecture**:
+1. **Unified AST Parsing**: All syntax variants (`TOP` and `LIMIT`, `#temp` and `CREATE TEMP TABLE`, `OUTPUT` and `RETURNING`) parse cleanly into a single unified AST without wire-dependent syntax blocking.
+2. **Default Dialect**: All sessions default strictly to **T-SQL** (`DialectTSQL`, default db `master`).
+3. **Session-Level Disambiguation**: When operators have irreconcilable semantic conflicts, execution branches on the session's active dialect (`SHOW dialect;`, `SET DIALECT = 'postgres' | 'tsql'`):
+   - **`+` Operator**:
+     - `DialectTSQL` (Default): `'A' + 'B'` evaluates to `'AB'` (string concat).
+     - `DialectPostgres`: `'A' + 'B'` fails-closed with `operator does not exist: text + text (use || for string concatenation)`.
+   - **`LIKE` Operator**:
+     - `DialectTSQL` (Default): Case-Insensitive (CI).
+     - `DialectPostgres`: Case-Sensitive (CS), with `ILIKE` for Case-Insensitive (CI).
+4. **Dual-Path Parity**: Injected consistently into both VDBE bytecode frames (`VMFrame.isPostgres`) and AST interpreter (`varRow["__postgres_compat__"]`), ensuring execution engine symmetry.
+
+### 4.3. Implementation Stopping Criteria
 To preserve architectural purity, PostgreSQL support shall halt after implementing the following high-value ergonomics:
 
 1. **Common Function Aliases**:

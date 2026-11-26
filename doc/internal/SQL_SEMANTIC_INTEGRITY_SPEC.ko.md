@@ -49,6 +49,14 @@ LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/�
 | `BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1` | `sql7.txt` #3 | `SELECT ... JOIN ... ORDER BY id` 및 `GROUP BY id` 모호한 컬럼 검증 누락 | `column reference "id" is ambiguous` (SQLSTATE 42702) 에러 반환 | 진행 중 |
 | `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql7.txt` #4 | `JOIN ON count(*) > 0` 조인 조건 내 집계 함수 사용 묵인 | `aggregate functions are not allowed in JOIN ON` (SQLSTATE 42803) | 진행 중 |
 
+### Part 4: 실용적 슈퍼셋 방언 및 시맨틱 하드닝 (`/tmp/sql13.txt`)
+| 태스크 ID | 파일 및 순번 | 증상 요약 | 표준 동작 (Fail-Closed) | 상태 |
+|---|---|---|---|---|
+| `BUG-CTE-SELF-DEADLOCK-UNDER-TX-1` | `sql13.txt` #1 | CTE 내 쓰기(UPDATE/INSERT/DELETE) 포함 시 묵시적 Tx 시작 중 `TxMgr.Lock` 재진입으로 자기 데드락 발생 | `beginSessionTxUnderTxMgrLock`, `commitSessionTxUnderTxMgrLock`을 호출하여 세션 락 위계 정합성 보장 및 데드락 제거 | 완료 (`d86a380d`) |
+| `FEAT-PRAGMATIC-SUPERSET-DIALECT-SWITCHING-1` | `sql13.txt` #2 | 포트 기반 격리(Babelfish 모델) 대신 통합 AST 파싱 및 충돌 시맨틱에 대해 세션 방언 분기 | 기본 T-SQL, `SET DIALECT = 'postgres'` 지원. PG 모드에서 `+` 문자열 결합 금지(`||` 강제), `LIKE` 대소문자 구분(CS, `ILIKE`는 CI) | 완료 (`d86a380d`) |
+| `BUG-CASE-BRANCH-INCOMPATIBLE-TYPE-FAIL-CLOSED-1` | `sql13.txt` #3 | `CASE WHEN ... THEN 1 ELSE 'one' END` 와 같이 브랜치 간 호환 불가능한 결과 타입 혼용 묵인 | `incompatible types in CASE branches: cannot match INT and VARCHAR` 즉시 Fail-Closed 에러 반환 | 완료 (`d86a380d`) |
+| `BUG-ARITHMETIC-NON-NUMERIC-STRING-FAIL-CLOSED-1` | `sql13.txt` #4 | `SELECT 10 / 'hello'`와 같이 산술 연산자에 비숫자 문자열 입력 시 `NULL`로 조용히 폴백 | `conversion failed when converting varchar value to numeric` 명시적 타입 변환 에러 반환 | 완료 (`d86a380d`) |
+
 ---
 
 ## 3. 상세 분석 및 설계
