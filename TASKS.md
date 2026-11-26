@@ -551,7 +551,7 @@
 | `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `PENDING` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.95.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.95.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
@@ -644,7 +644,7 @@
 | `PENDING` | **`TDS-COMPAT-6`** | `v1.99.0` | Wire | P2 | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`TDS-MOD-1`** |  | Architecture | P3 | TDS 대규모 파일 모듈 분할 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`TEST-BABELFISH-GROUND-TRUTH-ANSWERS-1`** | `1.0-GA` | Testing | P2 | Populate value-verified expected answers for Babelfish Oracle suites | [`notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md`](notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md) |  |
-| `PENDING` | **`TEST-DURA-CRASHTEST-ROUND-50-1`** | `v0.95.0` | Durability | P1 | WiredTiger 및 Pure Binary WAL 50라운드 불시 사살(SIGKILL) 복구 정합성 검증 |  |  |
+| `DONE` | **`TEST-DURA-CRASHTEST-ROUND-50-1`** | `v0.95.0` | Durability | P1 | WiredTiger 및 Pure Binary WAL 50라운드 불시 사살(SIGKILL) 복구 정합성 검증 |  |  |
 | `DONE` | **`TEST-E2E-SERVICES-1`** | `1.0-GA` | Test | P1 | E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite | [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md) |  |
 | `DONE` | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `1.0-GA` | Engine | P1 | go-gorm/sqlserver 드라이버 핵심 쿼리(MERGE USING VALUES, OUTPUT INSERTED, sp_rename, sys.indexes/foreign_keys/check_constraints 조인, IDENTITY_INSERT) 호환성 오라클 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-OCC-FLAT-1`** |  | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
@@ -5341,8 +5341,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) `PERF-MIN-MAX-INDEX-SEEK-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 00:30:32
+### [DONE] MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) `PERF-MIN-MAX-INDEX-SEEK-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 00:46:20
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
@@ -6061,8 +6061,8 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 
 ---
 
-### [PENDING] WiredTiger 및 Pure Binary WAL 50라운드 불시 사살(SIGKILL) 복구 정합성 검증 `TEST-DURA-CRASHTEST-ROUND-50-1`
-- **Domain**: Durability | **Priority**: P1 | **Updated**: 2026-11-26 00:30:48
+### [DONE] WiredTiger 및 Pure Binary WAL 50라운드 불시 사살(SIGKILL) 복구 정합성 검증 `TEST-DURA-CRASHTEST-ROUND-50-1`
+- **Domain**: Durability | **Priority**: P1 | **Updated**: 2026-11-26 00:45:14
 - **Milestone**: `v0.95.0`
 
 ---
