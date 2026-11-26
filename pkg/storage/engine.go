@@ -585,6 +585,17 @@ func (s *IndexSchema) Validate(tableSchema *TableSchema) error {
 }
 
 
+// PhysicalTableName returns the physical file base name for WiredTiger (PhysicalName if set, otherwise Name).
+func (s *TableSchema) PhysicalTableName() string {
+	if s == nil {
+		return ""
+	}
+	if s.PhysicalName != "" {
+		return s.PhysicalName
+	}
+	return s.Name
+}
+
 // TableURI returns the WiredTiger table URI ("table:<physical_name>").
 func (s *TableSchema) TableURI() string {
 	if s == nil {

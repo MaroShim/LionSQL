@@ -771,20 +771,54 @@ func (e *Engine) loadCatalog() {
 	var tables []*storage.TableSchema
 	if err := json.Unmarshal(data, &tables); err == nil {
 		var hasTemp bool
+		var needSave bool
 		for _, t := range tables {
 			if storage.IsTemporaryTable(t.Name) {
 				hasTemp = true
 				continue
 			}
+
+			// Self-Healing: Reconcile PhysicalName with actual disk files.
+			// If PhysicalName is set to a versioned timestamp (_v...) or differs from Name,
+			// verify if the physical .wt file actually exists. If it does not exist,
+			// restore PhysicalName to t.Name (or clear it) so it points to the genuine table file.
+			if t.PhysicalName != "" && t.PhysicalName != t.Name {
+				physFile := filepath.Join(e.homeDir, t.PhysicalName+".wt")
+				nameFile := filepath.Join(e.homeDir, t.Name+".wt")
+				if _, statErr := os.Stat(physFile); os.IsNotExist(statErr) {
+					if _, statNameErr := os.Stat(nameFile); statNameErr == nil {
+						t.PhysicalName = t.Name
+						needSave = true
+					} else {
+						// Neither exists; default to Name
+						t.PhysicalName = t.Name
+						needSave = true
+					}
+				}
+			}
+
 			e.tables[t.Name] = t
 		}
-		if hasTemp {
+		if hasTemp || needSave {
 			_ = e.saveCatalog()
 		}
 		if e.conn != nil {
 			var sess *C.WT_SESSION
 			if C.go_wt_open_session(e.conn, &sess) == 0 {
 				for _, t := range e.tables {
+					// Self-Healing: If underlying .wt table file does not exist, automatically recreate the table
+					tableFile := filepath.Join(e.homeDir, t.PhysicalTableName()+".wt")
+					if _, statErr := os.Stat(tableFile); os.IsNotExist(statErr) {
+						uri := C.CString(t.TableURI())
+						config := C.CString("key_format=S,value_format=u")
+						_ = C.go_wt_session_create(sess, uri, config)
+						C.free(unsafe.Pointer(config))
+						C.free(unsafe.Pointer(uri))
+						if len(t.Indexes) > 0 {
+							_ = createIndexFile(sess, t)
+						}
+					}
+
 					cnt := e.countTableRows(sess, t)
 					e.getRowCountAtomicLocked(t.Name).Store(cnt)
 				}

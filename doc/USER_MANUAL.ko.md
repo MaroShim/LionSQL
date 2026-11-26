@@ -160,10 +160,13 @@
   * 슈퍼유저(`sa`, `dbo`) vs 일반 사용자(`guest`, `app_user`) 권한 모델
   * 로그인/사용자 관리 및 DCL 권한 제어 (`CREATE/ALTER LOGIN`, `USER`, `GRANT`, `DENY`)
   * 세션 가장 및 복원 보안 (`EXECUTE AS`, `REVERT`)
-* **6.5. 네트워크 암호화 (TLS/SSL)**
+* **6.5. 트랜잭셔널 아웃박스(Transactional Outbox) 및 이벤트 브로커 릴레이**
+  * 인프로세스(In-Process) 이벤트 브로커 릴레이 기동 (`-outbox`, `-outbox-webhook`, `-outbox-kafka`)
+  * Writable CTE 기반 원자적 아웃박스 패턴 구현
+* **6.6. 네트워크 암호화 (TLS/SSL)**
   * TLS/SSL 인증서 및 개인키 설정 (`--tls`, `--tls-cert`, `--tls-key`)
   * 비암호화 연결 차단 및 SSL 연결 강제 (`--require-ssl`)
-* **6.6. 장애 진단 및 문제 해결 (Troubleshooting)**
+* **6.7. 장애 진단 및 문제 해결 (Troubleshooting)**
   * 포트 충돌(`bind: address already in use`) 및 좀비 프로세스 정리
   * 시스템 진단 도구 실행 (`./bin/lionsql doctor`)
   * 트랜잭션 락 경합 및 메모리 거버너 차단 에러 진단
@@ -788,6 +791,20 @@ psql -h 127.0.0.1 -p 5433 -U admin dbname=postgres
 -- 6. 서버 버전 확인
 SELECT version();
 ```
+
+#### PostgreSQL 호환 편의 기능 (PG Ergonomics & Session Settings):
+LionSQL은 PostgreSQL 클라이언트 생태계(psql, Prisma, DBeaver, GORM, TypeORM)와의 원활한 상호운용성을 위해 표준 PostgreSQL 세션 제어 및 타입 캐스팅 문법을 전면 지원합니다.
+
+1. **범용 `expr::type` 캐스팅**:
+   - `SELECT`, `WHERE`, `VALUES`, `JOIN ON`, 집계 및 내장 함수 인자 등 모든 표현식 위치에서 PostgreSQL 표준 `::` 캐스팅을 지원합니다.
+   - 지원 타입: `::int`, `::integer`, `::int4`, `::bigint`, `::int8`, `::smallint`, `::float`, `::numeric`, `::decimal`, `::varchar`, `::text`, `::boolean`, `::timestamp` 등.
+   - 연쇄 캐스팅 지원: `SELECT col::varchar::int FROM tbl;`
+
+2. **세션 환경 파라미터 제어 (`SET`, `SHOW`, `current_setting()`, `set_config()`)**:
+   - `search_path`: `SET search_path TO myschema, public;` 설정 시 즉시 세션 변수에 반영되며, `SHOW search_path;` 및 `SELECT current_setting('search_path');`로 일관되게 조회됩니다.
+   - `timezone`: `SET timezone TO 'Asia/Seoul';` 또는 `SELECT set_config('timezone', 'Asia/Seoul', false);`로 세션 시간대를 동적으로 변경할 수 있습니다.
+   - `set_config(name, value, is_local)`: 표준 PostgreSQL 동적 설정 함수로 세션 변수를 실시간 갱신하고 변경된 값을 반환합니다.
+   - `current_setting(name)`: `server_version`, `server_version_num`, `search_path`, `timezone`, `work_mem`, `standard_conforming_strings` 등 현재 세션의 파라미터 값을 반환합니다.
 
 ---
 
@@ -1447,7 +1464,37 @@ ALTER LOGIN sa WITH PASSWORD = 'hacked';
 
 ---
 
-### 6.5. 네트워크 암호화 (TLS/SSL)
+### 6.5. 트랜잭셔널 아웃박스(Transactional Outbox) 및 이벤트 브로커 릴레이
+
+LionSQL은 외부 CDC 데몬(Debezium, Kafka Connect) 없이도 단일 바이너리 내부에서 커밋된 트랜잭션의 변경 사항을 외부 메시지 브로커(Kafka, RabbitMQ) 및 웹훅(Webhook)으로 무손실 스트리밍하는 **In-Process Transactional Outbox Broker Relay**를 내장하고 있습니다.
+
+#### 1. 아웃박스 기동 옵션 (CLI Flags):
+```bash
+# Webhook 엔드포인트로 모든 테이블 변경 이벤트 전송
+./bin/lionsql start -dir=./data -outbox -outbox-webhook="http://127.0.0.1:8080/events"
+
+# 특정 테이블('orders')만 Kafka REST Proxy로 전송
+./bin/lionsql start -dir=./data -outbox -outbox-table="orders" -outbox-kafka="http://localhost:8082" -outbox-topic-prefix="corp.sales."
+```
+
+#### 2. Writable CTE 기반 트랜잭셔널 아웃박스 패턴:
+비즈니스 레코드 삽입과 아웃박스 이벤트 발행을 단일 원자적 ACID 트랜잭션으로 커밋합니다:
+```sql
+WITH ins_order AS (
+    INSERT INTO orders (customer_id, amount) VALUES (42, 150.00) RETURNING id
+),
+ins_outbox AS (
+    INSERT INTO outbox (topic, key, payload)
+    SELECT 'orders.created', CAST(id AS VARCHAR), '{"order_id":' + CAST(id AS VARCHAR) + '}'
+    FROM ins_order
+)
+SELECT id FROM ins_order;
+```
+* 상세 가이드 및 아키텍처 규격: [`doc/TRANSACTIONAL_OUTBOX_GUIDE.md`](TRANSACTIONAL_OUTBOX_GUIDE.md)
+
+---
+
+### 6.6. 네트워크 암호화 (TLS/SSL)
 
 프로덕션 환경에서는 공용 인터넷 노출을 방지하고 전송 계층 암호화를 활성화해야 합니다:
 
@@ -1471,13 +1518,14 @@ lionsql start -dir=/var/lib/lionsql/data \
 
 ---
 
-### 6.6. 장애 진단 및 문제 해결 (Troubleshooting)
+### 6.7. 장애 진단 및 문제 해결 (Troubleshooting)
 
 실무 운영 중 발생할 수 있는 주요 상황과 해결 방법입니다:
 
 | 현상 및 에러 메시지 | 원인 분석 | 해결 조치 |
 | :--- | :--- | :--- |
 | `bind: address already in use` | 이전 프로세스가 정상 종료되지 않고 포트를 점유 중 | `lionsql status -dir data`로 기존 PID 확인 후 `lionsql stop` 실행. 필요 시 `kill -9 <PID>` 후 재기동 |
+| `handle-open: open: No such file or directory` | 이전 마이그레이션 도중 타임스탬프 물리 파일명과 카탈로그 간 불일치 | LionSQL v0.96.0+의 부팅 시 자동 자가 치유(Self-Healing)를 통해 카탈로그와 디스크 B-Tree가 1회 자동 동기화 및 복구됨 |
 | `hash join memory budget exceeded` | 대용량 카테시안 곱 또는 인덱스 부재 조인으로 `work_mem` 초과 | 쿼리에 적절한 `WHERE` 필터를 부여하거나, 세션 레벨에서 `SET work_mem = '128MB'`로 상향 조정 |
 | `serialization failure: write-write conflict (40001)` | 인메모리 OCC 또는 MVCC에서 동일 행 동시 수정 경합 | 애플리케이션 드라이버 레벨에서 10~50ms 지수 백오프 재시도(Retry) 로직 적용 |
 | `password authentication failed (28P01)` | 잘못된 관리자 이메일 또는 비밀번호 | 기동 시 지정한 `-admin-email`과 `-admin-pass` 확인 또는 `lionsql.json` 설정 검증 |

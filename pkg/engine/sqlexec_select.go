@@ -1088,19 +1088,56 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	if strings.HasPrefix(upper, "CURRENT_SETTING(") && strings.HasSuffix(upper, ")") {
 		arg := strings.TrimSpace(trimmed[len("CURRENT_SETTING(") : len(trimmed)-1])
 		arg = strings.Trim(arg, "'\"")
-		switch strings.ToLower(arg) {
+		paramLower := strings.ToLower(arg)
+		paramNorm := strings.ReplaceAll(paramLower, " ", "_")
+
+		if cs != nil {
+			cs.Mu.Lock()
+			v, exists := cs.Vars[paramNorm]
+			if !exists {
+				v, exists = cs.Vars[paramLower]
+			}
+			cs.Mu.Unlock()
+			if exists && v != nil {
+				return fmt.Sprintf("%v", v), "current_setting"
+			}
+		}
+
+		switch paramNorm {
 		case "server_version":
 			return "15.0", "current_setting"
 		case "server_version_num":
 			return "150000", "current_setting"
 		case "search_path":
 			return "public", "current_setting"
+		case "timezone", "time_zone":
+			return "UTC", "current_setting"
 		case "is_superuser":
 			return "on", "current_setting"
 		case "standard_conforming_strings":
 			return "on", "current_setting"
+		case "transaction_isolation", "default_transaction_isolation":
+			return "read committed", "current_setting"
 		default:
 			return "", "current_setting"
+		}
+	}
+
+	// set_config('setting_name', 'new_value', is_local)
+	if strings.HasPrefix(upper, "SET_CONFIG(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("SET_CONFIG(") : len(trimmed)-1])
+		parts := sqlutil.SplitTopLevel(inner, ',')
+		if len(parts) >= 2 {
+			param := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+			newVal := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			paramNorm := strings.ReplaceAll(strings.ToLower(param), " ", "_")
+			if cs != nil {
+				cs.Mu.Lock()
+				cs.Vars[paramNorm] = newVal
+				cs.Vars[param] = newVal
+				cs.Mu.Unlock()
+			}
+			return newVal, "set_config"
 		}
 	}
 
@@ -2208,7 +2245,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "WHERE") && !strings.Contains(upperClean, "ORDER BY") && !strings.Contains(upperClean, "GROUP BY") && !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "IDENT_") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+		if !strings.Contains(upperClean, "WHERE") && !strings.Contains(upperClean, "ORDER BY") && !strings.Contains(upperClean, "GROUP BY") && !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "IDENT_") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "SET_CONFIG") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}

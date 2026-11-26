@@ -303,13 +303,13 @@
 | `PENDING` | **`FEAT-PG-CATALOG-FUNCTIONS-1`** | `v1.2.0` | Catalog | P2 | format_type(), pg_get_expr(), pg_get_constraintdef() 등 메타 함수 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-PG-DISCARD-COMMANDS-1`** | `v0.95.0` | Wire | P2 | 커넥션 풀러용 DISCARD ALL / PLANS / SEQUENCES / TEMP 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-DISTINCT-ON-1`** | `v1.1.0` | Engine | P2 | SELECT DISTINCT ON (...) 구문 지원 및 정렬 기반 중복 제거 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PG-DOUBLE-COLON-CAST-ALL-1`** | `v0.96.0` | Engine | P2 | 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-PG-DOUBLE-COLON-CAST-ALL-1`** | `v0.96.0` | Engine | P2 | 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-E2E-TOOLING-VALIDATION-1`** | `v1.2.0` | Test | P2 | psql, Prisma, GORM, DBeaver PGWire E2E 통합 테스트 스위트 구축 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-ILIKE-AND-REGEX-OPS-1`** | `v1.1.0` | Engine | P2 | ILIKE, NOT ILIKE 및 POSIX 정규식 연산자 (~, !~, ~*, !~*) 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-JSONB-OPERATORS-1`** | `v1.2.0` | Engine | P2 | JSONB 탐색 연산자 (->, ->>, #>, ?) 및 빌더 함수 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-SEQUENCE-FUNCS-1`** | `v1.1.0` | Engine | P2 | nextval(), currval(), setval() 시퀀스 함수 및 SERIAL 연동 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-SEQUENCE-OBJECTS-1`** | `v1.1.0` | Catalog | P2 | CREATE/ALTER/DROP SEQUENCE DDL 및 원자적 카운터 엔진 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v0.96.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v0.96.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-STAT-ACTIVITY-AND-SETTINGS-1`** | `v1.2.0` | Catalog | P2 | pg_stat_activity, pg_settings 가상 뷰 확충 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
@@ -3537,8 +3537,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) `FEAT-PG-DOUBLE-COLON-CAST-ALL-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+### [DONE] 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) `FEAT-PG-DOUBLE-COLON-CAST-ALL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 06:54:00
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md)
 
@@ -3579,8 +3579,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] SET/SHOW search_path, timezone, current_setting(), set_config() `FEAT-PG-SESSION-SETTINGS-PARITY-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+### [DONE] SET/SHOW search_path, timezone, current_setting(), set_config() `FEAT-PG-SESSION-SETTINGS-PARITY-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-26 06:54:00
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md)
 
@@ -5086,12 +5086,9 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) `OLAP-DYNAMIC-PARTITION-PRUNING-1`
-- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-26 06:34:00
+- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
-- **아키텍처 스펙 경계 및 차별점**:
-  - *연산자 레벨 필터(`PERF-RUNTIME-BLOOM-FILTER-1`, 기완료 `1e9ec853`)*: `HashJoin` 내부에서 개별 튜플의 해시 버킷 조회를 건너뛰는 행 단위 필터.
-  - *본 과제(스토리지 DPP)*: 대규모 Fact 테이블이 물리 파티션 파일(B-Tree 파일)로 분할되어 있을 때, 차원 조인 키 블룸 필터를 스토리지 스캔에 주입하여 수 GB 단위의 불일치 파티션 파일 자체를 열지도 않고 건너뛰는(Prune) 스토리지 I/O 회피 DW 기법.
 
 ---
 
