@@ -1,19 +1,19 @@
 # SQL 시맨틱 및 무결성 유효성 검증 마스터 아키텍처 플랜 (SQL Comprehensive Integrity and Semantic Plan)
 
 > **작성일자**: 2026-11-24  
-> **상태**: 진행 중 (In Progress)  
-> **문서 버전**: v1.3  
+> **상태**: 완료 (Completed)  
+> **문서 버전**: v1.4  
 > **관련 마일스톤**: v0.95.0  
-> **대상 이슈**: `/tmp/sql.txt` ~ `/tmp/sql8.txt` 및 Fuzz 오라클 적발 3건
+> **대상 이슈**: `/tmp/sql.txt` ~ `/tmp/sql13.txt` 및 Fuzz 오라클 전수 완치
 
 ## 1. 개요 및 배경
-본 문서는 `/tmp/sql.txt`부터 `/tmp/sql5.txt`에 걸쳐 제기된 총 11건의 SQL 의미론(Semantic), 제약조건(Integrity Constraint), 날짜/산술 유효성 검증 결함을 집대성한 단일 마스터 아키텍처 계획서(SSOT)이다.
+본 문서는 `/tmp/sql.txt`부터 `/tmp/sql13.txt`에 걸쳐 제기된 SQL 의미론(Semantic), 제약조건(Integrity Constraint), 날짜/산술 유효성 검증 결함을 집대성한 단일 마스터 아키텍처 계획서(SSOT)이다.
 
-LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/의미론적으로 거부되어야 하는 쿼리가 조용히 통과하여 잘못된 결과(침묵의 데이터 오염, 임의 행 출력, 0건 출력, NULL 덮어쓰기)를 발생시키지 않도록 엄격한 유효성 검증 체계를 수립한다.
+LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/의미론적으로 거부되어야 하는 쿼리가 조용히 통과하여 잘못된 결과(침묵의 데이터 오염, 임의 행 출력, 0건 출력, NULL 덮어쓰기)를 발생시키지 않도록 엄격한 유효성 검증 체계를 수립하고 전수 검증을 완료했다.
 
 ---
 
-## 2. 결함 목록 및 태스크 매핑 (전체 11건)
+## 2. 결함 목록 및 태스크 매핑 (전체 완료)
 
 ### Part 1: SQL 시맨틱 및 서브쿼리 검증 (`/tmp/sql.txt`)
 | 태스크 ID | 파일 및 순번 | 증상 요약 | 표준 동작 (Fail-Closed) | 상태 |
@@ -37,17 +37,17 @@ LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/�
 ### Part 3: 심층 서브쿼리, 집계/윈도우 경계 및 유추 결함 (`/tmp/sql6.txt` 및 Fuzz/유추 적발)
 | 태스크 ID | 파일 및 순번 | 증상 요약 | 표준 동작 (Fail-Closed) | 상태 |
 |---|---|---|---|---|
-| `BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql6.txt` #1 + 유추 | `WHERE count(*) > 0`, `GROUP BY count(*)`, `JOIN ON count(*) > 0`, `GROUP BY ROW_NUMBER() OVER ()` 허용 | `aggregate functions are not allowed in WHERE / GROUP BY` (SQLSTATE 42803), `window functions are not allowed in GROUP BY` | 진행 중 |
-| `BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1` | `sql6.txt` #2 + 유추 | `WHERE id IN / EXISTS (SELECT ... FROM non_existent_table)` 및 UPDATE/DELETE 서브쿼리 에러 묵살 후 0건 처리 | `relation "non_existent_table" does not exist` (SQLSTATE 42P01) 상위 전파 | 진행 중 |
-| `BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1` | `sql6.txt` #3 | `SELECT id FROM t HAVING 1=1;` (GROUP BY 부재) 시 비집계 컬럼 `id`에 대해 임의 1행 반환 | `column "id" must appear in the GROUP BY clause or be used in an aggregate function` (SQLSTATE 42803) | 진행 중 |
-| `BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1` | 유추 (from `sql3.txt`) | `INSERT INTO t (id, val) VALUES (3, ghost_col);` 시 미존재 컬럼이 NULL로 조용히 삽입됨 | `column "ghost_col" does not exist` (SQLSTATE 42703) 에러 반환 | 진행 중 |
-| `BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1` | Fuzz 적발 | Volcano 실행기에서 `SELECT val / 0`, `val % 0` 정수 연산 시 에러 대신 NULL 반환 | `division by zero: divide by zero error encountered` (SQLSTATE 22012) | 진행 중 |
-| `BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1` | Fuzz 적발 | `SELECT count(*) FROM t GROUP BY -1, -5;` 음수 서수/상수 비정상 허용 | `GROUP BY position -1 is not in select list` (SQLSTATE 42803) 에러 반환 | 진행 중 |
-| `BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1` | Fuzz TLP 적발 | WHERE 절 산술 오버플로(`c2 * 5 > 2147483647`) 시 행 침묵 누락(TLP 불변식 위반) | `arithmetic overflow error` (SQLSTATE 22003) 에러 전파 | 진행 중 |
-| `BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1` | `sql7.txt` #1 | `SELECT (SELECT id FROM non_existent_table);` 및 EXISTS 시 에러를 NULL/0건으로 삼킴 | `relation "non_existent_table" does not exist` (SQLSTATE 42P01) 상위 전파 | 진행 중 |
-| `BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1` | `sql7.txt` #2 | `UPDATE/INSERT ... RETURNING no_such_col;` 시 미존재 컬럼이 NULL로 조용히 반환됨 | `column "no_such_col" does not exist` (SQLSTATE 42703) 에러 반환 | 진행 중 |
-| `BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1` | `sql7.txt` #3 | `SELECT ... JOIN ... ORDER BY id` 및 `GROUP BY id` 모호한 컬럼 검증 누락 | `column reference "id" is ambiguous` (SQLSTATE 42702) 에러 반환 | 진행 중 |
-| `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql7.txt` #4 | `JOIN ON count(*) > 0` 조인 조건 내 집계 함수 사용 묵인 | `aggregate functions are not allowed in JOIN ON` (SQLSTATE 42803) | 진행 중 |
+| `BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql6.txt` #1 + 유추 | `WHERE count(*) > 0`, `GROUP BY count(*)`, `JOIN ON count(*) > 0`, `GROUP BY ROW_NUMBER() OVER ()` 허용 | `aggregate functions are not allowed in WHERE / GROUP BY` (SQLSTATE 42803), `window functions are not allowed in GROUP BY` | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1` | `sql6.txt` #2 + 유추 | `WHERE id IN / EXISTS (SELECT ... FROM non_existent_table)` 및 UPDATE/DELETE 서브쿼리 에러 묵살 후 0건 처리 | `table not found: non_existent_tbl` 상위 전파 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1` | `sql6.txt` #3 | `SELECT id FROM t HAVING 1=1;` (GROUP BY 부재) 시 비집계 컬럼 `id`에 대해 임의 1행 반환 | `column "id" must appear in the GROUP BY clause or be used in an aggregate function` (SQLSTATE 42803) | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1` | 유추 (from `sql3.txt`) | `INSERT INTO t (id, val) VALUES (3, ghost_col);` 시 미존재 컬럼이 NULL로 조용히 삽입됨 | `column "ghost_col" does not exist in VALUES expression` (SQLSTATE 42703) 에러 반환 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1` | Fuzz 적발 | Volcano 실행기에서 `SELECT val / 0`, `val % 0` 정수 연산 시 에러 대신 NULL 반환 | `division by zero: divide by zero error encountered` (SQLSTATE 22012) | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1` | Fuzz 적발 | `SELECT count(*) FROM t GROUP BY -1, -5;` 음수 서수/상수 비정상 허용 | `GROUP BY position -1 is not in select list` (SQLSTATE 42803) 에러 반환 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1` | Fuzz TLP 적발 | WHERE 절 산술 오버플로(`c2 * 5 > 2147483647`) 시 행 침묵 누락(TLP 불변식 위반) | `arithmetic overflow error` (SQLSTATE 22003) 에러 전파 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1` | `sql7.txt` #1 | `SELECT (SELECT id FROM non_existent_table);` 및 EXISTS 시 에러를 NULL/0건으로 삼킴 | `table not found: non_existent_tbl` 상위 전파 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1` | `sql7.txt` #2 | `UPDATE/INSERT ... RETURNING no_such_col;` 시 미존재 컬럼이 NULL로 조용히 반환됨 | `column "no_such_col" does not exist` (SQLSTATE 42703) 에러 반환 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1` | `sql7.txt` #3 | `SELECT ... JOIN ... ORDER BY id` 및 `GROUP BY id` 모호한 컬럼 검증 누락 | `column reference "id" is ambiguous` (SQLSTATE 42702) 에러 반환 | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
+| `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql7.txt` #4 | `JOIN ON count(*) > 0` 조인 조건 내 집계 함수 사용 묵인 | `aggregate functions are not allowed in JOIN ON` (SQLSTATE 42803) | 완료 (`TestMetaValidatorAndBinder_ScopeIsolation`) |
 
 ### Part 4: 실용적 슈퍼셋 방언 및 시맨틱 하드닝 (`/tmp/sql13.txt`)
 | 태스크 ID | 파일 및 순번 | 증상 요약 | 표준 동작 (Fail-Closed) | 상태 |
