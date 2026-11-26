@@ -1029,9 +1029,12 @@ func collectFrameVars(frame *VMFrame) map[string]any {
 }
 
 func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame {
-	numRegs := int(prog.NumRegisters) + 16
-	if numRegs < 64 {
-		numRegs = 64
+	// Exact-Size Register Slicing (PERF-VDBE-FRAME-SLIM-1):
+	// Allocate exact program register demand with conservative safety margin,
+	// avoiding forced 64-register minimum allocations on lightweight procedures.
+	numRegs := int(prog.NumRegisters) + 8
+	if numRegs < 16 {
+		numRegs = 16
 	}
 
 	numSlots := int(prog.SlotCount)

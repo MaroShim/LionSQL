@@ -240,7 +240,7 @@
 | `DONE` | **`BUG-WT-SWEEP-1`** |  | Integrity | P2 | WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug) |  |  |
 | `DONE` | **`BUG-WT-SWEEP-3`** |  | Integrity | P2 | SessionPool 백그라운드 TTL/스윕 루프 및 유휴 ClientSession.Session 회수 |  |  |
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** |  | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
-| `PENDING` | **`CBO-STATS-HISTOGRAM-1`** | `v0.96.0` | Planner | P1 | CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 | [`--priority`](--priority) |  |
+| `DONE` | **`CBO-STATS-HISTOGRAM-1`** | `v0.96.0` | Planner | P1 | CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 | [`--priority`](--priority) |  |
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** |  | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** |  | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CI-RELEASE-MULTI-OS-WT-1`** | `v0.94.0` | CI/CD | P1 | GitHub Actions Multi-OS (macOS/Linux/Windows) Native WiredTiger Release Workflow | [`.github/workflows/release.yml`](.github/workflows/release.yml) |  |
@@ -588,7 +588,7 @@
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TOP-N-SORT-FUSION-1`** | `v0.95.0` | Execution | P2 | Top-N Sort Fusion (ORDER BY ... LIMIT k 전체 정렬 생략 및 Bounded Min-Heap 인-플레이스 선별) | [`notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md`](notes/plans/TOP_N_SORT_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
-| `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v0.95.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-VDBE-FRAME-SLIM-1`** | `v0.95.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-VDBE-HOTPATH-EXPANSION-1`** | `v1.1.0` | Execution | P1 | 단일 테이블 포인트 룩업 및 단일 행 DML 핫패스 VDBE 바이트코드 직결 (300ns & 0-Alloc) | [`notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md`](notes/VDBE_HOTPATH_EXPANSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -3003,8 +3003,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 `CBO-STATS-HISTOGRAM-1`
-- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-24 10:44:16
+### [DONE] CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 `CBO-STATS-HISTOGRAM-1`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-26 01:02:32
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`--priority`](--priority)
 
@@ -5616,8 +5616,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 `PERF-VDBE-FRAME-SLIM-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 00:30:32
+### [DONE] VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 `PERF-VDBE-FRAME-SLIM-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 01:02:32
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
 

@@ -22,6 +22,7 @@ const (
 	RowsPerPageDefault   = 50     // Default average number of rows per disk page
 	MaxMCVCount          = 20     // Maximum number of Most Common Values retained per column (C-7)
 	MinMCVCountThreshold = 2      // Minimum occurrences required to qualify as an MCV unless NDV == 1
+	MaxHistogramSteps    = 200    // Microsoft SQL Server standard histogram step upper bound (200 steps)
 )
 
 // MCVItem represents a Most Common Value and its observed frequency in the dataset (C-7).
@@ -333,8 +334,11 @@ func BuildColumnStats(name string, colType storage.DataType, vals []storage.Valu
 		}
 	}
 
-	// Construct Equi-Depth Histogram (up to 20 quantile buckets)
-	numBuckets := 20
+	// Construct Equi-Depth Histogram (Adaptive up to 200 quantile buckets aligned with SQL Server)
+	numBuckets := MaxHistogramSteps
+	if len(nonMCVVals) < 1000 {
+		numBuckets = 64 // Adaptive compact buckets for smaller tables
+	}
 	if len(nonMCVVals) < numBuckets {
 		numBuckets = len(nonMCVVals)
 	}
@@ -1070,14 +1074,24 @@ func (cs *ColumnStats) interpolateRange(valStr string, isLess bool) float64 {
 		return 0.01
 	}
 
-	// Locate histogram bucket
+	// Locate histogram bucket via O(log K) binary search
 	numBuckets := len(cs.Histogram) - 1
+	idx := sort.Search(len(cs.Histogram), func(i int) bool {
+		return cs.Histogram[i].Compare(target) >= 0
+	})
 	bucketIdx := 0
-	for i := 0; i < numBuckets; i++ {
-		if target.Compare(cs.Histogram[i+1]) <= 0 {
-			bucketIdx = i
-			break
-		}
+	if idx <= 0 {
+		bucketIdx = 0
+	} else if idx >= len(cs.Histogram) {
+		bucketIdx = numBuckets - 1
+	} else {
+		bucketIdx = idx - 1
+	}
+	if bucketIdx < 0 {
+		bucketIdx = 0
+	}
+	if bucketIdx >= numBuckets {
+		bucketIdx = numBuckets - 1
 	}
 
 	// Linear interpolation within bucket
