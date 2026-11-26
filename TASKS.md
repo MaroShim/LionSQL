@@ -5086,9 +5086,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) `OLAP-DYNAMIC-PARTITION-PRUNING-1`
-- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
+- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-26 06:34:00
 - **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **아키텍처 스펙 경계 및 차별점**:
+  - *연산자 레벨 필터(`PERF-RUNTIME-BLOOM-FILTER-1`, 기완료 `1e9ec853`)*: `HashJoin` 내부에서 개별 튜플의 해시 버킷 조회를 건너뛰는 행 단위 필터.
+  - *본 과제(스토리지 DPP)*: 대규모 Fact 테이블이 물리 파티션 파일(B-Tree 파일)로 분할되어 있을 때, 차원 조인 키 블룸 필터를 스토리지 스캔에 주입하여 수 GB 단위의 불일치 파티션 파일 자체를 열지도 않고 건너뛰는(Prune) 스토리지 I/O 회피 DW 기법.
 
 ---
 
