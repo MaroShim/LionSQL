@@ -1525,7 +1525,8 @@ lionsql start -dir=/var/lib/lionsql/data \
 | 현상 및 에러 메시지 | 원인 분석 | 해결 조치 |
 | :--- | :--- | :--- |
 | `bind: address already in use` | 이전 프로세스가 정상 종료되지 않고 포트를 점유 중 | `lionsql status -dir data`로 기존 PID 확인 후 `lionsql stop` 실행. 필요 시 `kill -9 <PID>` 후 재기동 |
-| `handle-open: open: No such file or directory` | 이전 마이그레이션 도중 타임스탬프 물리 파일명과 카탈로그 간 불일치 | LionSQL v0.96.0+의 부팅 시 자동 자가 치유(Self-Healing)를 통해 카탈로그와 디스크 B-Tree가 1회 자동 동기화 및 복구됨 |
+| `catalog integrity verification failed: physical table file missing` | 실제 물리 테이블 파일(`.wt`) 또는 보조 인덱스 파일(`.wt`)의 손실/삭제 | **Fail-Closed 원칙**: 빈 테이블을 자동 재생성하여 데이터 손실을 은폐하지 않고 서버 시작을 즉시 중단합니다. 백업본에서 해당 파일을 복구하거나 복구 절차를 진행하십시오. |
+| `handle-open: open: No such file or directory` (구버전) | 이전 마이그레이션 도중 타임스탬프 물리 파일명과 카탈로그 간 메타데이터 불일치 | 표준 파일(`.wt`)이 존재하는 정상 불일치는 부팅 시 자동 자가 치유(Self-Healing)되어 카탈로그 메타데이터가 1회 자동 동기화됩니다. |
 | `hash join memory budget exceeded` | 대용량 카테시안 곱 또는 인덱스 부재 조인으로 `work_mem` 초과 | 쿼리에 적절한 `WHERE` 필터를 부여하거나, 세션 레벨에서 `SET work_mem = '128MB'`로 상향 조정 |
 | `serialization failure: write-write conflict (40001)` | 인메모리 OCC 또는 MVCC에서 동일 행 동시 수정 경합 | 애플리케이션 드라이버 레벨에서 10~50ms 지수 백오프 재시도(Retry) 로직 적용 |
 | `password authentication failed (28P01)` | 잘못된 관리자 이메일 또는 비밀번호 | 기동 시 지정한 `-admin-email`과 `-admin-pass` 확인 또는 `lionsql.json` 설정 검증 |

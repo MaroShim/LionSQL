@@ -723,7 +723,13 @@ func (e *Engine) Open(dir string) error {
 		e.tempEng = memengine.New()
 	}
 
-	e.loadCatalog()
+	if err := e.loadCatalog(); err != nil {
+		_ = C.go_wt_close(conn)
+		e.conn = nil
+		e.closed = true
+		e.connClosed.Store(true)
+		return fmt.Errorf("load catalog failed: %w", err)
+	}
 
 	e.cleanupOrphanTempFiles()
 
@@ -763,85 +769,123 @@ func (e *Engine) catalogPath() string {
 	return filepath.Join(e.homeDir, "catalog.json")
 }
 
-func (e *Engine) loadCatalog() {
+func (e *Engine) loadCatalog() error {
 	data, err := os.ReadFile(e.catalogPath())
 	if err != nil {
-		return
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read catalog file %s failed: %w", e.catalogPath(), err)
 	}
 	var tables []*storage.TableSchema
-	if err := json.Unmarshal(data, &tables); err == nil {
-		var hasTemp bool
-		var needSave bool
-		for _, t := range tables {
-			if storage.IsTemporaryTable(t.Name) {
-				hasTemp = true
-				continue
-			}
+	if err := json.Unmarshal(data, &tables); err != nil {
+		return fmt.Errorf("unmarshal catalog file %s failed: %w", e.catalogPath(), err)
+	}
 
-			// Self-Healing: Reconcile PhysicalName with actual disk files.
-			// If PhysicalName is set to a versioned timestamp (_v...) or differs from Name,
-			// verify if the physical .wt file actually exists. If it does not exist,
-			// restore PhysicalName to t.Name (or clear it) so it points to the genuine table file.
-			if t.PhysicalName != "" && t.PhysicalName != t.Name {
-				physFile := filepath.Join(e.homeDir, t.PhysicalName+".wt")
-				nameFile := filepath.Join(e.homeDir, t.Name+".wt")
-				if _, statErr := os.Stat(physFile); os.IsNotExist(statErr) {
-					if _, statNameErr := os.Stat(nameFile); statNameErr == nil {
-						t.PhysicalName = t.Name
-						needSave = true
-					} else {
-						// Neither exists; default to Name
-						t.PhysicalName = t.Name
-						needSave = true
-					}
+	var hasTemp bool
+	var needSave bool
+	for _, t := range tables {
+		if storage.IsTemporaryTable(t.Name) {
+			hasTemp = true
+			continue
+		}
+
+		// Self-Healing Reconciliation vs Data Loss Detection:
+		// 1. If PhysicalName is set to a versioned timestamp (_v...) or differs from Name:
+		//    Check if the designated physical file exists. If not, but the canonical Name.wt file exists,
+		//    this is a legitimate metadata naming divergence (e.g. migration artifact) -> heal PhysicalName to Name.
+		// 2. If neither physical file nor canonical name file exists on disk:
+		//    This is an ACTUAL DATA FILE LOSS (e.g. accidental deletion, disk corruption).
+		//    Under [RULE:ExplicitError], [RULE:PanicRecovery], and Invariant 9/14, NEVER silently recreate
+		//    an empty table. Fail-closed immediately with a fatal startup error to prevent data loss masking!
+		physName := t.PhysicalTableName()
+		physFile := filepath.Join(e.homeDir, physName+".wt")
+		nameFile := filepath.Join(e.homeDir, t.Name+".wt")
+
+		if _, statPhysErr := os.Stat(physFile); statPhysErr != nil {
+			if os.IsNotExist(statPhysErr) {
+				// Designated physical file does not exist. Check if canonical Name.wt exists.
+				if _, statNameErr := os.Stat(nameFile); statNameErr == nil {
+					// Canonical file exists: heal PhysicalName -> Name
+					t.PhysicalName = t.Name
+					needSave = true
+				} else {
+					// Actual Data File Loss! Neither physFile nor nameFile exists.
+					return fmt.Errorf("catalog integrity verification failed: physical table file missing for table %q (checked %q and %q) - aborting server start to prevent silent data loss", t.Name, physFile, nameFile)
 				}
+			} else {
+				return fmt.Errorf("inspect physical table file %s failed: %w", physFile, statPhysErr)
 			}
+		}
 
-			e.tables[t.Name] = t
-		}
-		if hasTemp || needSave {
-			_ = e.saveCatalog()
-		}
-		if e.conn != nil {
-			var sess *C.WT_SESSION
-			if C.go_wt_open_session(e.conn, &sess) == 0 {
-				for _, t := range e.tables {
-					// Self-Healing: If underlying .wt table file does not exist, automatically recreate the table
-					tableFile := filepath.Join(e.homeDir, t.PhysicalTableName()+".wt")
-					if _, statErr := os.Stat(tableFile); os.IsNotExist(statErr) {
-						uri := C.CString(t.TableURI())
-						config := C.CString("key_format=S,value_format=u")
-						_ = C.go_wt_session_create(sess, uri, config)
-						C.free(unsafe.Pointer(config))
-						C.free(unsafe.Pointer(uri))
-						if len(t.Indexes) > 0 {
-							_ = createIndexFile(sess, t)
+		// Also verify multiplexed secondary index file if table has indexes defined
+		if len(t.Indexes) > 0 {
+			idxFile := filepath.Join(e.homeDir, "_idx_"+t.PhysicalTableName()+".wt")
+			if _, statIdxErr := os.Stat(idxFile); statIdxErr != nil {
+				if os.IsNotExist(statIdxErr) {
+					// If index file is missing, also check under canonical Name
+					canonicalIdxFile := filepath.Join(e.homeDir, "_idx_"+t.Name+".wt")
+					if _, statCanonicalIdxErr := os.Stat(canonicalIdxFile); statCanonicalIdxErr != nil {
+						if os.IsNotExist(statCanonicalIdxErr) {
+							return fmt.Errorf("catalog integrity verification failed: index file missing for table %q with %d indexes (checked %q and %q) - aborting server start to prevent silent index loss", t.Name, len(t.Indexes), idxFile, canonicalIdxFile)
 						}
+						return fmt.Errorf("inspect index file %s failed: %w", canonicalIdxFile, statCanonicalIdxErr)
 					}
-
-					cnt := e.countTableRows(sess, t)
-					e.getRowCountAtomicLocked(t.Name).Store(cnt)
+				} else {
+					return fmt.Errorf("inspect index file %s failed: %w", idxFile, statIdxErr)
 				}
-				C.go_wt_session_close(sess)
 			}
+		}
+
+		e.tables[t.Name] = t
+	}
+
+	if hasTemp || needSave {
+		if err := e.saveCatalog(); err != nil {
+			return fmt.Errorf("save healed catalog failed: %w", err)
 		}
 	}
+
+	if e.conn != nil {
+		var sess *C.WT_SESSION
+		if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+			return fmt.Errorf("open session for catalog row count verification failed: %d", ret)
+		}
+		defer C.go_wt_session_close(sess)
+
+		for _, t := range e.tables {
+			cnt, err := e.countTableRowsChecked(sess, t)
+			if err != nil {
+				return fmt.Errorf("count rows for table %q failed: %w", t.Name, err)
+			}
+			e.getRowCountAtomicLocked(t.Name).Store(cnt)
+		}
+	}
+	return nil
 }
 
-// countTableRows counts physical rows in WiredTiger table (used during catalog load).
-func (e *Engine) countTableRows(sess *C.WT_SESSION, t *storage.TableSchema) int64 {
+// countTableRowsChecked counts physical rows in WiredTiger table, returning explicit error on failure.
+func (e *Engine) countTableRowsChecked(sess *C.WT_SESSION, t *storage.TableSchema) (int64, error) {
 	uri := C.CString(t.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 	var cur *C.WT_CURSOR
-	if C.go_wt_open_cursor(sess, uri, &cur) != 0 {
-		return 0
+	if ret := C.go_wt_open_cursor(sess, uri, &cur); ret != 0 {
+		return 0, fmt.Errorf("open cursor on %s failed with code %d", t.TableURI(), ret)
 	}
 	defer C.go_wt_cursor_close(cur)
 	var cnt int64
-	for C.go_wt_cursor_next(cur) == 0 {
-		cnt++
+	for {
+		ret := C.go_wt_cursor_next(cur)
+		if ret == 0 {
+			cnt++
+			continue
+		}
+		if ret == C.WT_NOTFOUND {
+			break
+		}
+		return cnt, fmt.Errorf("cursor next on %s failed with code %d", t.TableURI(), ret)
 	}
-	return cnt
+	return cnt, nil
 }
 
 func (e *Engine) getRowCountAtomicLocked(tableName string) *atomic.Int64 {
