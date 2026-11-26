@@ -228,7 +228,7 @@ func (p *Parser) parseExpression(precedence int) Expr {
 
 		case TokenDoubleColon:
 			p.nextToken() // eat ::
-			if !p.curTokenIs(TokenIdent) {
+			if !p.curTokenCanBeType() {
 				return nil
 			}
 			dt, prec, scale, isFixed := p.parseTypeSpec()
@@ -626,6 +626,10 @@ func (p *Parser) parsePrefix() Expr {
 	}
 }
 
+func (p *Parser) curTokenCanBeType() bool {
+	return p.curTokenIs(TokenIdent) || p.curTokenIs(TokenTime) || p.curTokenIs(TokenRow)
+}
+
 func (p *Parser) parseTypeSpec() (storage.DataType, int, int, bool) {
 	firstLit := p.curToken.Literal
 	dt := parseDataType(firstLit)
@@ -721,7 +725,7 @@ func (p *Parser) parseCast(try bool) Expr {
 		return nil
 	}
 	p.nextToken() // eat AS
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenCanBeType() {
 		return nil
 	}
 	dt, prec, scale, isFixed := p.parseTypeSpec()
@@ -745,7 +749,7 @@ func (p *Parser) parseConvert(try bool) Expr {
 		return nil
 	}
 	p.nextToken() // eat (
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenCanBeType() {
 		return nil
 	}
 	dt, prec, scale, isFixed := p.parseTypeSpec()
@@ -800,7 +804,7 @@ func (p *Parser) parseParse(try bool) Expr {
 		return nil
 	}
 	p.nextToken() // eat AS
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenCanBeType() {
 		return nil
 	}
 	dt, prec, scale, isFixed := p.parseTypeSpec()

@@ -64,13 +64,16 @@ WHERE o.amount > '50'::float AND o.status = 'completed'::varchar;
 	}
 
 	// 3. Scalar expr with ::type
-	scalarSQL := `SELECT '123'::int AS i, '3.14'::float AS f, 'true'::bool AS b, 'hello'::varchar AS s;`
+	scalarSQL := `SELECT '123'::int AS i, '3.14'::float AS f, 'true'::bool AS b, 'hello'::varchar AS s, '12:30:00'::TIME AS tm, CAST('14:45:00' AS TIME) AS tm2;`
 	sRes, err := coord.ExecuteSessionSQLContext(ctx, sess.ID, scalarSQL)
 	if err != nil {
 		t.Fatalf("failed scalar SELECT with ::type: %v", err)
 	}
 	if len(sRes.Rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(sRes.Rows))
+	}
+	if sRes.Rows[0]["tm"] == nil || sRes.Rows[0]["tm2"] == nil {
+		t.Fatalf("expected non-nil time values for tm and tm2, got: %+v", sRes.Rows[0])
 	}
 }
 

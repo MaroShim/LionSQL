@@ -431,7 +431,7 @@ func TestParseSQL_CastAndConvert(t *testing.T) {
 	}
 
 	// 4. PostgreSQL :: operator
-	sql4 := `SELECT '42'::INT AS answer, 123::VARCHAR AS str;`
+	sql4 := `SELECT '42'::INT AS answer, 123::VARCHAR AS str, '12:00:00'::TIME AS t;`
 	stmt4, err := proc.ParseSQL(sql4)
 	if err != nil {
 		t.Fatalf("ParseSQL failed for :: operator: %v", err)
@@ -444,6 +444,10 @@ func TestParseSQL_CastAndConvert(t *testing.T) {
 	pgCast2, ok := sel4.Projections[1].Expr.(*proc.CastExpr)
 	if !ok || pgCast2.TargetType != storage.TypeVarChar {
 		t.Fatalf("unexpected pgCast2: %+v", pgCast2)
+	}
+	pgCast3, ok := sel4.Projections[2].Expr.(*proc.CastExpr)
+	if !ok || pgCast3.TargetType != storage.TypeTime {
+		t.Fatalf("unexpected pgCast3: %+v", pgCast3)
 	}
 
 	// 5. Evaluation test with EvalRowExpr
@@ -468,6 +472,10 @@ func TestParseSQL_CastAndConvert(t *testing.T) {
 	vPg, err := proc.EvalRowExpr(pgCast1, nil, nil)
 	if err != nil || vPg != int64(42) {
 		t.Errorf("expected 42 for pgCast1, got val=%v, err=%v", vPg, err)
+	}
+	vPg3, err := proc.EvalRowExpr(pgCast3, nil, nil)
+	if err != nil || vPg3 == nil {
+		t.Errorf("expected time for pgCast3, got val=%v, err=%v", vPg3, err)
 	}
 
 	// 6. PARSE and TRY_PARSE evaluation (ENG-022)
