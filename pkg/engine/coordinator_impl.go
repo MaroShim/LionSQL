@@ -513,9 +513,12 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 	}
 	c.spidCounter++
 
-	defaultDB := "master"
+	defaultDB := "postgres"
 	dialect := DialectTSQL
-	if c.dialectPreference == "postgres" {
+	if strings.HasPrefix(id, "tds-") {
+		defaultDB = "master"
+	}
+	if c.dialectPreference == "postgres" || strings.HasPrefix(id, "pg-") {
 		defaultDB = "postgres"
 		dialect = DialectPostgres
 	}

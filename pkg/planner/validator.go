@@ -1488,6 +1488,10 @@ func areCompatibleCaseTypes(t1, t2 storage.DataType) bool {
 	if isNumericType(t1) && isNumericType(t2) {
 		return true
 	}
+	// In T-SQL / SQL standards, binary/hex literals (e.g. 0x200, 0x01) are integers / bitmasks and seamlessly coerce with integer numeric types.
+	if (t1 == storage.TypeBinary && isNumericType(t2)) || (t2 == storage.TypeBinary && isNumericType(t1)) {
+		return true
+	}
 	if (t1 == storage.TypeDateTime || t1 == storage.TypeDate) && (t2 == storage.TypeDateTime || t2 == storage.TypeDate) {
 		return true
 	}
