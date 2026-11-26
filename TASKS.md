@@ -22,7 +22,7 @@
 | `DONE` | **`ARCH-ANTLR-ORACLE-1`** | `1.0-GA` | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ARIES-LOGGING-1`** |  | ARCH | P2 | Implement ARIES Physiological Undo/Redo Logging for Savepoints | [`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`](notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-AST-GUARD-1`** | `v0.94.0` | Engine | P2 | Phase 2 완료 후 go/ast 정적 분석 아키텍처 가드를 통한 엔진 수동 문자열 파싱 재유입 및 Lexer 캡슐화 침해 영구 차단 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.98.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.98.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`** | `Spec-Out` | Execution | P3 | 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
@@ -792,10 +792,11 @@
 
 ---
 
-### [PENDING] 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 `ARCH-AST-ROUTING-REFACTORING-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 10:55:35
+### [DONE] 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 `ARCH-AST-ROUTING-REFACTORING-1`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-26 06:02:57
 - **Milestone**: `v0.98.0`
-- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)
+- **완료 및 종결 내용**: Commit `03d0457` (`ROUTING-AST-CATALOG-1`) 및 `04999d94` (`ARCH-VDBE-ROUTING-1`)를 통해 `proc.ExtractQueryCharacteristics` 및 `virtual.IsVirtualTable` 심볼 테이블을 구축하여 엔진/와이어 전역의 45개 문자열 휴리스틱을 완전 제거하고 AST 기반 통합 라우팅을 100% 기구현 완료함.
 
 ---
 
@@ -5373,8 +5374,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing `PERF-JOIN-SWISS-TABLE-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 05:52:40
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
-- **통합 및 종결 사유**: Go 1.24+ (현재 런타임 `go1.27.4`)에서 표준 `runtime.map`이 이미 C++ Abseil Swiss Table 기반으로 재작성되어 있으므로 범용 Swiss Table 래핑은 불필요(Spec-Out). 본 태스크의 본질인 "포인터 추적 및 GC 스캔 제거를 위한 평면 배열 기반 해시 조인"은 Post-1.0의 **`PERF-COMPLEX-QUERY-2` (Open-Addressing 정수 플랫 해시 조인)**로 단일화 및 통합 완료됨.
+- **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
+- **통합 및 종결 사유**: Go 1.24+ (현재 런타임 `go1.27.4`)에서 표준 `runtime.map`이 이미 C++ Abseil Swiss Table 기반으로 재작성되어 있으므로 범용 Swiss Table 래핑은 불필요(Spec-Out). 본 태스크의 본질인 "포인터 추적 및 GC 스캔 제거를 위한 평면 배열 기반 해시 조인"은 Post-1.0의 `PERF-COMPLEX-QUERY-2` (Open-Addressing 정수 플랫 해시 조인)로 단일화 및 통합 완료됨.
 
 ---
 
