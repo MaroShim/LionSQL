@@ -517,7 +517,7 @@
 | `DONE` | **`M3`** |  | Ecosystem | P3 | 내구성 및 신뢰성 1차 검증 완료 이력 |  |  |
 | `DONE` | **`OCC-HYPER-2`** |  | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`OLAP-CBO-EXTENDED-STATS-1`** | `Post-1.0` | Planner | P2 | 다중 컬럼 확장 통계 (CREATE STATISTICS) 및 함수 종속성 상관계수 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-CBO-HISTOGRAM-MCV-1`** | `Post-1.0` | Planner | P2 | Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `DONE` | **`OLAP-CBO-HISTOGRAM-MCV-1`** | `Post-1.0` | Planner | P2 | Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`OLAP-DYNAMIC-PARTITION-PRUNING-1`** | `Post-1.0` | Planner | P2 | Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`OLAP-INTRA-QUERY-PARALLEL-FRAMEWORK-1`** | `Post-1.0` | Execution | P2 | Volcano 화산 모델 Gather/Exchange 노드 및 병렬 워커 프레임워크 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`OLAP-JOIN-ORDERING-DP-1`** | `Post-1.0` | Planner | P2 | DPsize / DPsb 기반 다중 테이블 최적 조인 트리 탐색기 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
@@ -5078,8 +5078,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 `OLAP-CBO-HISTOGRAM-MCV-1`
-- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
+### [DONE] Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 `OLAP-CBO-HISTOGRAM-MCV-1`
+- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-26 06:27:34
 - **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
