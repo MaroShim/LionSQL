@@ -332,6 +332,7 @@ import (
 
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/fkengine"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -4189,45 +4190,9 @@ func (tx *WTTx) checkForeignKeyFromRowLocked(tbl *storage.TableSchema, row stora
 }
 
 func (tx *WTTx) checkForeignKeyLocked(tbl *storage.TableSchema, childRec storage.Record) error {
-	for _, fk := range tbl.ForeignKeys {
-		childVals := make([]storage.Value, len(fk.ChildColumns))
-		hasNull := false
-		for i, cCol := range fk.ChildColumns {
-			val, ok := childRec.Get(cCol)
-			if !ok || val.IsNull {
-				hasNull = true
-				break
-			}
-			childVals[i] = val
-		}
-		if hasNull {
-			continue
-		}
-
-		pTbl, err := tx.getTableLocked(fk.ParentTable)
-		if err != nil {
-			return fmt.Errorf("%w: referenced table %q not found", storage.ErrTableNotFound, fk.ParentTable)
-		}
-
-		pCols := fk.ParentColumns
-		if len(pCols) == 0 {
-			pkCol, err := pTbl.PrimaryKeyColumn()
-			if err != nil || pkCol == nil {
-				return fmt.Errorf("referenced table %q has no primary key", fk.ParentTable)
-			}
-			pCols = []string{pkCol.Name}
-		}
-
-		matched, mErr := tx.parentRecordExistsUnderLock(pTbl, pCols, childVals)
-		if mErr != nil {
-			return mErr
-		}
-		if !matched {
-			return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
-				storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
-		}
-	}
-	return nil
+	adapter := &wtFkAdapter{tx: tx}
+	fke := fkengine.New(adapter)
+	return fke.ValidateChildInsertOrUpdate(tbl, childRec)
 }
 
 func (tx *WTTx) parentRecordExistsUnderLock(pTbl *storage.TableSchema, pCols []string, childVals []storage.Value) (bool, error) {
@@ -4323,91 +4288,20 @@ func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.V
 		return nil
 	}
 
-	type childRef struct {
-		childTable string
-		fk         storage.ForeignKeySchema
-	}
-	var childRefs []childRef
+	var childRefs []fkengine.ChildReference
 	tx.sess.engine.mu.RLock()
 	for childName, td := range tx.sess.engine.tables {
 		for _, fk := range td.ForeignKeys {
 			if strings.EqualFold(fk.ParentTable, tableName) {
-				childRefs = append(childRefs, childRef{childTable: childName, fk: fk})
+				childRefs = append(childRefs, fkengine.ChildReference{ChildTable: childName, FK: fk})
 			}
 		}
 	}
 	tx.sess.engine.mu.RUnlock()
 
-	for _, cr := range childRefs {
-		cTbl, err := tx.getTableLocked(cr.childTable)
-		if err != nil {
-			continue
-		}
-		if _, err := cTbl.PrimaryKeyColumn(); err != nil {
-			continue
-		}
-
-		pCols := cr.fk.ParentColumns
-		if len(pCols) == 0 {
-			if pkCol, err := pTbl.PrimaryKeyColumn(); err == nil && pkCol != nil {
-				pCols = []string{pkCol.Name}
-			}
-		}
-
-		parentValues := make([]storage.Value, len(pCols))
-		hasNull := false
-		for i, pCol := range pCols {
-			val, ok := oldRec.Get(pCol)
-			if !ok || val.IsNull {
-				hasNull = true
-				break
-			}
-			parentValues[i] = val
-		}
-		if hasNull {
-			continue
-		}
-
-		cur, err := tx.scanLocked(cr.childTable)
-		if err != nil {
-			continue
-		}
-		var matchingPKs []storage.Value
-		for cur.Next() {
-			row, rErr := cur.Row()
-			if rErr == nil && cTbl.RowMatchesFK(row, cr.fk.ChildColumns, parentValues) {
-				if childPK, ok := cTbl.ResolveRowPK(row); ok && !childPK.IsNull {
-					matchingPKs = append(matchingPKs, childPK)
-				}
-			}
-		}
-		cur.Close()
-
-		if len(matchingPKs) > 0 {
-			switch cr.fk.OnDelete {
-			case storage.ActionCascade:
-				for _, cpk := range matchingPKs {
-					if err := tx.deleteLocked(cr.childTable, cpk); err != nil {
-						return err
-					}
-				}
-			case storage.ActionSetNull:
-				for _, cpk := range matchingPKs {
-					nullPatch := make(storage.Record)
-					for _, cCol := range cr.fk.ChildColumns {
-						nullPatch.Set(cCol, storage.NullValue(storage.TypeVarChar))
-					}
-					if err := tx.updateLocked(cr.childTable, cTbl, cpk, nullPatch); err != nil {
-						return err
-					}
-				}
-			default:
-				return fmt.Errorf("%w: cannot delete from %q: referenced by child row in %q",
-					storage.ErrForeignKeyViolation, tableName, cr.childTable)
-			}
-		}
-	}
-	return nil
+	adapter := &wtFkAdapter{tx: tx}
+	fke := fkengine.New(adapter)
+	return fke.HandleParentDelete(pTbl.Name, oldRec, childRefs, 0)
 }
 
 func (tx *WTTx) Get(tableName string, pk storage.Value) (storage.Record, error) {
