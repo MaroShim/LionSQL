@@ -35,7 +35,7 @@
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.98.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
-| `DONE` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.96.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.95.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.97.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
@@ -96,10 +96,10 @@
 | `DONE` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `DONE` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `DONE` | **`BINDER-EVOL-PHASE-6`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `DONE` | **`BINDER-EVOL-PHASE-7`** | `v0.96.0` | Planner | P1 | Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
-| `DONE` | **`BINDER-EVOL-PHASE-8`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`--domain`](--domain) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-5`** | `v0.95.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-6`** | `v0.95.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-7`** | `v0.95.0` | Planner | P1 | Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-8`** | `v0.95.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`--domain`](--domain) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** |  | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -240,7 +240,7 @@
 | `DONE` | **`BUG-WT-SWEEP-1`** |  | Integrity | P2 | WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug) |  |  |
 | `DONE` | **`BUG-WT-SWEEP-3`** |  | Integrity | P2 | SessionPool 백그라운드 TTL/스윕 루프 및 유휴 ClientSession.Session 회수 |  |  |
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** |  | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
-| `DONE` | **`CBO-STATS-HISTOGRAM-1`** | `v0.96.0` | Planner | P1 | CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 | [`--priority`](--priority) |  |
+| `DONE` | **`CBO-STATS-HISTOGRAM-1`** | `v0.95.0` | Planner | P1 | CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 | [`--priority`](--priority) |  |
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** |  | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** |  | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CI-RELEASE-MULTI-OS-WT-1`** | `v0.94.0` | CI/CD | P1 | GitHub Actions Multi-OS (macOS/Linux/Windows) Native WiredTiger Release Workflow | [`.github/workflows/release.yml`](.github/workflows/release.yml) |  |
@@ -303,13 +303,13 @@
 | `PENDING` | **`FEAT-PG-CATALOG-FUNCTIONS-1`** | `v1.2.0` | Catalog | P2 | format_type(), pg_get_expr(), pg_get_constraintdef() 등 메타 함수 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-PG-DISCARD-COMMANDS-1`** | `v0.95.0` | Wire | P2 | 커넥션 풀러용 DISCARD ALL / PLANS / SEQUENCES / TEMP 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-DISTINCT-ON-1`** | `v1.1.0` | Engine | P2 | SELECT DISTINCT ON (...) 구문 지원 및 정렬 기반 중복 제거 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PG-DOUBLE-COLON-CAST-ALL-1`** | `v0.95.0` | Engine | P2 | 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-PG-DOUBLE-COLON-CAST-ALL-1`** | `v0.96.0` | Engine | P2 | 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-E2E-TOOLING-VALIDATION-1`** | `v1.2.0` | Test | P2 | psql, Prisma, GORM, DBeaver PGWire E2E 통합 테스트 스위트 구축 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-ILIKE-AND-REGEX-OPS-1`** | `v1.1.0` | Engine | P2 | ILIKE, NOT ILIKE 및 POSIX 정규식 연산자 (~, !~, ~*, !~*) 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-JSONB-OPERATORS-1`** | `v1.2.0` | Engine | P2 | JSONB 탐색 연산자 (->, ->>, #>, ?) 및 빌더 함수 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-SEQUENCE-FUNCS-1`** | `v1.1.0` | Engine | P2 | nextval(), currval(), setval() 시퀀스 함수 및 SERIAL 연동 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-SEQUENCE-OBJECTS-1`** | `v1.1.0` | Catalog | P2 | CREATE/ALTER/DROP SEQUENCE DDL 및 원자적 카운터 엔진 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v0.95.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v0.96.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-STAT-ACTIVITY-AND-SETTINGS-1`** | `v1.2.0` | Catalog | P2 | pg_stat_activity, pg_settings 가상 뷰 확충 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
@@ -335,7 +335,7 @@
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1`** | `-` | Engine | P1 | 컬럼 타입별 데이터 검증기 및 정규화 엔진 (VARCHAR/CHAR/DECIMAL/TINYINT) | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
-| `DONE` | **`FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`** | `v0.96.0` | 1 | P2 | Planner | [`--milestone`](--milestone) |  |
+| `DONE` | **`FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`** | `v0.95.0` | 1 | P2 | Planner | [`--milestone`](--milestone) |  |
 | `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `v1.1.0` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
@@ -530,9 +530,9 @@
 | `PENDING` | **`P2-BACKLOG`** | `v1.99.0` | Engine | P3 | Post-1.0 P2 Deferred Audit Items (92 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`P2-STABILIZE-AB-1`** |  | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** |  | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
-| `DONE` | **`PERF-AGG-SCALAR-ACCUMULATOR-1`** | `v0.97.0` | Execution | P2 | Zero-Allocation Scalar Accumulator for High-Frequency Group By Aggregations | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-AGG-SCALAR-ACCUMULATOR-1`** | `v0.95.0` | Execution | P2 | Zero-Allocation Scalar Accumulator for High-Frequency Group By Aggregations | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** |  | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
-| `DONE` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.96.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
+| `DONE` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.95.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CBO-STATS-BOUNDED-1`** | `1.0-GA` | Planner / Storage | P2 | Support atomic live TableRowCount in WiredTiger and enforce 30,000-row bounded Vitter reservoir sampling in AnalyzeTable ([RULE:BoundedBuffers]) | [`notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md`](notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md) |  |
 | `DONE` | **`PERF-COMPLEX-QUERY-2`** | `v0.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
@@ -543,18 +543,18 @@
 | `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-EXEC-VECTORIZED-BATCH-1`** | `v1.0-GA` | Execution | P2 | Vectorized 1024-Row Batch Processing Pipeline across Volcano Operators | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-FLAT-ARRAY-HASH-JOIN-1`** | `v0.96.0` | Execution | P1 | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-FLAT-ARRAY-HASH-JOIN-1`** | `v0.95.0` | Execution | P1 | Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
-| `DONE` | **`PERF-HASH-JOIN-DIRECT-INT-PROBE-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 단일 정수 키 직결 Flat Array 프로브 패스트패스 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
-| `DONE` | **`PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`** | `v0.96.0` | Execution | P1 | HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-HASH-JOIN-DIRECT-INT-PROBE-1`** | `v0.95.0` | Execution | P1 | HashJoinIterator 단일 정수 키 직결 Flat Array 프로브 패스트패스 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.95.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
+| `DONE` | **`PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`** | `v0.95.0` | Execution | P1 | HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
-| `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.96.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-JOIN-MINMAX-ZONE-PRUNING-1`** | `v0.97.0` | Execution | P2 | Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-JOIN-AGG-OPERATOR-FUSION-1`** | `v0.95.0` | Execution | P1 | Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-JOIN-MINMAX-ZONE-PRUNING-1`** | `v0.95.0` | Execution | P2 | Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `PENDING` | **`PERF-JOIN-RADIX-PARTITIONED-1`** | `Post-1.0` | Execution | P3 | L2-Cache-Fit Radix Partitioned Hash Join for Out-of-L3 In-Memory Datasets | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `PENDING` | **`PERF-JOIN-SWISS-TABLE-1`** | `v0.98.0` | Execution | P2 | Flat Swiss-Table Robin-Hood Hash Join Engine to eliminate pointer chasing | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `DONE` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.96.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-LIMIT-EARLY-EXIT-1`** | `v0.95.0` | Execution | P2 | Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-MEMENGINE-ADAPTIVE-RADIX-TREE-1`** | `v1.20.0` | Storage | P2 | Trie-Augmented SkipList (ART + SkipList Hybrid) 인메모리 인덱스 엔진 도입 (상위 O(k) ART 접두사 라우터 + 하위 O(1) 선형 스캔) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-MIN-MAX-INDEX-SEEK-1`** | `v0.95.0` | Execution | P1 | MIN()/MAX() 집계 함수 인덱스 O(1) 다이렉트 단방향 시크 최적화 (Index First/Last Leaf Seek) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
@@ -568,24 +568,24 @@
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
-| `DONE` | **`PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`** | `v0.96.0` | Planner | P1 | B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
-| `DONE` | **`PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`** | `v0.96.0` | Execution | P1 | Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
+| `DONE` | **`PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`** | `v0.95.0` | Planner | P1 | B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
+| `DONE` | **`PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`** | `v0.95.0` | Execution | P1 | Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 | [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
-| `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.96.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
-| `DONE` | **`PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`** |  | Wire | P1 | v0.96.0 | [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축) |  |
+| `DONE` | **`PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`** | `v0.95.0` | Execution | P1 | Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`** | `v0.95.0` | Wire | P1 | PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out | [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md) |  |
+| `DONE` | **`PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`** | `v0.95.0` | Wire | P1 | 1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축 | [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
 | `DONE` | **`PERF-RESULT-ROW-STREAM-1`** | `v1.10.0` | Engine | P2 | 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
-| `DONE` | **`PERF-RUNTIME-BLOOM-FILTER-1`** | `v0.96.0` | Execution | P2 | Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-RUNTIME-BLOOM-FILTER-1`** | `v0.95.0` | Execution | P2 | Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) | [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-RUNTIME-BLOOM-FILTER-JOIN-1`** | `Post-1.0` | Execution | P2 | Runtime Bloom Filter Pushdown (Join Build-side 블룸 필터 Probe Scan 주입) | [`notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md`](notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SCAN-FILTER-FUSION-1`** | `v0.95.0` | Execution | P2 | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) | [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.97.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `DONE` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.96.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
-| `DONE` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.96.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.95.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.95.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.95.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-STORAGE-SCAN-FILTER-BYTE-FUSION-1`** | `v0.99.0` | Storage | P2 | Storage Scan-Filter Early Byte Elimination (원시 바이트 오프셋 기반 조기 필터 판정) | [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
@@ -609,7 +609,7 @@
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
-| `COMPLETED` | **`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`** | `v0.96.0` | Refactoring | P2 | 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
+| `COMPLETED` | **`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`** | `v0.95.0` | Refactoring | P2 | 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.97.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -889,8 +889,8 @@
 ---
 
 ### [DONE] TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 `ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-26 01:23:40
-- **Milestone**: `v0.96.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
@@ -1459,29 +1459,29 @@
 ---
 
 ### [DONE] BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 및 플랫/조인 O(1) 정수 슬롯 바인딩 `BINDER-EVOL-PHASE-5`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-25 03:51:07
-- **Milestone**: `v0.96.0`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
 ---
 
 ### [DONE] 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext & OuterLevel 연동) `BINDER-EVOL-PHASE-6`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-25 06:24:56
-- **Milestone**: `v0.96.0`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Scope Shadowing, Self-Join Ambiguity, Wildcard Expansion & Semantic Gatekeeper `BINDER-EVOL-PHASE-7`
-- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-25 07:31:27
-- **Milestone**: `v0.96.0`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
 ---
 
 ### [DONE] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-8`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-25 09:55:56
-- **Milestone**: `v0.97.0`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`--domain`](--domain)
 
 ---
@@ -3009,8 +3009,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] CBO 64-버킷 등고선 히스토그램 및 MCV 카디널리티 엔진 `CBO-STATS-HISTOGRAM-1`
-- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-26 01:02:32
-- **Milestone**: `v0.96.0`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`--priority`](--priority)
 
 ---
@@ -3537,8 +3537,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) `FEAT-PG-DOUBLE-COLON-CAST-ALL-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 00:30:32
-- **Milestone**: `v0.95.0`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md)
 
 ---
@@ -3579,8 +3579,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] SET/SHOW search_path, timezone, current_setting(), set_config() `FEAT-PG-SESSION-SETTINGS-PARITY-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-26 00:30:32
-- **Milestone**: `v0.95.0`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md)
 
 ---
@@ -3759,8 +3759,8 @@ WiredTiger C MVCC(WT_ROLLBACK)와의 물리적 불일치 및 In-Memory OCC 락�
 ---
 
 ### [DONE] Planner `FEAT-VALIDATOR-GATEKEEPER-HARDENING-1`
-- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-25 08:00:44
-- **Milestone**: `v0.96.0`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`--milestone`](--milestone)
 
 ---
@@ -5179,8 +5179,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Zero-Allocation Scalar Accumulator for High-Frequency Group By Aggregations `PERF-AGG-SCALAR-ACCUMULATOR-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:50:29
-- **Milestone**: `v0.97.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
@@ -5191,8 +5191,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 `PERF-BULK-INSERT-PIPELINE-1`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-24 03:15:54
-- **Milestone**: `v0.96.0`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`--priority`](--priority)
 
 ---
@@ -5281,8 +5281,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Flat Array Direct Probe 해시 조인 (소형 빌드 테이블 L1/L2 캐시 상주) `PERF-FLAT-ARRAY-HASH-JOIN-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 10:31:52
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -5316,22 +5316,22 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] HashJoinIterator 단일 정수 키 직결 Flat Array 프로브 패스트패스 `PERF-HASH-JOIN-DIRECT-INT-PROBE-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:20:09
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 `PERF-HASH-JOIN-SMALL-BUILD-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 06:03:15
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md)
 
 ---
 
 ### [DONE] HashJoinIterator 프로브 결과 튜플 슬라이스 할당 제거 (Chunk Buffer Pool 활용) `PERF-HASH-JOIN-ZERO-ALLOC-CHUNK-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:58:19
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -5343,15 +5343,15 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Join-Aggregate Operator Fusion (중간 튜플 생략 및 다이렉트 슬롯 누적) `PERF-JOIN-AGG-OPERATOR-FUSION-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:48:30
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:39
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Runtime Min/Max Zone Map Filter Pushdown for Hash Join Probe Optimization `PERF-JOIN-MINMAX-ZONE-PRUNING-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:50:29
-- **Milestone**: `v0.97.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
@@ -5371,8 +5371,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Early-Exit LIMIT 스토리지 조기 탈출 (WHERE EXISTS 및 LIMIT n 도달 시 스캔 즉시 중단) `PERF-LIMIT-EARLY-EXIT-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 10:06:00
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -5467,15 +5467,15 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] B-Tree Index Scan 정렬 순서 일치 시 Sort 연산자 완전 생략 / Order Bypass `PERF-ORDER-BY-INDEX-SCAN-BYPASS-1`
-- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-25 05:11:19
-- **Milestone**: `v0.96.0`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md)
 
 ---
 
 ### [DONE] Order By 다중 컬럼 정적 슬롯 인덱싱 및 원시 타입(Int, Float, String) 직결 비교기 `PERF-ORDER-BY-PREBOUND-MULTI-SLOT-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 05:06:06
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md`](notes/ORDER_BY_ACCELERATION_AND_BYPASS_PLAN.ko.md)
 
 ---
@@ -5495,21 +5495,22 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Parallel Hash Join 및 워커 로컬 부분 집계 (Local Aggregation & Gather Sum) `PERF-PARALLEL-HASH-JOIN-LOCAL-AGG-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:35:10
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md`](notes/PARALLEL_HASH_JOIN_AND_OPERATOR_FUSION_PLAN.ko.md)
 
 ---
 
 ### [DONE] PGWire 단일 PK 포인트 룩업(WHERE pk = ?) Fast-Path tryPointLookup 직결 및 복잡 쿼리 플랜 캐싱 Spec-Out `PERF-PGWIRE-POINT-LOOKUP-FASTPATH-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 09:55:56
-- **Milestone**: `v0.96.0`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md`](notes/plans/POINT_LOOKUP_FASTPATH_PLAN.ko.md)
 
 ---
 
-### [DONE] v0.96.0 `PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-25 05:25:19
+### [DONE] 1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축 `PERF-PGWIRE-ZERO-COPY-CHUNK-FLUSH-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축`](1만 건 데이터 전송을 위한 PGWire 직렬화 버퍼 Zero-Copy 및 Chunk Flush 파이프라인 구축)
 
 ---
@@ -5551,8 +5552,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Runtime Bloom Filter 푸시다운 (해시 조인 빌드 측 비트셋 기반 대형 프로브 테이블 조기 필터링) `PERF-RUNTIME-BLOOM-FILTER-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:21:28
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md`](notes/plans/PRE_1_0_PERFORMANCE_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -5581,22 +5582,22 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 `PERF-SKIPLIST-BACKWARD-POINTER-1`
-- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-26 01:40:58
-- **Milestone**: `v0.97.0`
+- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 
 ### [DONE] SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 `PERF-SORT-PREBOUND-COMPARATOR-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-25 04:20:09
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 `PERF-SORT-SPILL-BINARY-CODEC-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-25 10:06:00
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md)
 
 ---
@@ -5793,8 +5794,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [COMPLETED] 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) `REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`
-- **Domain**: Refactoring | **Priority**: P2 | **Updated**: 2026-11-24 08:40:17
-- **Milestone**: `v0.96.0`
+- **Domain**: Refactoring | **Priority**: P2 | **Updated**: 2026-11-26 01:52:40
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
 
 ---
