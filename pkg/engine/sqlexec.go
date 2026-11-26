@@ -1471,6 +1471,57 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		if rawParam, rawVal, ok := parseSetConfigRest(rest); ok {
 			param := strings.ToLower(cleanIdentifier(rawParam))
 			valStr := strings.Trim(strings.TrimSpace(rawVal), "';\"")
+			if param == "dialect" || param == "sql_dialect" {
+				valNorm := strings.ToLower(strings.TrimSpace(valStr))
+				switch valNorm {
+				case "postgres", "postgresql", "pg":
+					cs.Mu.Lock()
+					cs.Dialect = DialectPostgres
+					cs.Vars["dialect"] = "postgres"
+					cs.Mu.Unlock()
+					return &QueryResult{
+						Success:    true,
+						Command:    "SET",
+						Messages:   []string{"SET: dialect set to postgres."},
+						DurationUS: time.Since(start).Microseconds(),
+					}, nil
+				case "tsql", "sqlserver", "mssql", "default":
+					cs.Mu.Lock()
+					cs.Dialect = DialectTSQL
+					cs.Vars["dialect"] = "tsql"
+					cs.Mu.Unlock()
+					return &QueryResult{
+						Success:    true,
+						Command:    "SET",
+						Messages:   []string{"SET: dialect set to tsql."},
+						DurationUS: time.Since(start).Microseconds(),
+					}, nil
+				case "mysql":
+					cs.Mu.Lock()
+					cs.Dialect = DialectMySQL
+					cs.Vars["dialect"] = "mysql"
+					cs.Mu.Unlock()
+					return &QueryResult{
+						Success:    true,
+						Command:    "SET",
+						Messages:   []string{"SET: dialect set to mysql."},
+						DurationUS: time.Since(start).Microseconds(),
+					}, nil
+				case "sqlite":
+					cs.Mu.Lock()
+					cs.Dialect = DialectSQLite
+					cs.Vars["dialect"] = "sqlite"
+					cs.Mu.Unlock()
+					return &QueryResult{
+						Success:    true,
+						Command:    "SET",
+						Messages:   []string{"SET: dialect set to sqlite."},
+						DurationUS: time.Since(start).Microseconds(),
+					}, nil
+				default:
+					return nil, fmt.Errorf("ERROR 22023: invalid dialect %q (supported: tsql, postgres, mysql, sqlite)", valStr)
+				}
+			}
 			if param == "work_mem" {
 				if strings.HasPrefix(strings.TrimSpace(valStr), "-") {
 					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter \"work_mem\": %q", valStr)
@@ -1582,6 +1633,23 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 		} else {
 			switch paramNorm {
+			case "dialect", "sql_dialect":
+				if cs != nil {
+					cs.Mu.Lock()
+					switch cs.Dialect {
+					case DialectPostgres:
+						valStr = "postgres"
+					case DialectMySQL:
+						valStr = "mysql"
+					case DialectSQLite:
+						valStr = "sqlite"
+					default:
+						valStr = "tsql"
+					}
+					cs.Mu.Unlock()
+				} else {
+					valStr = "tsql"
+				}
 			case "work_mem":
 				valStr = execution.FormatMemSize(s.DefaultWorkMem())
 			case "search_path":

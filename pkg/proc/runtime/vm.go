@@ -624,10 +624,16 @@ type VMFrame struct {
 	lastErrorMsg    string
 	lastErrorLine   int
 	callDepth       int
+	isPostgres      bool
 	ctx             context.Context
 }
 
 func (f *VMFrame) bindParams(params map[string]any) {
+	if pgAny, ok := params["__postgres_compat__"]; ok {
+		if b, ok := pgAny.(bool); ok {
+			f.isPostgres = b
+		}
+	}
 	if sttAny, ok := params["__session_temp_tables__"]; ok {
 		if sttMap, ok := sttAny.(map[string]string); ok {
 			f.sessionTempTables = sttMap
@@ -3859,8 +3865,11 @@ func storageDiv(a, b storage.Value) (storage.Value, error) {
 		}
 		return storage.IntValue(a.IVal / b.IVal), nil
 	}
-	n1, _ := toFloatNum(a)
-	n2, _ := toFloatNum(b)
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if !ok1 || !ok2 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
+	}
 	if n2 == 0 {
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero: divide by zero error encountered")
 	}
@@ -3875,8 +3884,11 @@ func storageIntDiv(a, b storage.Value) (storage.Value, error) {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown), nil
 	}
-	n1, _ := toFloatNum(a)
-	n2, _ := toFloatNum(b)
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if !ok1 || !ok2 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
+	}
 	i1 := int64(n1)
 	i2 := int64(n2)
 	if i2 == 0 {
@@ -3892,8 +3904,11 @@ func storageMod(a, b storage.Value) (storage.Value, error) {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown), nil
 	}
-	n1, _ := toFloatNum(a)
-	n2, _ := toFloatNum(b)
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if !ok1 || !ok2 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
+	}
 	i1 := int64(n1)
 	i2 := int64(n2)
 	if i2 == 0 {

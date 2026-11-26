@@ -2,6 +2,7 @@ package planner
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -1099,6 +1100,22 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 		return nil
 	}
 	return WalkAST(expr, func(node proc.Expr) error {
+		// 1. Static validation: Arithmetic operators must not operate on non-numeric string literals
+		if bin, ok := node.(*proc.BinaryExpr); ok {
+			switch bin.Op {
+			case proc.TokenSlash, proc.TokenAsterisk, proc.TokenMinus, proc.TokenPercent, proc.TokenDiv:
+				if isNonNumericStringLiteral(bin.Left) || isNonNumericStringLiteral(bin.Right) {
+					var nonNum string
+					if isNonNumericStringLiteral(bin.Left) {
+						nonNum = bin.Left.(*proc.LiteralExpr).Val.SVal
+					} else {
+						nonNum = bin.Right.(*proc.LiteralExpr).Val.SVal
+					}
+					return fmt.Errorf("conversion failed when converting the varchar value %q to data type numeric", nonNum)
+				}
+			}
+		}
+
 		col, ok := node.(*proc.ColumnRefExpr)
 		if !ok {
 			return nil
@@ -1137,6 +1154,21 @@ func (s *TableScope) validateExprInternal(expr proc.Expr, allowProjectionAlias b
 		_ = res // ResolveDefinite or ResolveIndeterminate passes
 		return nil
 	})
+}
+
+func isNonNumericStringLiteral(expr proc.Expr) bool {
+	if expr == nil {
+		return false
+	}
+	lit, ok := expr.(*proc.LiteralExpr)
+	if !ok || lit.Val.Type != storage.TypeVarChar || lit.Val.IsNull {
+		return false
+	}
+	str := strings.TrimSpace(lit.Val.SVal)
+	if _, err := strconv.ParseFloat(str, 64); err != nil {
+		return true
+	}
+	return false
 }
 
 // ValidateAmbiguousExpr checks whether any unqualified column in the expression exists in multiple table schemas.
@@ -1382,12 +1414,38 @@ func ValidateDistinctOrderBy(projections []proc.Projection, orderBy []proc.Order
 	return nil
 }
 
-// ValidateConstantDomainBounds checks constant argument bounds for functions such as NTILE and PERCENTILE_CONT.
+// ValidateConstantDomainBounds checks constant argument bounds for functions such as NTILE and PERCENTILE_CONT,
+// as well as semantic type invariants on expressions like CASE.
 func ValidateConstantDomainBounds(expr proc.Expr) error {
 	if expr == nil {
 		return nil
 	}
 	return WalkAST(expr, func(node proc.Expr) error {
+		// 1. Static validation: CASE branches must have compatible result types
+		if caseNode, ok := node.(*proc.CaseExpr); ok {
+			var branchTypes []storage.DataType
+			for _, w := range caseNode.Whens {
+				if w.Result != nil {
+					if lit, isLit := w.Result.(*proc.LiteralExpr); isLit && !lit.Val.IsNull {
+						branchTypes = append(branchTypes, lit.Val.Type)
+					}
+				}
+			}
+			if caseNode.Else != nil {
+				if lit, isLit := caseNode.Else.(*proc.LiteralExpr); isLit && !lit.Val.IsNull {
+					branchTypes = append(branchTypes, lit.Val.Type)
+				}
+			}
+			for i := 0; i < len(branchTypes); i++ {
+				for j := i + 1; j < len(branchTypes); j++ {
+					t1, t2 := branchTypes[i], branchTypes[j]
+					if t1 != t2 && !areCompatibleCaseTypes(t1, t2) {
+						return fmt.Errorf("incompatible types in CASE branches: cannot match %s and %s", t1.String(), t2.String())
+					}
+				}
+			}
+		}
+
 		fn, ok := node.(*proc.FunctionCallExpr)
 		if !ok {
 			return nil
@@ -1421,6 +1479,19 @@ func ValidateConstantDomainBounds(expr proc.Expr) error {
 		}
 		return nil
 	})
+}
+
+func areCompatibleCaseTypes(t1, t2 storage.DataType) bool {
+	if t1 == t2 {
+		return true
+	}
+	if isNumericType(t1) && isNumericType(t2) {
+		return true
+	}
+	if (t1 == storage.TypeDateTime || t1 == storage.TypeDate) && (t2 == storage.TypeDateTime || t2 == storage.TypeDate) {
+		return true
+	}
+	return false
 }
 
 // ValidateDMLContract enforces schema integrity contracts on DML write operations.

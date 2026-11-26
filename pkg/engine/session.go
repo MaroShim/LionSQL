@@ -893,7 +893,7 @@ func (cs *ClientSession) IsPostgres() bool {
 	if cs == nil {
 		return false
 	}
-	return cs.Dialect == DialectPostgres || strings.HasPrefix(cs.ID, "pg-")
+	return cs.Dialect == DialectPostgres
 }
 
 // IsTSQL reports whether the session operates under Microsoft T-SQL dialect semantics.

@@ -1614,10 +1614,8 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		if e.Not {
 			flags |= 1
 		}
-		if e.Collation != "" && sqlutil.IsCaseSensitiveCollation(e.Collation) {
-			flags |= 2
-		} else if !e.CaseInsensitive && isExprCollateCS(e.Expr) {
-			flags |= 2
+		if e.CaseInsensitive {
+			flags |= 4 // explicit ILIKE
 		}
 		var aux any
 		if e.Escape != nil {
@@ -1650,6 +1648,9 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		return valReg, nil
 
 	case *CaseExpr:
+		if err := validateCaseBranchResultTypes(e, nil, nil, nil); err != nil {
+			return 0, err
+		}
 		r := c.allocReg()
 		var endJumps []int
 

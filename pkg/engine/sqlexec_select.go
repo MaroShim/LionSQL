@@ -170,14 +170,15 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 	if cs != nil {
 		cs.Mu.Lock()
-		if len(cs.Vars) > 0 || cs.IsSQLite() {
-			opts.SessionVars = make(map[string]any, len(cs.Vars)+1)
-			for k, v := range cs.Vars {
-				opts.SessionVars[k] = v
-			}
-			if cs.IsSQLite() {
-				opts.SessionVars["__sqlite_compat__"] = true
-			}
+		opts.SessionVars = make(map[string]any, len(cs.Vars)+2)
+		for k, v := range cs.Vars {
+			opts.SessionVars[k] = v
+		}
+		if cs.IsSQLite() {
+			opts.SessionVars["__sqlite_compat__"] = true
+		}
+		if cs.IsPostgres() {
+			opts.SessionVars["__postgres_compat__"] = true
 		}
 		if wmVal, ok := cs.Vars["work_mem"]; ok {
 			switch v := wmVal.(type) {
@@ -1214,16 +1215,15 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		var varRow map[string]any
 		if cs != nil {
 			cs.Mu.Lock()
-			if len(cs.Vars) > 0 {
-				varRow = make(map[string]any, len(cs.Vars)+1)
-				for k, v := range cs.Vars {
-					varRow[k] = v
-				}
-			} else {
-				varRow = make(map[string]any, 1)
+			varRow = make(map[string]any, len(cs.Vars)+2)
+			for k, v := range cs.Vars {
+				varRow[k] = v
 			}
 			if cs.IsSQLite() {
 				varRow["__sqlite_compat__"] = true
+			}
+			if cs.IsPostgres() {
+				varRow["__postgres_compat__"] = true
 			}
 			cs.Mu.Unlock()
 		}
@@ -1425,11 +1425,15 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 				var varRow map[string]any
 				if cs != nil {
 					cs.Mu.Lock()
-					if len(cs.Vars) > 0 {
-						varRow = make(map[string]any, len(cs.Vars))
-						for k, v := range cs.Vars {
-							varRow[k] = v
-						}
+					varRow = make(map[string]any, len(cs.Vars)+2)
+					for k, v := range cs.Vars {
+						varRow[k] = v
+					}
+					if cs.IsSQLite() {
+						varRow["__sqlite_compat__"] = true
+					}
+					if cs.IsPostgres() {
+						varRow["__postgres_compat__"] = true
 					}
 					cs.Mu.Unlock()
 				}
@@ -1894,13 +1898,19 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		if cs.QueryCtx != nil {
 			ctx = cs.QueryCtx
 		}
-		params = make(map[string]any, len(cs.Vars)+2)
+		params = make(map[string]any, len(cs.Vars)+4)
 		for k, v := range cs.Vars {
 			params[k] = v
 		}
 		if cs.Database != "" {
 			params["current_database"] = cs.Database
 			params["db_name"] = cs.Database
+		}
+		if cs.IsPostgres() {
+			params["__postgres_compat__"] = true
+		}
+		if cs.IsSQLite() {
+			params["__sqlite_compat__"] = true
 		}
 		cs.Mu.Unlock()
 	}

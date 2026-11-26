@@ -446,7 +446,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			} else if c, ok := e.Right.(*CollateExpr); ok {
 				collate = c.Collation
 			}
-			return evalRowBinaryOpWithCollation(e.Op, leftVal, rightVal, collate, isSQLiteCompat(row))
+			return evalRowBinaryOpWithCollation(e.Op, leftVal, rightVal, collate, isSQLiteCompat(row), isPostgresCompat(row))
 		}
 
 	case *InExpr:
@@ -602,13 +602,18 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 				}
 			}
 		}
-		matched := sqlutil.MatchLikeEscape(strPat, strVal, escStr, true)
+		ci := true
+		if isPostgresCompat(row) {
+			ci = false
+		}
+		if e.CaseInsensitive {
+			ci = true
+		}
+		matched := sqlutil.MatchLikeEscape(strPat, strVal, escStr, ci)
 		if e.Collation != "" {
 			matched = sqlutil.MatchLikeEscape(strPat, strVal, escStr, !sqlutil.IsCaseSensitiveCollation(e.Collation))
-		} else if !e.CaseInsensitive {
-			if c, ok := e.Expr.(*CollateExpr); ok {
-				matched = sqlutil.MatchLikeEscape(strPat, strVal, escStr, !sqlutil.IsCaseSensitiveCollation(c.Collation))
-			}
+		} else if c, ok := e.Expr.(*CollateExpr); ok {
+			matched = sqlutil.MatchLikeEscape(strPat, strVal, escStr, !sqlutil.IsCaseSensitiveCollation(c.Collation))
 		}
 		if e.Not {
 			return !matched, nil
@@ -627,6 +632,8 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		return isNull, nil
 
 	case *CaseExpr:
+		var resultVal any
+		var resultErr error
 		if e.Operand != nil {
 			opVal, err := EvalRowExpr(e.Operand, row, execSubquery)
 			if err != nil {
@@ -641,24 +648,35 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 					}
 					condStVal := anyToStorageVal(condVal)
 					if !condStVal.IsNull && opStVal.Equal(condStVal) {
-						return EvalRowExpr(w.Result, row, execSubquery)
+						resultVal, resultErr = EvalRowExpr(w.Result, row, execSubquery)
+						break
 					}
 				}
 			}
-			if e.Else != nil {
-				return EvalRowExpr(e.Else, row, execSubquery)
+			if resultVal == nil && resultErr == nil && e.Else != nil {
+				resultVal, resultErr = EvalRowExpr(e.Else, row, execSubquery)
 			}
-			return nil, nil
-		}
-		for _, w := range e.Whens {
-			if EvalBoolExpr(w.Condition, row, execSubquery) {
-				return EvalRowExpr(w.Result, row, execSubquery)
+		} else {
+			matched := false
+			for _, w := range e.Whens {
+				if EvalBoolExpr(w.Condition, row, execSubquery) {
+					resultVal, resultErr = EvalRowExpr(w.Result, row, execSubquery)
+					matched = true
+					break
+				}
+			}
+			if !matched && e.Else != nil {
+				resultVal, resultErr = EvalRowExpr(e.Else, row, execSubquery)
 			}
 		}
-		if e.Else != nil {
-			return EvalRowExpr(e.Else, row, execSubquery)
+		if resultErr != nil {
+			return nil, resultErr
 		}
-		return nil, nil
+		// Invariant: Verify type compatibility across all candidate branch results if present
+		if err := validateCaseBranchResultTypes(e, resultVal, row, execSubquery); err != nil {
+			return nil, err
+		}
+		return resultVal, nil
 
 	case *CastExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
@@ -933,6 +951,52 @@ func extractArrayElements(rightVal any) []string {
 	return elements
 }
 
+func validateCaseBranchResultTypes(e *CaseExpr, resVal any, row map[string]any, execSubquery SubqueryExecutor) error {
+	if e == nil {
+		return nil
+	}
+	var branchTypes []storage.DataType
+	for _, w := range e.Whens {
+		if w.Result != nil {
+			if lit, isLit := w.Result.(*LiteralExpr); isLit && !lit.Val.IsNull {
+				branchTypes = append(branchTypes, lit.Val.Type)
+			}
+		}
+	}
+	if e.Else != nil {
+		if lit, isLit := e.Else.(*LiteralExpr); isLit && !lit.Val.IsNull {
+			branchTypes = append(branchTypes, lit.Val.Type)
+		}
+	}
+	if len(branchTypes) > 1 {
+		for i := 0; i < len(branchTypes); i++ {
+			for j := i + 1; j < len(branchTypes); j++ {
+				t1, t2 := branchTypes[i], branchTypes[j]
+				if t1 != t2 && !areCaseTypesCompatible(t1, t2) {
+					return fmt.Errorf("incompatible types in CASE branches: cannot match %s and %s", t1.String(), t2.String())
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func areCaseTypesCompatible(t1, t2 storage.DataType) bool {
+	if t1 == t2 {
+		return true
+	}
+	isNum := func(t storage.DataType) bool {
+		return t == storage.TypeInt || t == storage.TypeFloat || t == storage.TypeReal || t == storage.TypeDecimal
+	}
+	if isNum(t1) && isNum(t2) {
+		return true
+	}
+	if (t1 == storage.TypeDateTime || t1 == storage.TypeDate) && (t2 == storage.TypeDateTime || t2 == storage.TypeDate) {
+		return true
+	}
+	return false
+}
+
 func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
 	if leftVal == nil || isNullVal(leftVal) || rightVal == nil || isNullVal(rightVal) {
 		return nil, nil
@@ -1026,6 +1090,26 @@ func isStringType(v any) (string, bool) {
 	return "", false
 }
 
+func typeOfVal(v any) string {
+	if v == nil {
+		return "unknown"
+	}
+	switch val := v.(type) {
+	case string:
+		return "text"
+	case int, int32, int64:
+		return "integer"
+	case float32, float64:
+		return "numeric"
+	case bool:
+		return "boolean"
+	case storage.Value:
+		return val.Type.String()
+	default:
+		return fmt.Sprintf("%T", v)
+	}
+}
+
 func isSQLiteCompat(row map[string]any) bool {
 	if row == nil {
 		return false
@@ -1038,7 +1122,20 @@ func isSQLiteCompat(row map[string]any) bool {
 	return false
 }
 
-func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string, isSQLite bool) (any, error) {
+func isPostgresCompat(row map[string]any) bool {
+	if row == nil {
+		return false
+	}
+	if v, ok := row["__postgres_compat__"]; ok {
+		if b, bOk := v.(bool); bOk {
+			return b
+		}
+	}
+	return false
+}
+
+func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string, isSQLite bool, isPostgres ...bool) (any, error) {
+	isPG := len(isPostgres) > 0 && isPostgres[0]
 	if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
 		switch op {
 		case TokenEq:
@@ -1061,14 +1158,15 @@ func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string,
 			}
 		}
 	}
-	return evalRowBinaryOpWithContext(op, left, right, isSQLite)
+	return evalRowBinaryOpWithContext(op, left, right, isSQLite, isPG)
 }
 
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
-	return evalRowBinaryOpWithContext(op, left, right, false)
+	return evalRowBinaryOpWithContext(op, left, right, false, false)
 }
 
-func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (any, error) {
+func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool, isPostgres ...bool) (any, error) {
+	isPG := len(isPostgres) > 0 && isPostgres[0]
 	if isNullVal(left) || isNullVal(right) {
 		switch op {
 		case TokenPlus, TokenMinus, TokenAsterisk, TokenSlash, TokenDiv, TokenPercent:
@@ -1089,7 +1187,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 				return nil, fmt.Errorf("tuple length mismatch: %d vs %d", len(lSlice), len(rSlice))
 			}
 			for i := range lSlice {
-				res, err := evalRowBinaryOpWithContext(TokenEq, lSlice[i], rSlice[i], isSQLite)
+				res, err := evalRowBinaryOpWithContext(TokenEq, lSlice[i], rSlice[i], isSQLite, isPG)
 				if err != nil {
 					return nil, err
 				}
@@ -1289,6 +1387,13 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if isPG {
+			_, isStr1 := isStringType(left)
+			_, isStr2 := isStringType(right)
+			if isStr1 || isStr2 {
+				return nil, fmt.Errorf("operator does not exist: %v + %v (use || for string concatenation)", typeOfVal(left), typeOfVal(right))
+			}
+		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
 				if !isSQLite && isInt32Val(left) && isInt32Val(right) {
@@ -1343,7 +1448,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 			}
 			return diff, nil
 		}
-		return nil, fmt.Errorf("cannot subtract non-numeric values")
+		return nil, fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
 
 	case TokenAsterisk:
 		if left == nil || right == nil {
@@ -1380,7 +1485,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 			}
 			return prod, nil
 		}
-		return nil, fmt.Errorf("cannot multiply non-numeric values")
+		return nil, fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
 
 	case TokenSlash:
 		if left == nil || right == nil {
@@ -1415,7 +1520,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 			}
 			return div, nil
 		}
-		return nil, fmt.Errorf("cannot divide non-numeric values")
+		return nil, fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
 
 	case TokenDiv:
 		if left == nil || right == nil {
@@ -1433,7 +1538,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 			}
 			return int64(n1) / i2, nil
 		}
-		return nil, fmt.Errorf("cannot integer-divide non-numeric values")
+		return nil, fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
 
 	case TokenPercent:
 		if left == nil || right == nil {
@@ -1452,7 +1557,7 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 			}
 			return i1 % i2, nil
 		}
-		return nil, fmt.Errorf("cannot modulo non-numeric values")
+		return nil, fmt.Errorf("conversion failed when converting varchar value to numeric: invalid input syntax")
 
 	case TokenJSONExtract:
 		if left == nil {

@@ -599,6 +599,12 @@ vmLoop:
 			}
 			f.regs[inst.A] = storage.IntValue(vb.IVal + vc.IVal)
 		} else {
+			if f.isPostgres && (vb.Type == storage.TypeVarChar || vc.Type == storage.TypeVarChar) {
+				if catchErr := f.handleCatch(fmt.Errorf("operator does not exist: %v + %v (use || for string concatenation)", vb.Type.String(), vc.Type.String()), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
 			f.regs[inst.A] = storageAdd(vb, vc)
 		}
 
@@ -835,6 +841,9 @@ vmLoop:
 				}
 			}
 			isCS := inst.Flags&2 != 0
+			if f.isPostgres && inst.Flags&4 == 0 { // In PG dialect, default LIKE is Case-Sensitive (unless ILIKE flag 4)
+				isCS = true
+			}
 			matched := sqlutil.MatchLikeEscape(pat, str, esc, !isCS)
 			if inst.Flags&1 != 0 {
 				matched = !matched
@@ -2155,7 +2164,13 @@ vmLoop:
 					}
 					cols = append(cols, cleanName)
 
-					vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
+					vAny, err := proc.EvalRowExpr(p.Expr, rowCtx, nil)
+					if err != nil {
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
+						}
+						continue vmLoop
+					}
 					if sv, ok := vAny.(storage.Value); ok {
 						vAny = sv.Interface()
 					}

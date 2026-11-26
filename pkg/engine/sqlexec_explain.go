@@ -1451,7 +1451,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		cs.Mu.Unlock()
 
 		if !hasActiveTx {
-			if err := s.BeginSessionTx(cs.ID, cs.TxOptions()); err != nil {
+			if err := s.beginSessionTxUnderTxMgrLock(cs, cs.TxOptions()); err != nil {
 				return nil, fmt.Errorf("begin implicit CTE transaction error: %w", err)
 			}
 			startedImplicitTx = true
@@ -1477,7 +1477,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 	defer func() {
 		if retErr != nil {
 			if startedImplicitTx && cs != nil {
-				_ = s.RollbackSessionTx(cs.ID)
+				_ = s.rollbackSessionTxUnderTxMgrLock(cs)
 				cs.ClearTxFailed()
 			} else if usedSavepoint && cs != nil {
 				cs.Mu.Lock()
@@ -1656,7 +1656,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 	}
 
 	if startedImplicitTx && cs != nil {
-		if err := s.CommitSessionTx(cs.ID); err != nil {
+		if err := s.commitSessionTxUnderTxMgrLock(cs); err != nil {
 			return nil, fmt.Errorf("commit implicit CTE transaction error: %w", err)
 		}
 		startedImplicitTx = false
