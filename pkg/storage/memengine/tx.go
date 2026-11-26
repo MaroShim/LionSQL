@@ -2142,21 +2142,119 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 
 // IndexScanDesc scans the secondary index in descending order.
 func (tx *Transaction) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	cur, err := tx.IndexScan(tableName, indexName, low, high)
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+
+	td, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return nil, err
 	}
-	mCur, ok := cur.(*memCursor)
-	if !ok {
-		return cur, nil
+	snapSchema, snapLayout := td.snapshotSchemaAndLayout()
+	tableName = snapSchema.Name
+
+	tx.engine.mu.RLock()
+	idxData, exists := td.Indexes[indexName]
+	if !exists {
+		idxData, exists = sqlutil.MapGetFold(td.Indexes, indexName)
 	}
-	n := len(mCur.keys)
-	revKeys := make([]string, n)
-	for i, pk := range mCur.keys {
-		revKeys[n-1-i] = pk
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
-	mCur.keys = revKeys
-	return mCur, nil
+	if idxData.Schema.Disabled {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: index %q on table %s is disabled", storage.ErrIndexDisabled, indexName, tableName)
+	}
+
+	// Fast-path: When there are no local writes or in read-only transaction,
+	// utilize SkipList's level-0 backward pointer for direct zero-alloc reverse iteration.
+	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
+		candidatePKs := idxData.ScanRangeDesc(low, high)
+		tx.engine.mu.RUnlock()
+		return &memCursor{
+			tx:         tx,
+			tableName:  tableName,
+			td:         td,
+			snapSchema: snapSchema,
+			snapLayout: snapLayout,
+			keys:       candidatePKs,
+			idx:        -1,
+		}, nil
+	}
+
+	candidateEntries := idxData.ScanRangeDescEntries(low, high)
+	tx.engine.mu.RUnlock()
+
+	type indexScanItem struct {
+		pk     string
+		idxKey storage.Value
+	}
+
+	items := make([]indexScanItem, 0, len(candidateEntries))
+	seen := make(map[string]bool, len(candidateEntries))
+
+	for _, entry := range candidateEntries {
+		pk := entry.PK
+		if seen[pk] {
+			continue
+		}
+		seen[pk] = true
+
+		if tx.isLocallyDeleted(tableName, pk) {
+			continue
+		}
+
+		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
+			}
+			continue
+		}
+
+		items = append(items, indexScanItem{pk: pk, idxKey: entry.Key})
+	}
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for pk, locRow := range localRows {
+			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+				continue
+			}
+			seen[pk] = true
+			idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
+			}
+		}
+	}
+
+	// Sort items descending by index key, then descending by PK
+	sort.Slice(items, func(i, j int) bool {
+		cmp := items[i].idxKey.Compare(items[j].idxKey)
+		if cmp != 0 {
+			return cmp > 0
+		}
+		return items[i].pk > items[j].pk
+	})
+
+	pks := make([]string, len(items))
+	for i, item := range items {
+		pks[i] = item.pk
+	}
+
+	return &memCursor{
+		tx:         tx,
+		tableName:  tableName,
+		td:         td,
+		snapSchema: snapSchema,
+		snapLayout: snapLayout,
+		keys:       pks,
+		idx:        -1,
+	}, nil
 }
 
 // ParsePKValue parses a string-encoded primary key back into a storage.Value.

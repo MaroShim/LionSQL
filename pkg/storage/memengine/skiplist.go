@@ -21,9 +21,10 @@ type IndexItem struct {
 
 // SkipListNode represents an individual element in the SkipList.
 type SkipListNode struct {
-	Key     storage.Value
-	Items   []IndexItem
-	forward []*SkipListNode
+	Key      storage.Value
+	Items    []IndexItem
+	forward  []*SkipListNode
+	backward *SkipListNode
 }
 
 // SkipList is a high-performance, concurrent, probabilistic sorted index structure.
@@ -112,14 +113,18 @@ func (sl *SkipList) Insert(key storage.Value, pk string, incVals ...[]storage.Va
 	}
 
 	newNode := &SkipListNode{
-		Key:     key,
-		Items:   []IndexItem{{PK: pk, IncludeValues: inc}},
-		forward: make([]*SkipListNode, lvl),
+		Key:      key,
+		Items:    []IndexItem{{PK: pk, IncludeValues: inc}},
+		forward:  make([]*SkipListNode, lvl),
+		backward: update[0],
 	}
 
 	for i := 0; i < lvl; i++ {
 		newNode.forward[i] = update[i].forward[i]
 		update[i].forward[i] = newNode
+	}
+	if newNode.forward[0] != nil {
+		newNode.forward[0].backward = newNode
 	}
 	sl.length++
 	return nil
@@ -169,6 +174,10 @@ func (sl *SkipList) Delete(key storage.Value, pk string) {
 		} else {
 			update[i].forward[i] = nil
 		}
+	}
+
+	if curr.forward[0] != nil {
+		curr.forward[0].backward = update[0]
 	}
 
 	// Adjust active maximum level
@@ -273,6 +282,82 @@ func (sl *SkipList) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
 			})
 		}
 		curr = curr.forward[0]
+	}
+
+	return result
+}
+
+// ScanRangeDesc returns all PKs whose indexed keys fall within [low, high] inclusive, in descending order.
+// Uses the level-0 backward pointer for O(1) step backwards traversal.
+func (sl *SkipList) ScanRangeDesc(low, high *storage.Value) []string {
+	sl.mu.RLock()
+	defer sl.mu.RUnlock()
+
+	var result []string
+	curr := sl.head
+
+	if high != nil {
+		for i := sl.level - 1; i >= 0; i-- {
+			for curr.forward[i] != nil && curr.forward[i].Key.Compare(*high) <= 0 {
+				curr = curr.forward[i]
+			}
+		}
+	} else {
+		for i := sl.level - 1; i >= 0; i-- {
+			for curr.forward[i] != nil {
+				curr = curr.forward[i]
+			}
+		}
+	}
+
+	for curr != nil && curr != sl.head {
+		if low != nil && curr.Key.Compare(*low) < 0 {
+			break
+		}
+		// Items within the same key are also iterated in reverse PK order if needed, but in LionSQL PKs are unique per key
+		for i := len(curr.Items) - 1; i >= 0; i-- {
+			result = append(result, curr.Items[i].PK)
+		}
+		curr = curr.backward
+	}
+
+	return result
+}
+
+// ScanRangeDescEntries returns all (Key, PK, IncludeValues) entries whose indexed keys fall within [low, high] inclusive, in descending order.
+func (sl *SkipList) ScanRangeDescEntries(low, high *storage.Value) []SkipListEntry {
+	sl.mu.RLock()
+	defer sl.mu.RUnlock()
+
+	var result []SkipListEntry
+	curr := sl.head
+
+	if high != nil {
+		for i := sl.level - 1; i >= 0; i-- {
+			for curr.forward[i] != nil && curr.forward[i].Key.Compare(*high) <= 0 {
+				curr = curr.forward[i]
+			}
+		}
+	} else {
+		for i := sl.level - 1; i >= 0; i-- {
+			for curr.forward[i] != nil {
+				curr = curr.forward[i]
+			}
+		}
+	}
+
+	for curr != nil && curr != sl.head {
+		if low != nil && curr.Key.Compare(*low) < 0 {
+			break
+		}
+		for i := len(curr.Items) - 1; i >= 0; i-- {
+			result = append(result, SkipListEntry{
+				Key:           curr.Key,
+				PK:            curr.Items[i].PK,
+				IncludeValues: curr.Items[i].IncludeValues,
+			})
+		}
+		curr = curr.backward
 	}
 
 	return result

@@ -95,6 +95,20 @@ func (idx *IndexData) ScanRangeEntries(low, high *storage.Value) []SkipListEntry
 	return idx.sl.ScanRangeEntries(low, high)
 }
 
+func (idx *IndexData) ScanRangeDesc(low, high *storage.Value) []string {
+	if err := idx.init(); err != nil || idx.sl == nil {
+		return nil
+	}
+	return idx.sl.ScanRangeDesc(low, high)
+}
+
+func (idx *IndexData) ScanRangeDescEntries(low, high *storage.Value) []SkipListEntry {
+	if err := idx.init(); err != nil || idx.sl == nil {
+		return nil
+	}
+	return idx.sl.ScanRangeDescEntries(low, high)
+}
+
 // SyncEntries exports the in-memory SkipList into the Entries slice for disk snapshot persistence.
 func (idx *IndexData) SyncEntries() {
 	if idx.sl != nil {

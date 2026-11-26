@@ -119,6 +119,69 @@ func TestSkipList_ScanRange(t *testing.T) {
 	}
 }
 
+func TestSkipList_ScanRangeDesc(t *testing.T) {
+	sl := NewSkipList(false)
+
+	for i := 1; i <= 10; i++ {
+		_ = sl.Insert(storage.IntValue(int64(i*10)), fmt.Sprintf("pk_%d", i*10))
+	}
+
+	// Range [30, 70] in DESC
+	low := storage.IntValue(30)
+	high := storage.IntValue(70)
+	pks := sl.ScanRangeDesc(&low, &high)
+	if len(pks) != 5 {
+		t.Fatalf("Expected 5 items in DESC [30, 70], got %d (%v)", len(pks), pks)
+	}
+	if pks[0] != "pk_70" || pks[4] != "pk_30" {
+		t.Fatalf("Unexpected DESC range boundaries: %v", pks)
+	}
+
+	// Range unbounded high [80, nil] in DESC
+	low80 := storage.IntValue(80)
+	pksHigh := sl.ScanRangeDesc(&low80, nil)
+	if len(pksHigh) != 3 {
+		t.Fatalf("Expected 3 items in DESC [80, nil], got %d (%v)", len(pksHigh), pksHigh)
+	}
+	if pksHigh[0] != "pk_100" || pksHigh[2] != "pk_80" {
+		t.Fatalf("Unexpected DESC pksHigh: %v", pksHigh)
+	}
+
+	// Range unbounded low [nil, 30] in DESC
+	high30 := storage.IntValue(30)
+	pksLow := sl.ScanRangeDesc(nil, &high30)
+	if len(pksLow) != 3 {
+		t.Fatalf("Expected 3 items in DESC [nil, 30], got %d (%v)", len(pksLow), pksLow)
+	}
+	if pksLow[0] != "pk_30" || pksLow[2] != "pk_10" {
+		t.Fatalf("Unexpected DESC pksLow: %v", pksLow)
+	}
+
+	// Unbounded full scan in DESC
+	pksAll := sl.ScanRangeDesc(nil, nil)
+	if len(pksAll) != 10 {
+		t.Fatalf("Expected 10 items in full scan DESC, got %d", len(pksAll))
+	}
+	if pksAll[0] != "pk_100" || pksAll[9] != "pk_10" {
+		t.Fatalf("Unexpected full DESC scan boundaries: %v", pksAll)
+	}
+
+	// Out of bounds range
+	lowOut := storage.IntValue(105)
+	highOut := storage.IntValue(200)
+	pksEmpty := sl.ScanRangeDesc(&lowOut, &highOut)
+	if len(pksEmpty) != 0 {
+		t.Fatalf("Expected empty range for out-of-bounds scan DESC, got %d", len(pksEmpty))
+	}
+
+	// Test backward pointer integrity after delete
+	sl.Delete(storage.IntValue(70), "pk_70")
+	pksAfterDel := sl.ScanRangeDesc(&low, &high)
+	if len(pksAfterDel) != 4 || pksAfterDel[0] != "pk_60" || pksAfterDel[3] != "pk_30" {
+		t.Fatalf("Unexpected range after delete 70: %v", pksAfterDel)
+	}
+}
+
 func TestSkipList_SerializationRoundTrip(t *testing.T) {
 	sl := NewSkipList(false)
 

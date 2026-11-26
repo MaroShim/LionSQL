@@ -578,7 +578,7 @@
 | `PENDING` | **`PERF-RUNTIME-BLOOM-FILTER-JOIN-1`** | `Post-1.0` | Execution | P2 | Runtime Bloom Filter Pushdown (Join Build-side 블룸 필터 Probe Scan 주입) | [`notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md`](notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SCAN-FILTER-FUSION-1`** | `v0.95.0` | Execution | P2 | Scan-Filter Operator Fusion (스캔 루프 내 조건 직결 평가 및 불일치 튜플 객체 생성 스킵) | [`notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md`](notes/plans/SCAN_FILTER_FUSION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.97.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v0.97.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-SORT-PREBOUND-COMPARATOR-1`** | `v0.96.0` | Execution | P1 | SortIterator 정렬 키 사전 바인딩 및 int64 전용 Primitive Fast-Path 비교기 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SORT-SPILL-BINARY-CODEC-1`** | `v0.96.0` | Execution | P2 | SortIterator 디스크 스필 시 JSON 직렬화 대체 및 고속 바이너리 튜플 인코딩 | [`notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md`](notes/SORT_AND_JOIN_MICRO_ACCELERATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
@@ -5540,8 +5540,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 `PERF-SKIPLIST-BACKWARD-POINTER-1`
-- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-24 23:42:07
+### [DONE] MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 `PERF-SKIPLIST-BACKWARD-POINTER-1`
+- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-26 01:40:58
 - **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
