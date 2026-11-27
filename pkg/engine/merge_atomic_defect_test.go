@@ -198,6 +198,30 @@ WHEN MATCHED THEN
 	if _, err := coord.ExecuteSessionSQL(sessID, sqlValidDerivedSource); err != nil {
 		t.Errorf("expected valid derived subquery MERGE to pass upfront validation, got err: %v", err)
 	}
+
+	// 10. Subquery with malformed syntax must fail upfront with descriptive error
+	sqlMalformedSubquery := `
+MERGE m_target_empty AS t
+USING (SELECT id, FROM m_source_empty) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = 'ok';
+`
+	if res, err := coord.ExecuteSessionSQL(sessID, sqlMalformedSubquery); err == nil && (res == nil || res.Success) {
+		t.Errorf("expected MERGE with malformed USING subquery syntax to fail upfront, got res: %+v, err: %v", res, err)
+	}
+
+	// 11. Subquery derived source with wildcard (open schema) allows dynamic resolution without false rejection
+	sqlOpenWildcardSubquery := `
+MERGE m_target_empty AS t
+USING (SELECT * FROM m_source_empty) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.name;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlOpenWildcardSubquery); err != nil {
+		t.Errorf("expected MERGE with wildcard subquery source to pass with open schema resolution, got err: %v", err)
+	}
 }
 
 func TestDEFECT_Merge_Triggers_Executed(t *testing.T) {

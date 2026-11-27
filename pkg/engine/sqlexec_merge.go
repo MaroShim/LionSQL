@@ -111,6 +111,7 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 	// Resolve source schema if source is a physical table, subquery, or named columns
 	var sourceSchema *storage.TableSchema
+	sourceIsOpen := false
 	sourceTable := cleanIdentifier(parsed.sourceRaw)
 	if sourceTable != "" && !strings.HasPrefix(sourceTable, "(") {
 		if srcSch, sErr := s.engine.GetTable(sourceTable); sErr == nil && srcSch != nil {
@@ -132,38 +133,44 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		// Subquery derived source: (SELECT ...) AS alias
 		if inner, ok := sqlutil.StripParentheses(strings.TrimSpace(parsed.sourceRaw)); ok {
 			innerTrim := strings.TrimSpace(inner)
-			if parsedStmt, pErr := proc.ParseSQL(innerTrim); pErr == nil {
-				if selStmt, isSel := parsedStmt.(*proc.GeneralSelectStmt); isSel && selStmt != nil {
-					allCatalogSchemas := make(map[string]*storage.TableSchema)
-					if s.engine != nil {
-						if tables, tErr := s.engine.ListTables(); tErr == nil {
-							for _, t := range tables {
-								if t != nil {
-									allCatalogSchemas[strings.ToLower(t.Name)] = t
-									allCatalogSchemas[t.Name] = t
-								}
-							}
+			parsedStmt, pErr := proc.ParseSQL(innerTrim)
+			if pErr != nil {
+				return nil, fmt.Errorf("invalid subquery in MERGE USING clause: %w", pErr)
+			}
+			selStmt, isSel := parsedStmt.(*proc.GeneralSelectStmt)
+			if !isSel || selStmt == nil {
+				return nil, fmt.Errorf("expected SELECT query in MERGE USING subquery, got %T", parsedStmt)
+			}
+			allCatalogSchemas := make(map[string]*storage.TableSchema)
+			if s.engine != nil {
+				if tables, tErr := s.engine.ListTables(); tErr == nil {
+					for _, t := range tables {
+						if t != nil {
+							allCatalogSchemas[strings.ToLower(t.Name)] = t
+							allCatalogSchemas[t.Name] = t
 						}
-					}
-					srcSch, _ := planner.DeriveSubquerySchema(parsed.sourceAlias, selStmt, allCatalogSchemas)
-					if srcSch != nil {
-						sourceSchema = srcSch
 					}
 				}
 			}
+			srcSch, isOpen := planner.DeriveSubquerySchema(parsed.sourceAlias, selStmt, allCatalogSchemas)
+			if srcSch == nil {
+				return nil, fmt.Errorf("failed to derive schema for MERGE USING subquery %q", parsed.sourceAlias)
+			}
+			sourceSchema = srcSch
+			sourceIsOpen = isOpen
 		}
 	}
 
 	// Construct comprehensive TableScope for target and source to validate expressions upfront
 	mergeScope := planner.NewTableScope()
-	if err := mergeScope.Register(parsed.targetTable, parsed.targetAlias, targetSchema); err != nil {
+	if err := mergeScope.RegisterWithOpen(parsed.targetTable, parsed.targetAlias, targetSchema, false); err != nil {
 		return nil, fmt.Errorf("failed to register target table in scope: %w", err)
 	}
 	srcName := sourceTable
-	if srcName == "" {
+	if srcName == "" || strings.HasPrefix(srcName, "(") {
 		srcName = parsed.sourceAlias
 	}
-	if err := mergeScope.Register(srcName, parsed.sourceAlias, sourceSchema); err != nil {
+	if err := mergeScope.RegisterWithOpen(srcName, parsed.sourceAlias, sourceSchema, sourceIsOpen); err != nil {
 		return nil, fmt.Errorf("failed to register source relation in scope: %w", err)
 	}
 
@@ -171,7 +178,7 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 	validateMergeExprString := func(exprStr string) error {
 		exprStr = strings.TrimSpace(exprStr)
 		if exprStr == "" {
-			return nil
+			return fmt.Errorf("syntax error: empty expression in MERGE clause")
 		}
 		p := proc.NewParser(proc.NewLexer(exprStr))
 		astExpr := p.ParseExpr()

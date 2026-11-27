@@ -1049,6 +1049,29 @@ func TestParseSQL_ILikeAndCollate(t *testing.T) {
 	}
 }
 
+func TestParser_RejectTrailingCommaInSelectList(t *testing.T) {
+	invalidQueries := []string{
+		"SELECT id, FROM t",
+		"SELECT id, name, FROM t",
+		"SELECT id,",
+		"SELECT id,, name FROM t",
+		"SELECT id, WHERE id > 1",
+		"SELECT id, GROUP BY id",
+		"SELECT id, ORDER BY id",
+		"SELECT id, UNION SELECT 1",
+		"SELECT @x = 1, FROM t",
+		"SELECT (SELECT id, )",
+	}
+
+	for _, q := range invalidQueries {
+		_, err := proc.ParseSQL(q)
+		if err == nil {
+			t.Errorf("expected query with trailing comma in projection list to fail syntax parsing: %q", q)
+		}
+	}
+}
+
+
 
 
 

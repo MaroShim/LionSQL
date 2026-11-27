@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- propagate `isOpen` dynamic schema state from `DeriveSubquerySchema` into `TableScope.RegisterWithOpen` in `MERGE USING (SELECT ...) AS s` preventing false column rejections on open wildcard subqueries (`AUDIT-STABILIZATION-ROUND3-2`)
+- enforce fail-closed syntax error rejection on trailing commas in SELECT projection lists preventing silent truncation across subqueries and DML statements
+- verify deterministic external sort multi-run spill and k-way heap merge exact scale preservation across varying scales and high-precision Decimals
 - resolve Round 3 deep audit findings across Validator gatekeeper, Binder, and Execution engine (`AUDIT-STABILIZATION-ROUND3-1`):
   - enforce literal zero division/modulo checks uniformly across `WHERE`, `HAVING`, `JOIN ON`, and `GROUP BY` expressions (`SQLSTATE 22012`)
   - calculate true subquery output arity across `JOIN` additions and derived table expansions during wildcard checking (`SQLSTATE 42601`)

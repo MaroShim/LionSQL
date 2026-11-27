@@ -627,6 +627,9 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: varName, IsAssign: true})
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
+				if isReservedAfterProjection(p.curToken.Type) || p.curTokenIs(TokenInto) || isSetOpIdent(p.curToken) {
+					return nil, fmt.Errorf("syntax error: unexpected token %q after comma in SELECT list", p.curToken.Literal)
+				}
 				continue
 			}
 			break
@@ -657,6 +660,9 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
+			if isReservedAfterProjection(p.curToken.Type) || p.curTokenIs(TokenInto) || isSetOpIdent(p.curToken) {
+				return nil, fmt.Errorf("syntax error: unexpected token %q after comma in SELECT list", p.curToken.Literal)
+			}
 		} else {
 			break
 		}

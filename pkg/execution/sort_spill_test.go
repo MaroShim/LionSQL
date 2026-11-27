@@ -584,8 +584,12 @@ func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *tes
 	inputDecs := []storage.Decimal{d1, d2, d3, d4, d5, d6, d7, d8}
 
 	// Repeat rows with tiny work_mem=128 bytes to force multiple spill runs and k-way merge
+	type expectedRow struct {
+		id  int64
+		dec storage.Decimal
+	}
 	var tuples []execution.Tuple
-	var allExpected []storage.Decimal
+	var allExpected []expectedRow
 	idCounter := int64(1)
 	for repeat := 0; repeat < 50; repeat++ {
 		for _, dec := range inputDecs {
@@ -593,22 +597,21 @@ func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *tes
 				Values: []any{idCounter, dec},
 				Index:  colMap,
 			})
-			allExpected = append(allExpected, dec)
+			allExpected = append(allExpected, expectedRow{id: idCounter, dec: dec})
 			idCounter++
 		}
 	}
 
 	sort.SliceStable(allExpected, func(i, j int) bool {
-		cmp := allExpected[i].Cmp(allExpected[j])
+		cmp := allExpected[i].dec.Cmp(allExpected[j].dec)
 		if cmp != 0 {
 			return cmp < 0
 		}
-		// If mathematical value is equal, preserve scale stability
-		return allExpected[i].Scale() < allExpected[j].Scale()
+		return allExpected[i].id < allExpected[j].id
 	})
 
 	mock := &mockTupleIterator{tuples: tuples, schema: schema}
-	sortIter := execution.NewSortIterator(mock, "val ASC")
+	sortIter := execution.NewSortIterator(mock, "val ASC, id ASC")
 	sortIter.SetWorkMem(128)
 
 	if err := sortIter.Open(ctx); err != nil {
@@ -637,12 +640,12 @@ func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *tes
 		if !ok {
 			t.Fatalf("row %d: expected storage.Decimal, got %T", i, results[i].Get("val"))
 		}
-		if !gotVal.Equal(allExpected[i]) {
-			t.Fatalf("row %d: expected %v, got %v", i, allExpected[i], gotVal)
+		if !gotVal.Equal(allExpected[i].dec) {
+			t.Fatalf("row %d: expected %v, got %v", i, allExpected[i].dec, gotVal)
 		}
 		// Verify scale was completely restored and never lost/truncated
-		if gotVal.Scale() < 0 {
-			t.Fatalf("row %d: invalid negative scale %d", i, gotVal.Scale())
+		if gotVal.Scale() != allExpected[i].dec.Scale() {
+			t.Fatalf("row %d: scale mismatch after spill! expected scale %d, got %d", i, allExpected[i].dec.Scale(), gotVal.Scale())
 		}
 	}
 }
