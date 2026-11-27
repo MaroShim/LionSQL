@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
@@ -285,8 +286,9 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 	var cols []storage.Column
 	isOpen := false
 
-	// Build map of subquery's tables/aliases -> TableSchema
+	// Build map of subquery's tables/aliases -> TableSchema, and track which are open
 	subTables := make(map[string]*storage.TableSchema)
+	subTablesOpen := make(map[string]bool)
 	var fromSubSch *storage.TableSchema
 	fromSubIsOpen := false
 
@@ -295,6 +297,9 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 		if fromSubSch != nil && subquery.From.Alias != "" {
 			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(subquery.From.Alias))
 			subTables[cleanAlias] = fromSubSch
+			if fromSubIsOpen {
+				subTablesOpen[cleanAlias] = true
+			}
 		}
 	} else if subquery.From.Name != "" {
 		tSch := findSchemaFromMap(schemas, subquery.From.Name)
@@ -312,10 +317,13 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 
 	for _, j := range subquery.Joins {
 		if j.Table.Subquery != nil {
-			jSubSch, _ := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+			jSubSch, jSubIsOpen := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
 			if jSubSch != nil && j.Table.Alias != "" {
 				cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
 				subTables[cleanAlias] = jSubSch
+				if jSubIsOpen {
+					subTablesOpen[cleanAlias] = true
+				}
 			}
 		} else if j.Table.Name != "" {
 			tSch := findSchemaFromMap(schemas, j.Table.Name)
@@ -373,6 +381,9 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 				// Qualified wildcard: qual.*
 				if tSch, found := subTables[starQualifier]; found && tSch != nil {
 					cols = append(cols, tSch.Columns...)
+					if subTablesOpen[starQualifier] {
+						isOpen = true
+					}
 				} else {
 					isOpen = true
 				}
@@ -478,7 +489,7 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 				}
 			}
 			if j.On != nil {
-				if err := ValidateCommonFilterExpr(j.On, ScopeJoinOn, nil); err != nil {
+				if err := ValidateCommonFilterExprWithParent(j.On, ScopeJoinOn, schemas, joinScope); err != nil {
 					return nil, err
 				}
 				if err := joinScope.ValidateExpr(j.On); err != nil {
@@ -490,7 +501,7 @@ func setupTableScopeAndValidateJoins(stmt *proc.GeneralSelectStmt, schemas map[s
 		// Non-catalog syntactic verification for JOIN ON
 		for _, j := range stmt.Joins {
 			if j.On != nil {
-				if err := ValidateCommonFilterExpr(j.On, ScopeJoinOn, nil); err != nil {
+				if err := ValidateCommonFilterExprWithParent(j.On, ScopeJoinOn, schemas, scope); err != nil {
 					return nil, err
 				}
 			}
@@ -504,7 +515,7 @@ func validateWhereClause(where proc.Expr, scope *TableScope, schemas map[string]
 	if where == nil {
 		return nil
 	}
-	if err := ValidateCommonFilterExpr(where, ScopeWhere, schemas); err != nil {
+	if err := ValidateCommonFilterExprWithParent(where, ScopeWhere, schemas, scope); err != nil {
 		return err
 	}
 	if err := ValidateConstantDomainBounds(where); err != nil {
@@ -527,10 +538,13 @@ func validateGroupByClause(stmt *proc.GeneralSelectStmt, scope *TableScope, sche
 		if err := CheckDisallowedExprs(g, ScopeGroupBy); err != nil {
 			return nil, err
 		}
+		if err := ValidateConstantDomainBounds(g); err != nil {
+			return nil, err
+		}
 		if err := ValidateNoNestedAggregates(g); err != nil {
 			return nil, err
 		}
-		if err := ValidateSubqueryExprs(g, schemas); err != nil {
+		if err := ValidateSubqueryExprsWithParent(g, schemas, scope); err != nil {
 			return nil, err
 		}
 		// Negative integer position check (e.g. GROUP BY -1)
@@ -617,10 +631,7 @@ func validateHavingClause(having proc.Expr, resolvedGroupBy []proc.Expr, hasGrou
 	if having == nil {
 		return nil
 	}
-	if err := ValidateCommonFilterExpr(having, ScopeHaving, schemas); err != nil {
-		return err
-	}
-	if err := ValidateConstantDomainBounds(having); err != nil {
+	if err := ValidateCommonFilterExprWithParent(having, ScopeHaving, schemas, scope); err != nil {
 		return err
 	}
 	if scope != nil && scope.HasSchemas() {
@@ -629,11 +640,11 @@ func validateHavingClause(having proc.Expr, resolvedGroupBy []proc.Expr, hasGrou
 		}
 	}
 	if hasGroupBy {
-		if err := ValidateProjectionUnderGroupByWithProjections(having, resolvedGroupBy, false, projections); err != nil {
+		if err := ValidateProjectionUnderGroupByWithProjectionsAndScope(having, resolvedGroupBy, false, projections, scope); err != nil {
 			return err
 		}
 	} else if hasHavingOnly {
-		if err := ValidateProjectionUnderHavingWithProjections(having, false, projections); err != nil {
+		if err := ValidateProjectionUnderHavingWithProjectionsAndScope(having, false, projections, scope); err != nil {
 			return err
 		}
 	}
@@ -654,7 +665,7 @@ func validateProjections(projections []proc.Projection, resolvedGroupBy []proc.E
 		if err := ValidateNoNestedWindowFunctions(p.Expr); err != nil {
 			return err
 		}
-		if err := ValidateSubqueryExprs(p.Expr, schemas); err != nil {
+		if err := ValidateSubqueryExprsWithParent(p.Expr, schemas, scope); err != nil {
 			return err
 		}
 
@@ -708,7 +719,7 @@ func validateOrderByClause(orderBy []proc.OrderByItem, projections []proc.Projec
 		if err := ValidateNoNestedWindowFunctions(ob.Expr); err != nil {
 			return err
 		}
-		if err := ValidateSubqueryExprs(ob.Expr, schemas); err != nil {
+		if err := ValidateSubqueryExprsWithParent(ob.Expr, schemas, scope); err != nil {
 			return err
 		}
 
@@ -916,9 +927,14 @@ func (s *TableScope) AddProjectionAlias(alias string) {
 	}
 }
 
-// HasSchemas returns whether any schemas are known in this scope.
+// HasSchemas returns whether any schemas are known in this scope or any ancestor scopes.
 func (s *TableScope) HasSchemas() bool {
-	return s != nil && (len(s.schemas) > 0 || len(s.instances) > 0)
+	for cur := s; cur != nil; cur = cur.parent {
+		if len(cur.schemas) > 0 || len(cur.instances) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateExpr checks all column references within an expression against the table scope.
@@ -985,11 +1001,13 @@ func (s *TableScope) ResolveQualifiedColumn(tblPart, colPart string) (ColumnReso
 	}
 	cleanTbl := strings.ToLower(sqlutil.CleanIdentifier(tblPart))
 	sch, ok := s.schemas[cleanTbl]
+	targetScope := s
 	if !ok {
 		foundInParent := false
 		for p := s.parent; p != nil; p = p.parent {
 			if psch, pok := p.schemas[cleanTbl]; pok {
 				sch = psch
+				targetScope = p
 				foundInParent = true
 				break
 			}
@@ -1011,7 +1029,7 @@ func (s *TableScope) ResolveQualifiedColumn(tblPart, colPart string) (ColumnReso
 		return ResolveDefinite, nil
 	}
 
-	if s.isTableOpen(cleanTbl) {
+	if targetScope.isTableOpen(cleanTbl) {
 		return ResolveIndeterminate, nil
 	}
 
@@ -1245,6 +1263,11 @@ func ValidateNoNestedAggregates(expr proc.Expr) error {
 // 3. Prohibits nested window functions (SQLSTATE 42P20).
 // 4. Enforces unified subquery validation (single-column arity for scalar/IN/quantified subqueries, nil safety, recursive schema validation).
 func ValidateCommonFilterExpr(expr proc.Expr, scope ClauseScope, schemas map[string]*storage.TableSchema) error {
+	return ValidateCommonFilterExprWithParent(expr, scope, schemas, nil)
+}
+
+// ValidateCommonFilterExprWithParent performs unified semantic validation for filter expressions with an optional parent scope.
+func ValidateCommonFilterExprWithParent(expr proc.Expr, scope ClauseScope, schemas map[string]*storage.TableSchema, parentScope *TableScope) error {
 	if expr == nil {
 		return nil
 	}
@@ -1257,24 +1280,75 @@ func ValidateCommonFilterExpr(expr proc.Expr, scope ClauseScope, schemas map[str
 	if err := ValidateNoNestedWindowFunctions(expr); err != nil {
 		return err
 	}
-	// LIKE ... ESCAPE single-character constraint
-	if err := WalkAST(expr, func(node proc.Expr) error {
-		if likeNode, ok := node.(*proc.LikeExpr); ok && likeNode.Escape != nil {
-			if lit, ok := likeNode.Escape.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeVarChar {
-				s := lit.Val.SVal
-				if len(s) == 0 {
-					return fmt.Errorf("invalid escape string: escape character must be a single character (SQLSTATE 2200C)")
-				}
-				if len(s) > 1 {
-					return fmt.Errorf("invalid escape string: escape character must be a single character (SQLSTATE 22019)")
-				}
-			}
-		}
-		return nil
-	}); err != nil {
+	if err := ValidateConstantDomainBounds(expr); err != nil {
 		return err
 	}
-	return ValidateSubqueryExprs(expr, schemas)
+	return ValidateSubqueryExprsWithParent(expr, schemas, parentScope)
+}
+
+func countSubqueryWildcardColumns(subQuery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) int {
+	if subQuery == nil {
+		return 0
+	}
+	total := 0
+	// 1. From relation
+	if subQuery.From.Subquery != nil {
+		if sch, _ := deriveSubquerySchema(subQuery.From.Alias, subQuery.From.Subquery, schemas); sch != nil {
+			total += len(sch.Columns)
+		} else {
+			total += len(subQuery.From.Subquery.Projections)
+		}
+	} else if subQuery.From.Name != "" {
+		if sch := findSchemaFromMap(schemas, subQuery.From.Name); sch != nil {
+			total += len(sch.Columns)
+		}
+	}
+	// 2. Joined relations
+	for _, j := range subQuery.Joins {
+		if j.Table.Subquery != nil {
+			if sch, _ := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas); sch != nil {
+				total += len(sch.Columns)
+			} else {
+				total += len(j.Table.Subquery.Projections)
+			}
+		} else if j.Table.Name != "" {
+			if sch := findSchemaFromMap(schemas, j.Table.Name); sch != nil {
+				total += len(sch.Columns)
+			}
+		}
+	}
+	return total
+}
+
+func findSubqueryTableSchema(subQuery *proc.GeneralSelectStmt, prefix string, schemas map[string]*storage.TableSchema) *storage.TableSchema {
+	if subQuery == nil {
+		return nil
+	}
+	cleanPrefix := strings.ToLower(sqlutil.CleanIdentifier(prefix))
+	if cleanPrefix == "" {
+		return nil
+	}
+	fromAlias := strings.ToLower(sqlutil.CleanIdentifier(subQuery.From.Alias))
+	fromName := strings.ToLower(sqlutil.CleanIdentifier(subQuery.From.Name))
+	if fromAlias == cleanPrefix || fromName == cleanPrefix {
+		if subQuery.From.Subquery != nil {
+			sch, _ := deriveSubquerySchema(subQuery.From.Alias, subQuery.From.Subquery, schemas)
+			return sch
+		}
+		return findSchemaFromMap(schemas, subQuery.From.Name)
+	}
+	for _, j := range subQuery.Joins {
+		jAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
+		jName := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Name))
+		if jAlias == cleanPrefix || jName == cleanPrefix {
+			if j.Table.Subquery != nil {
+				sch, _ := deriveSubquerySchema(j.Table.Alias, j.Table.Subquery, schemas)
+				return sch
+			}
+			return findSchemaFromMap(schemas, j.Table.Name)
+		}
+	}
+	return nil
 }
 
 // ValidateSubqueryExprs performs unified subquery semantic validation across SELECT and DML statements:
@@ -1282,6 +1356,11 @@ func ValidateCommonFilterExpr(expr proc.Expr, scope ClauseScope, schemas map[str
 // 2. Nil-safe query validation: safely handles expressions where subquery AST is nil.
 // 3. Recursive query AST validation: if schemas is provided, validates subquery table scopes and predicates.
 func ValidateSubqueryExprs(expr proc.Expr, schemas map[string]*storage.TableSchema) error {
+	return ValidateSubqueryExprsWithParent(expr, schemas, nil)
+}
+
+// ValidateSubqueryExprsWithParent performs unified subquery semantic validation with an optional parent scope for correlation.
+func ValidateSubqueryExprsWithParent(expr proc.Expr, schemas map[string]*storage.TableSchema, parentScope *TableScope) error {
 	if expr == nil {
 		return nil
 	}
@@ -1315,22 +1394,31 @@ func ValidateSubqueryExprs(expr proc.Expr, schemas map[string]*storage.TableSche
 		if subQuery != nil {
 			if checkArity {
 				arity := len(subQuery.Projections)
-				if arity == 1 && subQuery.From.Name != "" {
+				if arity == 1 {
 					if colRef, isCol := subQuery.Projections[0].Expr.(*proc.ColumnRefExpr); isCol {
 						clean := strings.TrimSpace(colRef.Name)
-						if clean == "*" || strings.HasSuffix(clean, ".*") {
-							var tblSchema *storage.TableSchema
-							if schemas != nil {
-								tblSchema = findSchemaFromMap(schemas, subQuery.From.Name)
+						if clean == "*" {
+							totalCols := countSubqueryWildcardColumns(subQuery, schemas)
+							if totalCols > 1 {
+								return fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", totalCols)
 							}
-							if tblSchema != nil && len(tblSchema.Columns) > 1 {
-								return fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", len(tblSchema.Columns))
+						} else if strings.HasSuffix(clean, ".*") {
+							tblPrefix := strings.TrimSuffix(clean, ".*")
+							tblSch := findSubqueryTableSchema(subQuery, tblPrefix, schemas)
+							if tblSch != nil && len(tblSch.Columns) > 1 {
+								return fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", len(tblSch.Columns))
 							}
 						}
 					}
 				}
 				if arity != 1 {
 					return fmt.Errorf("subquery must return only one column, returned %d (SQLSTATE 42601)", arity)
+				}
+			}
+
+			if schemas != nil {
+				if err := ValidateQueryASTWithParent(subQuery, schemas, parentScope); err != nil {
+					return err
 				}
 			}
 		}
@@ -1478,10 +1566,11 @@ func ValidateConstantDomainBounds(expr proc.Expr) error {
 		if likeNode, ok := node.(*proc.LikeExpr); ok && likeNode.Escape != nil {
 			if lit, ok := likeNode.Escape.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeVarChar {
 				s := lit.Val.SVal
-				if len(s) == 0 {
+				rc := utf8.RuneCountInString(s)
+				if rc == 0 {
 					return fmt.Errorf("invalid escape string: escape character must be a single character (SQLSTATE 2200C)")
 				}
-				if len(s) > 1 {
+				if rc > 1 {
 					return fmt.Errorf("invalid escape string: escape character must be a single character (SQLSTATE 22019)")
 				}
 			}
@@ -1651,26 +1740,48 @@ func ValidateExprColsAgainstSchema(expr proc.Expr, schema *storage.TableSchema) 
 // ValidateProjectionUnderHaving recursively verifies that any column reference
 // in a projection without GROUP BY is strictly enclosed within an aggregate function.
 func ValidateProjectionUnderHaving(expr proc.Expr, inAggregate bool) error {
-	return validateProjectionUnderHaving(expr, inAggregate, false, nil)
+	return validateProjectionUnderHaving(expr, inAggregate, false, nil, nil)
 }
 
 // ValidateProjectionUnderHavingWithProjections recursively verifies that any column reference
 // in a projection without GROUP BY is strictly enclosed within an aggregate function or matches a projection alias.
 func ValidateProjectionUnderHavingWithProjections(expr proc.Expr, inAggregate bool, projections []proc.Projection) error {
-	return validateProjectionUnderHaving(expr, inAggregate, false, projections)
+	return validateProjectionUnderHaving(expr, inAggregate, false, projections, nil)
 }
 
-func validateProjectionUnderHaving(expr proc.Expr, inAggregate bool, inWindow bool, projections []proc.Projection) error {
+// ValidateProjectionUnderHavingWithProjectionsAndScope recursively verifies column references in HAVING with Table Column Primacy.
+func ValidateProjectionUnderHavingWithProjectionsAndScope(expr proc.Expr, inAggregate bool, projections []proc.Projection, scope *TableScope) error {
+	return validateProjectionUnderHaving(expr, inAggregate, false, projections, scope)
+}
+
+func validateProjectionUnderHaving(expr proc.Expr, inAggregate bool, inWindow bool, projections []proc.Projection, scope *TableScope) error {
 	if expr == nil {
 		return nil
 	}
 	switch e := expr.(type) {
 	case *proc.ColumnRefExpr:
 		if !inAggregate {
-			if projections != nil {
+			isTableColumn := false
+			if scope != nil && scope.HasSchemas() {
+				clean := strings.TrimSpace(e.Name)
+				parts := strings.Split(clean, ".")
+				if len(parts) == 1 {
+					res, _ := scope.ResolveUnqualifiedColumn(parts[0], false)
+					if res == ResolveDefinite {
+						isTableColumn = true
+					}
+				} else if len(parts) == 2 {
+					res, _ := scope.ResolveQualifiedColumn(parts[0], parts[1])
+					if res == ResolveDefinite {
+						isTableColumn = true
+					}
+				}
+			}
+			// Under Table Column Primacy: if it matches a real table column, it cannot resolve to a projection alias
+			if !isTableColumn && projections != nil {
 				for _, p := range projections {
 					if p.Alias != "" && strings.EqualFold(p.Alias, e.Name) {
-						if p.Expr != nil && validateProjectionUnderHaving(p.Expr, inAggregate, inWindow, projections) == nil {
+						if p.Expr != nil && validateProjectionUnderHaving(p.Expr, inAggregate, inWindow, projections, scope) == nil {
 							return nil
 						}
 						return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function (SQLSTATE 42803)", e.Name)
@@ -1695,77 +1806,77 @@ func validateProjectionUnderHaving(expr proc.Expr, inAggregate bool, inWindow bo
 			isAgg = true
 		}
 		for _, arg := range e.Args {
-			if err := validateProjectionUnderHaving(arg, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(arg, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		if e.Filter != nil {
-			if err := validateProjectionUnderHaving(e.Filter, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(e.Filter, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.BinaryExpr:
-		if err := validateProjectionUnderHaving(e.Left, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Left, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		return validateProjectionUnderHaving(e.Right, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.Right, inAggregate, inWindow, projections, scope)
 	case *proc.UnaryExpr:
-		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope)
 	case *proc.CastExpr:
-		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope)
 	case *proc.IsNullExpr:
-		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope)
 	case *proc.CaseExpr:
-		if err := validateProjectionUnderHaving(e.Operand, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Operand, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderHaving(e.Else, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Else, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, b := range e.Whens {
-			if err := validateProjectionUnderHaving(b.Condition, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(b.Condition, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
-			if err := validateProjectionUnderHaving(b.Result, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(b.Result, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.InExpr:
-		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, itm := range e.List {
-			if err := validateProjectionUnderHaving(itm, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(itm, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.BetweenExpr:
-		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderHaving(e.Low, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Low, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		return validateProjectionUnderHaving(e.High, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.High, inAggregate, inWindow, projections, scope)
 	case *proc.LikeExpr:
-		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderHaving(e.Pattern, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Pattern, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		if e.Escape != nil {
-			return validateProjectionUnderHaving(e.Escape, inAggregate, inWindow, projections)
+			return validateProjectionUnderHaving(e.Escape, inAggregate, inWindow, projections, scope)
 		}
 		return nil
 	case *proc.CollateExpr:
-		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections)
+		return validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope)
 	case *proc.TupleExpr:
 		for _, elem := range e.Elements {
-			if err := validateProjectionUnderHaving(elem, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(elem, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
@@ -1774,22 +1885,22 @@ func validateProjectionUnderHaving(expr proc.Expr, inAggregate bool, inWindow bo
 		isAgg := inAggregate
 		if e.Function != nil {
 			isAgg = isAgg || proc.IsAggregateFunctionName(e.Function.Name)
-			if err := validateProjectionUnderHaving(e.Function, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(e.Function, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		if e.OrderBy != nil {
-			if err := validateProjectionUnderHaving(e.OrderBy, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(e.OrderBy, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.QuantifiedComparisonExpr:
-		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderHaving(e.Expr, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, itm := range e.List {
-			if err := validateProjectionUnderHaving(itm, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderHaving(itm, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
@@ -1909,16 +2020,21 @@ func exprMatchesGroupBy(targetExpr proc.Expr, groupByExprs []proc.Expr) bool {
 // ValidateProjectionUnderGroupBy verifies that every column in the projection expression is either
 // contained within the GROUP BY list, enclosed within an aggregate function, or a constant.
 func ValidateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, inAggregate bool) error {
-	return validateProjectionUnderGroupBy(expr, groupByExprs, inAggregate, false, nil)
+	return validateProjectionUnderGroupBy(expr, groupByExprs, inAggregate, false, nil, nil)
 }
 
 // ValidateProjectionUnderGroupByWithProjections verifies that every column in the projection expression is either
 // contained within the GROUP BY list, enclosed within an aggregate function, a projection alias, or a constant.
 func ValidateProjectionUnderGroupByWithProjections(expr proc.Expr, groupByExprs []proc.Expr, inAggregate bool, projections []proc.Projection) error {
-	return validateProjectionUnderGroupBy(expr, groupByExprs, inAggregate, false, projections)
+	return validateProjectionUnderGroupBy(expr, groupByExprs, inAggregate, false, projections, nil)
 }
 
-func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, inAggregate bool, inWindow bool, projections []proc.Projection) error {
+// ValidateProjectionUnderGroupByWithProjectionsAndScope verifies column references in GROUP BY/HAVING with Table Column Primacy.
+func ValidateProjectionUnderGroupByWithProjectionsAndScope(expr proc.Expr, groupByExprs []proc.Expr, inAggregate bool, projections []proc.Projection, scope *TableScope) error {
+	return validateProjectionUnderGroupBy(expr, groupByExprs, inAggregate, false, projections, scope)
+}
+
+func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, inAggregate bool, inWindow bool, projections []proc.Projection, scope *TableScope) error {
 	if expr == nil {
 		return nil
 	}
@@ -1928,10 +2044,27 @@ func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 	switch e := expr.(type) {
 	case *proc.ColumnRefExpr:
 		if !inAggregate && !exprMatchesGroupBy(e, groupByExprs) {
-			if projections != nil {
+			isTableColumn := false
+			if scope != nil && scope.HasSchemas() {
+				clean := strings.TrimSpace(e.Name)
+				parts := strings.Split(clean, ".")
+				if len(parts) == 1 {
+					res, _ := scope.ResolveUnqualifiedColumn(parts[0], false)
+					if res == ResolveDefinite {
+						isTableColumn = true
+					}
+				} else if len(parts) == 2 {
+					res, _ := scope.ResolveQualifiedColumn(parts[0], parts[1])
+					if res == ResolveDefinite {
+						isTableColumn = true
+					}
+				}
+			}
+			// Under Table Column Primacy: if it matches a real table column, it cannot resolve to a projection alias
+			if !isTableColumn && projections != nil {
 				for _, p := range projections {
 					if p.Alias != "" && strings.EqualFold(p.Alias, e.Name) {
-						if p.Expr != nil && validateProjectionUnderGroupBy(p.Expr, groupByExprs, inAggregate, inWindow, projections) == nil {
+						if p.Expr != nil && validateProjectionUnderGroupBy(p.Expr, groupByExprs, inAggregate, inWindow, projections, scope) == nil {
 							return nil
 						}
 						return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function (SQLSTATE 42803)", e.Name)
@@ -1952,12 +2085,12 @@ func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 			// In a window function, its arguments are evaluated in the grouped context.
 			// Therefore, columns inside window function arguments must be in GROUP BY or aggregated.
 			for _, arg := range e.Args {
-				if err := validateProjectionUnderGroupBy(arg, groupByExprs, inAggregate, true, projections); err != nil {
+				if err := validateProjectionUnderGroupBy(arg, groupByExprs, inAggregate, true, projections, scope); err != nil {
 					return err
 				}
 			}
 			if e.Filter != nil {
-				if err := validateProjectionUnderGroupBy(e.Filter, groupByExprs, inAggregate, true, projections); err != nil {
+				if err := validateProjectionUnderGroupBy(e.Filter, groupByExprs, inAggregate, true, projections, scope); err != nil {
 					return err
 				}
 			}
@@ -1972,77 +2105,77 @@ func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 			isAgg = true
 		}
 		for _, arg := range e.Args {
-			if err := validateProjectionUnderGroupBy(arg, groupByExprs, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(arg, groupByExprs, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		if e.Filter != nil {
-			if err := validateProjectionUnderGroupBy(e.Filter, groupByExprs, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(e.Filter, groupByExprs, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.BinaryExpr:
-		if err := validateProjectionUnderGroupBy(e.Left, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Left, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		return validateProjectionUnderGroupBy(e.Right, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.Right, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.UnaryExpr:
-		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.CastExpr:
-		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.IsNullExpr:
-		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.CaseExpr:
-		if err := validateProjectionUnderGroupBy(e.Operand, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Operand, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderGroupBy(e.Else, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Else, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, b := range e.Whens {
-			if err := validateProjectionUnderGroupBy(b.Condition, groupByExprs, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(b.Condition, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
-			if err := validateProjectionUnderGroupBy(b.Result, groupByExprs, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(b.Result, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.InExpr:
-		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, itm := range e.List {
-			if err := validateProjectionUnderGroupBy(itm, groupByExprs, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(itm, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.BetweenExpr:
-		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderGroupBy(e.Low, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Low, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		return validateProjectionUnderGroupBy(e.High, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.High, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.LikeExpr:
-		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
-		if err := validateProjectionUnderGroupBy(e.Pattern, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Pattern, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		if e.Escape != nil {
-			return validateProjectionUnderGroupBy(e.Escape, groupByExprs, inAggregate, inWindow, projections)
+			return validateProjectionUnderGroupBy(e.Escape, groupByExprs, inAggregate, inWindow, projections, scope)
 		}
 		return nil
 	case *proc.CollateExpr:
-		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections)
+		return validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope)
 	case *proc.TupleExpr:
 		for _, elem := range e.Elements {
-			if err := validateProjectionUnderGroupBy(elem, groupByExprs, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(elem, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
@@ -2051,22 +2184,22 @@ func validateProjectionUnderGroupBy(expr proc.Expr, groupByExprs []proc.Expr, in
 		isAgg := inAggregate
 		if e.Function != nil {
 			isAgg = isAgg || proc.IsAggregateFunctionName(e.Function.Name)
-			if err := validateProjectionUnderGroupBy(e.Function, groupByExprs, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(e.Function, groupByExprs, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		if e.OrderBy != nil {
-			if err := validateProjectionUnderGroupBy(e.OrderBy, groupByExprs, isAgg, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(e.OrderBy, groupByExprs, isAgg, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
 		return nil
 	case *proc.QuantifiedComparisonExpr:
-		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections); err != nil {
+		if err := validateProjectionUnderGroupBy(e.Expr, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 			return err
 		}
 		for _, itm := range e.List {
-			if err := validateProjectionUnderGroupBy(itm, groupByExprs, inAggregate, inWindow, projections); err != nil {
+			if err := validateProjectionUnderGroupBy(itm, groupByExprs, inAggregate, inWindow, projections, scope); err != nil {
 				return err
 			}
 		}
@@ -2321,7 +2454,18 @@ func validateLegacyUpdateStmt(s *proc.UpdateStmt, schemas map[string]*storage.Ta
 	}
 
 	if s.WhereCol != "" && schema != nil {
-		norm := strings.ToLower(proc.CleanSchemaPrefix(s.WhereCol))
+		colPart := s.WhereCol
+		parts := strings.Split(s.WhereCol, ".")
+		if len(parts) > 1 {
+			tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[len(parts)-2]))
+			cleanSchemaName := strings.ToLower(sqlutil.CleanIdentifier(schema.Name))
+			bareSchemaName := strings.ToLower(proc.CleanSchemaPrefix(schema.Name))
+			if tblPart != cleanSchemaName && tblPart != bareSchemaName {
+				return fmt.Errorf("table or alias %q does not exist in query scope", tblPart)
+			}
+			colPart = parts[len(parts)-1]
+		}
+		norm := strings.ToLower(proc.CleanSchemaPrefix(colPart))
 		if _, _, ok := schema.FindColumn(norm); !ok {
 			return fmt.Errorf("column %q does not exist in table %q", s.WhereCol, schema.Name)
 		}
@@ -2339,7 +2483,20 @@ func validateLegacyUpdateStmt(s *proc.UpdateStmt, schemas map[string]*storage.Ta
 func validateUpdateAssignments(assignments []proc.UpdateAssignment, schema *storage.TableSchema, schemas map[string]*storage.TableSchema) error {
 	colSet := make(map[string]bool)
 	for _, a := range assignments {
-		norm := strings.ToLower(proc.CleanSchemaPrefix(a.Column))
+		colPart := a.Column
+		parts := strings.Split(a.Column, ".")
+		if len(parts) > 1 {
+			if schema != nil {
+				tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[len(parts)-2]))
+				cleanSchemaName := strings.ToLower(sqlutil.CleanIdentifier(schema.Name))
+				bareSchemaName := strings.ToLower(proc.CleanSchemaPrefix(schema.Name))
+				if tblPart != cleanSchemaName && tblPart != bareSchemaName {
+					return fmt.Errorf("table or alias %q does not exist in query scope", tblPart)
+				}
+			}
+			colPart = parts[len(parts)-1]
+		}
+		norm := strings.ToLower(proc.CleanSchemaPrefix(colPart))
 		if colSet[norm] {
 			return fmt.Errorf("column %q specified more than once in UPDATE SET", a.Column)
 		}
@@ -2390,7 +2547,18 @@ func validateLegacyDeleteStmt(s *proc.DeleteStmt, schemas map[string]*storage.Ta
 	}
 
 	if s.WhereCol != "" && schema != nil {
-		norm := strings.ToLower(proc.CleanSchemaPrefix(s.WhereCol))
+		colPart := s.WhereCol
+		parts := strings.Split(s.WhereCol, ".")
+		if len(parts) > 1 {
+			tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[len(parts)-2]))
+			cleanSchemaName := strings.ToLower(sqlutil.CleanIdentifier(schema.Name))
+			bareSchemaName := strings.ToLower(proc.CleanSchemaPrefix(schema.Name))
+			if tblPart != cleanSchemaName && tblPart != bareSchemaName {
+				return fmt.Errorf("table or alias %q does not exist in query scope", tblPart)
+			}
+			colPart = parts[len(parts)-1]
+		}
+		norm := strings.ToLower(proc.CleanSchemaPrefix(colPart))
 		if _, _, ok := schema.FindColumn(norm); !ok {
 			return fmt.Errorf("column %q does not exist in table %q", s.WhereCol, schema.Name)
 		}
@@ -2414,7 +2582,12 @@ func validateDMLWhereExpr(whereExpr proc.Expr, schema *storage.TableSchema, sche
 	if whereExpr == nil {
 		return nil
 	}
-	if err := ValidateCommonFilterExpr(whereExpr, ScopeWhere, schemas); err != nil {
+	var parentScope *TableScope
+	if schema != nil {
+		parentScope = NewTableScope()
+		_ = parentScope.Register(schema.Name, "", schema)
+	}
+	if err := ValidateCommonFilterExprWithParent(whereExpr, ScopeWhere, schemas, parentScope); err != nil {
 		return err
 	}
 	return validateDMLScopeExpr(whereExpr, schema, schemas)
@@ -2443,7 +2616,12 @@ func validateDMLScopeExpr(expr proc.Expr, schema *storage.TableSchema, schemas m
 	if expr == nil {
 		return nil
 	}
-	if err := ValidateSubqueryExprs(expr, schemas); err != nil {
+	var parentScope *TableScope
+	if schema != nil {
+		parentScope = NewTableScope()
+		_ = parentScope.Register(schema.Name, "", schema)
+	}
+	if err := ValidateSubqueryExprsWithParent(expr, schemas, parentScope); err != nil {
 		return err
 	}
 	return WalkAST(expr, func(node proc.Expr) error {
@@ -2457,6 +2635,20 @@ func validateDMLScopeExpr(expr proc.Expr, schema *storage.TableSchema, schemas m
 				return nil
 			}
 			if schema != nil {
+				parts := strings.Split(name, ".")
+				if len(parts) > 1 {
+					tblPart := strings.ToLower(sqlutil.CleanIdentifier(parts[len(parts)-2]))
+					colPart := sqlutil.CleanIdentifier(parts[len(parts)-1])
+					cleanSchemaName := strings.ToLower(sqlutil.CleanIdentifier(schema.Name))
+					bareSchemaName := strings.ToLower(proc.CleanSchemaPrefix(schema.Name))
+					if tblPart != cleanSchemaName && tblPart != bareSchemaName {
+						return fmt.Errorf("table or alias %q does not exist in query scope", tblPart)
+					}
+					if _, _, ok := schema.FindColumn(colPart); !ok {
+						return fmt.Errorf("column %q does not exist in table %q", colPart, schema.Name)
+					}
+					return nil
+				}
 				colName := proc.CleanSchemaPrefix(name)
 				if _, _, ok := schema.FindColumn(colName); !ok {
 					return fmt.Errorf("column %q does not exist in table %q", name, schema.Name)

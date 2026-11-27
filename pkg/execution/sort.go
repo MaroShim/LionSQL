@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"os"
 	"sort"
 	"strconv"
@@ -520,6 +521,22 @@ func encodeSpillTuple(w *bufio.Writer, t Tuple, buf []byte) error {
 			if _, err := w.Write(buf[:9]); err != nil {
 				return err
 			}
+		case storage.Decimal:
+			// Tag 0x07: Decimal codec (scale int32 + length uint32 + raw unscaled string bytes)
+			// Preserves exact scale and unscaled mathematical value across external sort spill cycles.
+			buf[0] = 0x07
+			binary.LittleEndian.PutUint32(buf[1:5], uint32(val.Scale()))
+			unscaled := val.UnscaledValue()
+			unscaledBytes := []byte(unscaled.String())
+			binary.LittleEndian.PutUint32(buf[5:9], uint32(len(unscaledBytes)))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+			if len(unscaledBytes) > 0 {
+				if _, err := w.Write(unscaledBytes); err != nil {
+					return err
+				}
+			}
 		case json.Number:
 			if i64, err := val.Int64(); err == nil {
 				buf[0] = 0x01
@@ -629,6 +646,25 @@ func (d *spillDecoder) Decode(indexMap *ColumnIndexMap) (Tuple, error) {
 				return Tuple{}, err
 			}
 			vals[i] = time.Unix(0, int64(binary.LittleEndian.Uint64(numBuf[:])))
+		case 0x07:
+			// Decimal codec
+			var decHeader [8]byte
+			if _, err := io.ReadFull(d.r, decHeader[:]); err != nil {
+				return Tuple{}, err
+			}
+			scale := int32(binary.LittleEndian.Uint32(decHeader[:4]))
+			rawLen := int(binary.LittleEndian.Uint32(decHeader[4:8]))
+			rawBytes := make([]byte, rawLen)
+			if rawLen > 0 {
+				if _, err := io.ReadFull(d.r, rawBytes); err != nil {
+					return Tuple{}, err
+				}
+			}
+			unscaled := new(big.Int)
+			if _, ok := unscaled.SetString(string(rawBytes), 10); !ok {
+				return Tuple{}, fmt.Errorf("corrupt spill decimal unscaled string: %s", string(rawBytes))
+			}
+			vals[i] = storage.NewDecimal(unscaled, scale)
 		default:
 			return Tuple{}, fmt.Errorf("unknown spill codec tag: 0x%02x", tag)
 		}

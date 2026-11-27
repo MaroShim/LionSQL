@@ -57,6 +57,8 @@ func (b *Binder) BindSelect(stmt *proc.GeneralSelectStmt) (*BoundSelectStmt, err
 	if stmt == nil {
 		return nil, nil
 	}
+	// Always reset to a fresh root scope context to prevent state leakage across independent BindSelect calls
+	b.current = newScopeContext(nil)
 	return b.bindSelectInternal(stmt)
 }
 
@@ -82,10 +84,34 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 		tableID := len(cur.Tables)
 		slotOffset := 0
 
+		// Bind inner derived table SELECT to extract accurate schema and output types
+		childScope := newScopeContext(cur)
+		b.current = childScope
+		boundSubquery, err := b.bindSelectInternal(stmt.From.Subquery)
+		b.current = cur
+		if err != nil {
+			return nil, err
+		}
+
+		var derivedCols []storage.Column
+		if boundSubquery != nil {
+			for _, p := range boundSubquery.Projections {
+				derivedCols = append(derivedCols, storage.Column{
+					Name: p.Alias,
+					Type: p.Type,
+				})
+			}
+		}
+		derivedSchema := &storage.TableSchema{
+			Name:    stmt.From.Alias,
+			Columns: derivedCols,
+		}
+
 		tRef := BoundTableRef{
 			TableID:    tableID,
 			Name:       stmt.From.Alias,
 			Alias:      stmt.From.Alias,
+			Schema:     derivedSchema,
 			SlotOffset: slotOffset,
 		}
 		cur.Tables = append(cur.Tables, tRef)
@@ -96,7 +122,7 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 			}
 			cur.TableLookup[cleanAlias] = tableID
 		}
-		if err := cur.Scope.Register("", stmt.From.Alias, nil); err != nil {
+		if err := cur.Scope.Register("", stmt.From.Alias, derivedSchema); err != nil {
 			return nil, err
 		}
 	} else if stmt.From.Name != "" {
@@ -145,6 +171,29 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 			cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
 			tableID := len(cur.Tables)
 
+			// Bind inner joined derived table SELECT to extract accurate schema and output types
+			childScope := newScopeContext(cur)
+			b.current = childScope
+			boundSubquery, err := b.bindSelectInternal(j.Table.Subquery)
+			b.current = cur
+			if err != nil {
+				return nil, err
+			}
+
+			var derivedCols []storage.Column
+			if boundSubquery != nil {
+				for _, p := range boundSubquery.Projections {
+					derivedCols = append(derivedCols, storage.Column{
+						Name: p.Alias,
+						Type: p.Type,
+					})
+				}
+			}
+			derivedSchema := &storage.TableSchema{
+				Name:    j.Table.Alias,
+				Columns: derivedCols,
+			}
+
 			prevOffset := 0
 			if len(cur.SlotOffsets) > 0 {
 				lastIdx := len(cur.Tables) - 1
@@ -159,6 +208,7 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 				TableID:    tableID,
 				Name:       j.Table.Alias,
 				Alias:      j.Table.Alias,
+				Schema:     derivedSchema,
 				SlotOffset: slotOffset,
 			}
 			cur.Tables = append(cur.Tables, tRef)
@@ -169,7 +219,7 @@ func (b *Binder) bindSelectInternal(stmt *proc.GeneralSelectStmt) (*BoundSelectS
 				}
 				cur.TableLookup[cleanAlias] = tableID
 			}
-			if err := cur.Scope.Register("", j.Table.Alias, nil); err != nil {
+			if err := cur.Scope.Register("", j.Table.Alias, derivedSchema); err != nil {
 				return nil, err
 			}
 		} else if j.Table.Name != "" {

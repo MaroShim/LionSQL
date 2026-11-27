@@ -346,7 +346,9 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		}
 
 		for _, tuple := range inChunk.Tuples {
-			tSize := EstimateTupleSize(tuple)
+			// Estimate tuple payload size plus entry overhead for map bucket and slice header (~48 bytes)
+			const hashMatchEntryOverhead = 48
+			tSize := EstimateTupleSize(tuple) + hashMatchEntryOverhead
 			if h.workMem > 0 && h.buildMemory+tSize > h.workMem {
 				_ = buildIter.Close()
 				return fmt.Errorf("hash join memory budget exceeded: %s > work_mem (%s)",

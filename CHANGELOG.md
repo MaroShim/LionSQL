@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- resolve Round 3 deep audit findings across Validator gatekeeper, Binder, and Execution engine (`AUDIT-STABILIZATION-ROUND3-1`):
+  - enforce literal zero division/modulo checks uniformly across `WHERE`, `HAVING`, `JOIN ON`, and `GROUP BY` expressions (`SQLSTATE 22012`)
+  - calculate true subquery output arity across `JOIN` additions and derived table expansions during wildcard checking (`SQLSTATE 42601`)
+  - support multi-byte Unicode characters in `LIKE ... ESCAPE` via `utf8.RuneCountInString` (`SQLSTATE 22019 / 2200C`)
+  - enforce strict Table Column Primacy in `HAVING` and `GROUP BY` preventing unaggregated table columns from incorrectly resolving to projection aliases (`SQLSTATE 42803`)
+  - support qualified column identifiers (`users.age`) and correlated subquery scopes referencing target table in DML `UPDATE` and `DELETE`
+  - add upfront validation of `MERGE` clauses against target schema to fail-closed on non-existent columns even when 0 rows match
+  - bind inner derived tables in `FROM` and `JOIN` within Dedicated Binder to synthesize physical `TableSchema` and accurate slot allocations
+  - reset root `ScopeContext` on every `BindSelect` call preventing scope state leakage across independent queries
+  - implement dedicated Tag `0x07` `Decimal` spill codec in external sort preserving mathematical ordering and scale across disk spill runs
+  - account for entry overhead (map bucket and slice headers) in Hash Join memory accounting against `work_mem`
 - harden Semantic Validator Gatekeeper defense lines with Round 2 standard SQL invariants (`FEAT-VALIDATOR-GATEKEEPER-ROUND2-1`):
   - enforce unaggregated column rejection in HAVING clauses with full support for aggregate projection aliases (`SQLSTATE 42803`)
   - enforce compile-time literal zero division and modulo rejection across expressions (`SQLSTATE 22012`)

@@ -108,6 +108,45 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		return nil, fmt.Errorf("target table %q not found: %w", parsed.targetTable, err)
 	}
 
+	// Upfront semantic validation of MERGE clauses against target table schema
+	// Prevents non-existent columns from passing silently when 0 rows match.
+	for _, clause := range parsed.clauses {
+		if clause.clauseType == mergeMatchedUpdate {
+			for _, pair := range clause.setPairs {
+				colName := stripQualifier(pair.column)
+				if _, _, found := targetSchema.FindColumn(colName); !found {
+					return nil, fmt.Errorf("column %q not found in target table %q", colName, parsed.targetTable)
+				}
+			}
+		} else if clause.clauseType == mergeNotMatchedInsert {
+			cols := clause.insertCols
+			if len(cols) == 0 {
+				identityCol := targetSchema.SyntheticPKColumn()
+				for _, c := range targetSchema.Columns {
+					if c.Identity {
+						identityCol = &c
+						break
+					}
+				}
+				for _, c := range targetSchema.Columns {
+					if identityCol != nil && c.Identity && len(clause.insertVals) < len(targetSchema.Columns) {
+						continue
+					}
+					cols = append(cols, c.Name)
+				}
+			}
+			if len(cols) != len(clause.insertVals) {
+				return nil, fmt.Errorf("MERGE INSERT column count (%d) does not match value count (%d)", len(cols), len(clause.insertVals))
+			}
+			for _, colName := range cols {
+				cleanedCol := stripQualifier(colName)
+				if _, _, found := targetSchema.FindColumn(cleanedCol); !found {
+					return nil, fmt.Errorf("column %q not found in target table %q", cleanedCol, parsed.targetTable)
+				}
+			}
+		}
+	}
+
 	pkCol, err := targetSchema.PrimaryKeyColumn()
 	if err != nil {
 		if synCol := targetSchema.SyntheticPKColumn(); synCol != nil {

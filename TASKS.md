@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-26
+> - **Last Synced**: 2026-11-27
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -79,6 +79,7 @@
 | `DONE` | **`AUDIT-ROUND11-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md) |  |
 | `DONE` | **`AUDIT-ROUND12-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md) |  |
 | `DONE` | **`AUDIT-ROUND9-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md) |  |
+| `DONE` | **`AUDIT-STABILIZATION-ROUND3-1`** | `v0.95.0` | Integrity | P1 | Resolve Round 3 deep audit findings across validator, binder, and execution engine | [`notes/plans/GATEKEEPER_AND_EXECUTION_STABILIZATION_PLAN.ko.md`](notes/plans/GATEKEEPER_AND_EXECUTION_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-DISPATCH`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 5: pkg/engine 구문 디스패치 및 query_utils strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-ENGINE`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
@@ -1322,6 +1323,13 @@
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 10:13:49
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md)
+
+---
+
+### [DONE] Resolve Round 3 deep audit findings across validator, binder, and execution engine `AUDIT-STABILIZATION-ROUND3-1`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-27 00:37:37
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/GATEKEEPER_AND_EXECUTION_STABILIZATION_PLAN.ko.md`](notes/plans/GATEKEEPER_AND_EXECUTION_STABILIZATION_PLAN.ko.md)
 
 ---
 

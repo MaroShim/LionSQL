@@ -1144,3 +1144,198 @@ func TestValidator_Hardening_LikeEscapeSingleChar(t *testing.T) {
 	}
 }
 
+func TestValidator_Hardening_DivisionByZero_GroupByAndJoinOn(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Division by zero in GROUP BY -> FAIL (SQLSTATE 22012)
+	sqlGroupBy := "SELECT id FROM users GROUP BY id / 0;"
+	parsedGB, err := proc.ParseSQL(sqlGroupBy)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedGB.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 22012 division by zero error in GROUP BY, got nil")
+	} else if !strings.Contains(err.Error(), "division by zero") || !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected SQLSTATE 22012, got: %v", err)
+	}
+
+	// 2. Modulo by zero in JOIN ON -> FAIL (SQLSTATE 22012)
+	sqlJoinOn := "SELECT * FROM users u JOIN orders o ON u.id % 0 = o.user_id;"
+	parsedJoin, err := proc.ParseSQL(sqlJoinOn)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedJoin.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 22012 modulo by zero error in JOIN ON, got nil")
+	} else if !strings.Contains(err.Error(), "division by zero") || !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected SQLSTATE 22012, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_SubqueryWildcardArity_JoinAndDerivedTable(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Wildcard subquery with JOIN returning multiple columns -> FAIL (SQLSTATE 42601)
+	sqlJoin := "SELECT (SELECT * FROM users u JOIN orders o ON u.id = o.user_id);"
+	parsedJoin, err := proc.ParseSQL(sqlJoin)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedJoin.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 42601 arity error for subquery with JOIN *, got nil")
+	} else if !strings.Contains(err.Error(), "42601") || !strings.Contains(err.Error(), "subquery must return only one column") {
+		t.Errorf("expected SQLSTATE 42601, got: %v", err)
+	}
+
+	// 2. Wildcard subquery on Derived Table with multiple columns -> FAIL (SQLSTATE 42601)
+	sqlDerived := "SELECT (SELECT * FROM (SELECT id, name FROM users) d);"
+	parsedDerived, err := proc.ParseSQL(sqlDerived)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedDerived.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 42601 arity error for subquery on derived table *, got nil")
+	} else if !strings.Contains(err.Error(), "42601") || !strings.Contains(err.Error(), "subquery must return only one column") {
+		t.Errorf("expected SQLSTATE 42601, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_LikeEscape_UnicodeRune(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Single Unicode rune multi-byte (UTF-8 2 bytes '§') -> MUST PASS!
+	sqlRunePass := "SELECT id FROM users WHERE name LIKE '%x%' ESCAPE '§';"
+	parsedPass, err := proc.ParseSQL(sqlRunePass)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedPass.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected single Unicode rune ESCAPE '§' to pass, got error: %v", err)
+	}
+
+	// 2. Two Unicode runes ('§§') -> MUST FAIL (SQLSTATE 22019)
+	sqlRuneFail := "SELECT id FROM users WHERE name LIKE '%x%' ESCAPE '§§';"
+	parsedFail, err := proc.ParseSQL(sqlRuneFail)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedFail.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 22019 error for 2 Unicode runes ESCAPE '§§', got nil")
+	} else if !strings.Contains(err.Error(), "22019") {
+		t.Errorf("expected SQLSTATE 22019, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_Having_TableColumnPrimacyCollision(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Collision: Projection alias 'amount' matches real table column 'orders.amount'.
+	// Table column primacy dictates 'amount' in HAVING refers to unaggregated table column orders.amount -> MUST FAIL (SQLSTATE 42803)
+	sqlCollision := "SELECT user_id, SUM(amount) AS amount FROM orders GROUP BY user_id HAVING amount > 100;"
+	parsedCol, err := proc.ParseSQL(sqlCollision)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedCol.(*proc.GeneralSelectStmt)); err == nil {
+		t.Errorf("expected 42803 unaggregated table column error under Table Column Primacy collision, got nil")
+	} else if !strings.Contains(err.Error(), "42803") {
+		t.Errorf("expected SQLSTATE 42803, got: %v", err)
+	}
+
+	// 2. Non-collision: Projection alias 'total_amount' does NOT match any table column.
+	// Resolves to projection alias SUM(amount) -> MUST PASS
+	sqlNoCollision := "SELECT user_id, SUM(amount) AS total_amount FROM orders GROUP BY user_id HAVING total_amount > 100;"
+	parsedNoCol, err := proc.ParseSQL(sqlNoCollision)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if _, err := planner.NewBinder(schemas).BindSelect(parsedNoCol.(*proc.GeneralSelectStmt)); err != nil {
+		t.Errorf("expected non-colliding projection alias in HAVING to pass, got error: %v", err)
+	}
+}
+
+func TestBinder_Hardening_DerivedTableBindingAndScopeReset(t *testing.T) {
+	schemas := setupTestCatalog()
+	binder := planner.NewBinder(schemas)
+
+	// 1. Derived table binding in FROM: SELECT d.id FROM (SELECT id, name FROM users) d;
+	sqlDerived := "SELECT d.id FROM (SELECT id, name FROM users) d;"
+	parsed, err := proc.ParseSQL(sqlDerived)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	bound, err := binder.BindSelect(parsed.(*proc.GeneralSelectStmt))
+	if err != nil {
+		t.Fatalf("BindSelect failed on derived table: %v", err)
+	}
+	if len(bound.Projections) != 1 {
+		t.Fatalf("expected 1 projection, got %d", len(bound.Projections))
+	}
+	bp := bound.Projections[0]
+	bCol, ok := bp.Expr.(*planner.BoundColumnRef)
+	if !ok {
+		t.Fatalf("expected *BoundColumnRef, got %T", bp.Expr)
+	}
+	if bCol.ColumnIdx != 0 {
+		t.Errorf("expected ColumnIdx 0 for d.id, got %d", bCol.ColumnIdx)
+	}
+	if bCol.TupleSlot != 0 {
+		t.Errorf("expected TupleSlot 0 for d.id, got %d", bCol.TupleSlot)
+	}
+	if bCol.DataType != storage.TypeInt {
+		t.Errorf("expected DataType TypeInt for d.id, got %v", bCol.DataType)
+	}
+
+	// 2. Binder scope reset on subsequent queries: state from previous query must not leak
+	sqlNext := "SELECT id FROM users;"
+	parsedNext, err := proc.ParseSQL(sqlNext)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	boundNext, err := binder.BindSelect(parsedNext.(*proc.GeneralSelectStmt))
+	if err != nil {
+		t.Fatalf("BindSelect failed on reused binder: %v", err)
+	}
+	if len(boundNext.Tables) != 1 {
+		t.Errorf("expected 1 table on reused binder, got %d", len(boundNext.Tables))
+	}
+	if boundNext.Tables[0].Name != "users" {
+		t.Errorf("expected table 'users', got %s", boundNext.Tables[0].Name)
+	}
+}
+
+func TestValidator_Hardening_DML_QualifiedColumnAndCorrelatedSubquery(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Qualified column in UPDATE SET: UPDATE users SET users.age = 30 WHERE users.id = 1;
+	sqlUpd := "UPDATE users SET users.age = 30 WHERE users.id = 1;"
+	parsedUpd, err := proc.ParseSQL(sqlUpd)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateDMLStmt(parsedUpd, schemas); err != nil {
+		t.Errorf("expected qualified column users.age to pass validation, got: %v", err)
+	}
+
+	// 2. Non-existent qualified table in UPDATE SET: UPDATE users SET orders.age = 30; -> MUST FAIL
+	sqlBadTable := "UPDATE users SET orders.age = 30;"
+	parsedBadTable, err := proc.ParseSQL(sqlBadTable)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateDMLStmt(parsedBadTable, schemas); err == nil {
+		t.Errorf("expected error for mismatched table qualifier orders.age in UPDATE users, got nil")
+	}
+
+	// 3. Correlated subquery in UPDATE SET referencing target table:
+	// UPDATE users SET age = (SELECT o.user_id FROM orders o WHERE o.user_id = users.id);
+	sqlCorrelated := "UPDATE users SET age = (SELECT o.user_id FROM orders o WHERE o.user_id = users.id);"
+	parsedCorrelated, err := proc.ParseSQL(sqlCorrelated)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateDMLStmt(parsedCorrelated, schemas); err != nil {
+		t.Errorf("expected correlated subquery referencing users.id in UPDATE to pass, got: %v", err)
+	}
+}
+

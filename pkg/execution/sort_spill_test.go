@@ -375,3 +375,65 @@ func TestSortIterator_PreboundMultiSlotSorting(t *testing.T) {
 		}
 	}
 }
+
+func TestSortIterator_DecimalSpillIntegrity(t *testing.T) {
+	ctx := context.Background()
+	schema := []string{"id", "amount"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+
+	// Numerical values: 2.50, 10.00, 100.25, 0.75, 20.00
+	// If serialized as strings, lexicographical order would wrongly put 10, 100 before 2!
+	// With Tag 0x07 Decimal codec, mathematical ordering must be strictly preserved.
+	d2_50, _ := storage.ParseDecimal("2.50")
+	d10_00, _ := storage.ParseDecimal("10.00")
+	d100_25, _ := storage.ParseDecimal("100.25")
+	d0_75, _ := storage.ParseDecimal("0.75")
+	d20_00, _ := storage.ParseDecimal("20.00")
+
+	tuples := []execution.Tuple{
+		{Values: []any{int64(1), d100_25}, Index: colMap},
+		{Values: []any{int64(2), d2_50}, Index: colMap},
+		{Values: []any{int64(3), d20_00}, Index: colMap},
+		{Values: []any{int64(4), d0_75}, Index: colMap},
+		{Values: []any{int64(5), d10_00}, Index: colMap},
+	}
+
+	mock := &mockTupleIterator{tuples: tuples, schema: schema}
+	sortIter := execution.NewSortIterator(mock, "amount ASC")
+	// Set very small work_mem (64 bytes) to force spilling to disk
+	sortIter.SetWorkMem(64)
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != 5 {
+		t.Fatalf("expected 5 tuples, got %d", len(results))
+	}
+
+	expectedIDs := []int64{4, 2, 5, 3, 1} // 0.75, 2.50, 10.00, 20.00, 100.25
+	for i, expID := range expectedIDs {
+		gotID := results[i].Get("id").(int64)
+		if gotID != expID {
+			t.Errorf("row %d: expected id %d, got %d (val: %v)", i, expID, gotID, results[i].Get("amount"))
+		}
+		gotDec, ok := results[i].Get("amount").(storage.Decimal)
+		if !ok {
+			t.Fatalf("row %d: expected storage.Decimal, got %T (%v)", i, results[i].Get("amount"), results[i].Get("amount"))
+		}
+		_ = gotDec
+	}
+}
