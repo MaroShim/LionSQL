@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- expand multi-table `JOIN` wildcards (`SELECT *`) in `DeriveSubquerySchema` when all joined relations exist in catalog, maintaining closed schema integrity and rejecting ghost columns upfront across `SELECT` and `MERGE` (`AUDIT-STABILIZATION-ROUND3-3`)
+- unify external sort spill codec across all signed and unsigned integer types (`int8`, `int16`, `int32`, `int64`, `int`, `uint8`, `uint16`, `uint32`, `uint64`, `uint`) and `storage.Value`, eliminating sorting discrepancies between in-memory sort and disk spill runs
+- record exact physical file bytes (`stat.Size()`) into `SortIterator.SpillBytes()` reflecting true temporary disk run I/O
 - propagate `isOpen` dynamic schema state from `DeriveSubquerySchema` into `TableScope.RegisterWithOpen` in `MERGE USING (SELECT ...) AS s` preventing false column rejections on open wildcard subqueries (`AUDIT-STABILIZATION-ROUND3-2`)
 - enforce fail-closed syntax error rejection on trailing commas in SELECT projection lists preventing silent truncation across subqueries and DML statements
 - verify deterministic external sort multi-run spill and k-way heap merge exact scale preservation across varying scales and high-precision Decimals

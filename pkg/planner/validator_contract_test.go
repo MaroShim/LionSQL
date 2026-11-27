@@ -584,14 +584,19 @@ func TestContract_DerivedTableSubqueryColumnValidation(t *testing.T) {
 		t.Errorf("expected non-existent column from * derived table to fail, got: %v", err)
 	}
 
-	// 9. Open/Dynamic schema with multi-table JOIN wildcard -> PASS (deferred to binder, zero false positive)
-	if err := parseAndValidate(t, "SELECT sub.any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas); err != nil {
-		t.Errorf("expected open join wildcard to be deferred without false positive, got: %v", err)
+	// 9. Closed multi-table JOIN wildcard with known catalog tables -> PASS for valid columns, FAIL for ghost
+	if err := parseAndValidate(t, "SELECT sub.id, sub.order_id FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas); err != nil {
+		t.Errorf("expected multi-table join wildcard valid columns to pass, got: %v", err)
+	}
+	err = parseAndValidate(t, "SELECT sub.any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected multi-table join wildcard ghost column to fail upfront when catalog schemas are known, got: %v", err)
 	}
 
-	// 10. Open/Dynamic schema with unqualified column on JOIN wildcard -> PASS (deferred to binder)
-	if err := parseAndValidate(t, "SELECT any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas); err != nil {
-		t.Errorf("expected open join wildcard unqualified column to be deferred, got: %v", err)
+	// 10. Unqualified ghost column on multi-table JOIN wildcard -> FAIL
+	err = parseAndValidate(t, "SELECT any_col FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected multi-table join wildcard unqualified ghost column to fail upfront, got: %v", err)
 	}
 
 	// 11. Nested closed derived table with * expansion -> PASS for valid, FAIL for ghost
@@ -603,9 +608,13 @@ func TestContract_DerivedTableSubqueryColumnValidation(t *testing.T) {
 		t.Errorf("expected nested closed derived table ghost column to fail, got: %v", err)
 	}
 
-	// 12. Nested open derived table with JOIN wildcard -> PASS (deferred to binder)
-	if err := parseAndValidate(t, "SELECT sub.dynamic_col FROM (SELECT * FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) inner_sub) AS sub;", schemas); err != nil {
-		t.Errorf("expected nested open derived table to pass to binder, got: %v", err)
+	// 12. Nested closed derived table with JOIN wildcard -> PASS for valid, FAIL for ghost
+	if err := parseAndValidate(t, "SELECT sub.id, sub.order_id FROM (SELECT * FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) inner_sub) AS sub;", schemas); err != nil {
+		t.Errorf("expected nested closed derived table valid column to pass, got: %v", err)
+	}
+	err = parseAndValidate(t, "SELECT sub.dynamic_col FROM (SELECT * FROM (SELECT * FROM users JOIN orders ON users.id = orders.user_id) inner_sub) AS sub;", schemas)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected nested closed derived table ghost column to fail, got: %v", err)
 	}
 }
 

@@ -366,20 +366,56 @@ func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schema
 		if isStar {
 			if starQualifier == "" {
 				// Bare *
+				// Check if all tables in FROM and all JOINs have known, closed schemas
+				allKnown := true
+				var starCols []storage.Column
+
+				// 1. FROM table
 				if subquery.From.Subquery != nil {
-					if fromSubSch != nil && !fromSubIsOpen && len(subquery.Joins) == 0 {
-						cols = append(cols, fromSubSch.Columns...)
+					if fromSubSch != nil && !fromSubIsOpen {
+						starCols = append(starCols, fromSubSch.Columns...)
 					} else {
-						isOpen = true
+						allKnown = false
 					}
-				} else if subquery.From.Name != "" && len(subquery.Joins) == 0 {
+				} else if subquery.From.Name != "" {
 					if tSch := findSchemaFromMap(schemas, subquery.From.Name); tSch != nil {
-						cols = append(cols, tSch.Columns...)
+						starCols = append(starCols, tSch.Columns...)
 					} else {
-						isOpen = true
+						allKnown = false
 					}
 				} else {
-					// Multiple tables in joins or unknown FROM
+					allKnown = false
+				}
+
+				// 2. JOIN tables
+				if allKnown {
+					for _, j := range subquery.Joins {
+						if j.Table.Subquery != nil {
+							cleanAlias := strings.ToLower(sqlutil.CleanIdentifier(j.Table.Alias))
+							jSubSch, found := subTables[cleanAlias]
+							if found && jSubSch != nil && !subTablesOpen[cleanAlias] {
+								starCols = append(starCols, jSubSch.Columns...)
+							} else {
+								allKnown = false
+								break
+							}
+						} else if j.Table.Name != "" {
+							if tSch := findSchemaFromMap(schemas, j.Table.Name); tSch != nil {
+								starCols = append(starCols, tSch.Columns...)
+							} else {
+								allKnown = false
+								break
+							}
+						} else {
+							allKnown = false
+							break
+						}
+					}
+				}
+
+				if allKnown {
+					cols = append(cols, starCols...)
+				} else {
 					isOpen = true
 				}
 			} else {

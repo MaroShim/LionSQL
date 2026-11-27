@@ -467,9 +467,105 @@ func encodeSpillTuple(w *bufio.Writer, t Tuple, buf []byte) error {
 			}
 		case int32:
 			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(int64(val)))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case int16:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(int64(val)))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case int8:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(int64(val)))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case uint:
+			buf[0] = 0x01
 			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
 			if _, err := w.Write(buf[:9]); err != nil {
 				return err
+			}
+		case uint64:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], val)
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case uint32:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case uint16:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case uint8:
+			buf[0] = 0x01
+			binary.LittleEndian.PutUint64(buf[1:9], uint64(val))
+			if _, err := w.Write(buf[:9]); err != nil {
+				return err
+			}
+		case storage.Value:
+			if val.IsNull {
+				if err := w.WriteByte(0x00); err != nil {
+					return err
+				}
+				continue
+			}
+			switch val.Type {
+			case storage.TypeInt:
+				buf[0] = 0x01
+				binary.LittleEndian.PutUint64(buf[1:9], uint64(val.IVal))
+				if _, err := w.Write(buf[:9]); err != nil {
+					return err
+				}
+			case storage.TypeFloat:
+				buf[0] = 0x02
+				binary.LittleEndian.PutUint64(buf[1:9], math.Float64bits(val.FVal))
+				if _, err := w.Write(buf[:9]); err != nil {
+					return err
+				}
+			case storage.TypeVarChar:
+				buf[0] = 0x03
+				binary.LittleEndian.PutUint32(buf[1:5], uint32(len(val.SVal)))
+				if _, err := w.Write(buf[:5]); err != nil {
+					return err
+				}
+				if len(val.SVal) > 0 {
+					if _, err := w.WriteString(val.SVal); err != nil {
+						return err
+					}
+				}
+			case storage.TypeBool:
+				buf[0] = 0x04
+				if val.BVal {
+					buf[1] = 1
+				} else {
+					buf[1] = 0
+				}
+				if _, err := w.Write(buf[:2]); err != nil {
+					return err
+				}
+			default:
+				s := fmt.Sprintf("%v", val.String())
+				buf[0] = 0x03
+				binary.LittleEndian.PutUint32(buf[1:5], uint32(len(s)))
+				if _, err := w.Write(buf[:5]); err != nil {
+					return err
+				}
+				if len(s) > 0 {
+					if _, err := w.WriteString(s); err != nil {
+						return err
+					}
+				}
 			}
 		case float64:
 			buf[0] = 0x02
@@ -698,11 +794,16 @@ func (s *SortIterator) spillRun() error {
 		_ = os.Remove(f.Name())
 		return fmt.Errorf("failed to flush sort spill: %w", err)
 	}
+	stat, sErr := f.Stat()
+	if sErr == nil && stat.Size() > 0 {
+		s.spillBytes += stat.Size()
+	} else {
+		s.spillBytes += s.peakMemory
+	}
 	_ = f.Close()
 
 	s.runFiles = append(s.runFiles, f.Name())
 	s.spillCount++
-	s.spillBytes += s.peakMemory
 	s.tuples = s.tuples[:0]
 	return nil
 }

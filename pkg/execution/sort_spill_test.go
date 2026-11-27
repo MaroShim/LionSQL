@@ -563,6 +563,13 @@ func TestSortIterator_LargeScaleMultiRunDecimalSpillMerge(t *testing.T) {
 			t.Fatalf("row %d: scale mismatch after spill! expected scale %d, got scale %d", i, expectedSortedDecs[i].Scale(), gotVal.Scale())
 		}
 	}
+
+	if sortIter.SpillCount() <= 1 {
+		t.Fatalf("expected multi-run disk spill (> 1 runs), got %d runs", sortIter.SpillCount())
+	}
+	if sortIter.SpillBytes() <= 0 {
+		t.Fatalf("expected physical SpillBytes > 0, got %d", sortIter.SpillBytes())
+	}
 }
 
 func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *testing.T) {
@@ -647,5 +654,132 @@ func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *tes
 		if gotVal.Scale() != allExpected[i].dec.Scale() {
 			t.Fatalf("row %d: scale mismatch after spill! expected scale %d, got %d", i, allExpected[i].dec.Scale(), gotVal.Scale())
 		}
+	}
+
+	if sortIter.SpillCount() <= 1 {
+		t.Fatalf("expected multi-run disk spill (> 1 runs), got %d runs", sortIter.SpillCount())
+	}
+	if sortIter.SpillBytes() <= 0 {
+		t.Fatalf("expected physical SpillBytes > 0, got %d", sortIter.SpillBytes())
+	}
+}
+
+func TestSortIterator_NumericIntegerTypes_SpillAndMemoryParity(t *testing.T) {
+	ctx := context.Background()
+	schema := []string{"id", "val"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+
+	// Mix of signed and unsigned integer types with positive, negative, and large values.
+	// Note: In string sorting, "12" < "5" and "5" < "-12", whereas numerically -12 < 5 < 12.
+	type sample struct {
+		val any
+		num int64
+	}
+	samples := []sample{
+		{val: int8(-12), num: -12},
+		{val: int8(5), num: 5},
+		{val: int8(12), num: 12},
+		{val: int16(-300), num: -300},
+		{val: int16(300), num: 300},
+		{val: int32(-100000), num: -100000},
+		{val: int32(100000), num: 100000},
+		{val: int64(-5000000000), num: -5000000000},
+		{val: int64(5000000000), num: 5000000000},
+		{val: int(42), num: 42},
+		{val: uint8(250), num: 250},
+		{val: uint16(50000), num: 50000},
+		{val: uint32(2000000), num: 2000000},
+		{val: storage.Value{Type: storage.TypeInt, IVal: 77}, num: 77},
+	}
+
+	var tuples []execution.Tuple
+	var expectedNums []int64
+	idCounter := int64(1)
+	for repeat := 0; repeat < 40; repeat++ {
+		for _, s := range samples {
+			tuples = append(tuples, execution.Tuple{
+				Values: []any{idCounter, s.val},
+				Index:  colMap,
+			})
+			expectedNums = append(expectedNums, s.num)
+			idCounter++
+		}
+	}
+
+	sort.SliceStable(expectedNums, func(i, j int) bool {
+		return expectedNums[i] < expectedNums[j]
+	})
+
+	mock := &mockTupleIterator{tuples: tuples, schema: schema}
+	sortIter := execution.NewSortIterator(mock, "val ASC")
+	sortIter.SetWorkMem(256) // tiny work_mem to force multiple disk spill runs and k-way merge
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != len(expectedNums) {
+		t.Fatalf("expected %d tuples, got %d", len(expectedNums), len(results))
+	}
+
+	toIntHelper := func(val any) (int64, bool) {
+		switch v := val.(type) {
+		case int64:
+			return v, true
+		case int:
+			return int64(v), true
+		case int32:
+			return int64(v), true
+		case int16:
+			return int64(v), true
+		case int8:
+			return int64(v), true
+		case uint64:
+			return int64(v), true
+		case uint32:
+			return int64(v), true
+		case uint16:
+			return int64(v), true
+		case uint8:
+			return int64(v), true
+		case uint:
+			return int64(v), true
+		case storage.Value:
+			if v.Type == storage.TypeInt && !v.IsNull {
+				return v.IVal, true
+			}
+		}
+		return 0, false
+	}
+
+	for i := 0; i < len(expectedNums); i++ {
+		rawVal := results[i].Get("val")
+		gotNum, ok := toIntHelper(rawVal)
+		if !ok {
+			t.Fatalf("row %d: expected numeric integer, got %T (%v)", i, rawVal, rawVal)
+		}
+		if gotNum != expectedNums[i] {
+			t.Fatalf("row %d: numerical sort order mismatch after disk spill! expected %d, got %d", i, expectedNums[i], gotNum)
+		}
+	}
+
+	if sortIter.SpillCount() <= 1 {
+		t.Fatalf("expected multi-run disk spill (> 1 runs), got %d runs", sortIter.SpillCount())
+	}
+	if sortIter.SpillBytes() <= 0 {
+		t.Fatalf("expected physical SpillBytes > 0, got %d", sortIter.SpillBytes())
 	}
 }

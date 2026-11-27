@@ -222,6 +222,30 @@ WHEN MATCHED THEN
 	if _, err := coord.ExecuteSessionSQL(sessID, sqlOpenWildcardSubquery); err != nil {
 		t.Errorf("expected MERGE with wildcard subquery source to pass with open schema resolution, got err: %v", err)
 	}
+
+	// 12. Subquery derived source with multi-table JOIN wildcard expands all known columns and rejects ghost column upfront
+	sqlMultiJoinWildcardGhost := `
+MERGE m_target_empty AS t
+USING (SELECT * FROM m_target_empty t1 JOIN m_source_empty s1 ON t1.id = s1.id) AS s
+ON t.id = s.ghost_multi_join_col
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.name;
+`
+	if res, err := coord.ExecuteSessionSQL(sessID, sqlMultiJoinWildcardGhost); err == nil && (res == nil || res.Success) {
+		t.Errorf("expected MERGE with multi-table JOIN wildcard referencing ghost column to fail upfront, got res: %+v, err: %v", res, err)
+	}
+
+	// 13. Subquery derived source with multi-table JOIN wildcard expands all known columns and accepts valid joined columns
+	sqlMultiJoinWildcardValid := `
+MERGE m_target_empty AS t
+USING (SELECT * FROM m_target_empty t1 JOIN m_source_empty s1 ON t1.id = s1.id) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.name;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlMultiJoinWildcardValid); err != nil {
+		t.Errorf("expected MERGE with multi-table JOIN wildcard to pass upfront validation with expanded columns, got err: %v", err)
+	}
 }
 
 func TestDEFECT_Merge_Triggers_Executed(t *testing.T) {
