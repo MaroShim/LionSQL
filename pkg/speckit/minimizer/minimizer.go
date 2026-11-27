@@ -232,6 +232,74 @@ func %s(t *testing.T) {
 `, pkgName, testName, d.Type, d.Details, testName, defectID, testName, d.TableDDL, formatInserts(d.InsertDMLs), d.Query, d.PivotID)
 	}
 
+	if d.Type == oracle.DiscrepancyDualEngine {
+		return fmt.Sprintf(`package %s
+
+import (
+	"fmt"
+	"testing"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/memengine"
+)
+
+// %s verifies the spec discrepancy:
+// Discrepancy Type: %s
+// Details: %s
+func %s(t *testing.T) {
+	if testing.Short() {
+		t.Skip("TDD RED: %s - pending resolution sprint")
+	}
+
+	eng1 := memengine.New()
+	_ = eng1.Open("")
+	defer eng1.Close()
+	cat1 := catalog.New(eng1)
+	coord1 := engine.NewCoordinator(cat1, eng1, engine.Config{})
+
+	eng2 := memengine.New()
+	_ = eng2.Open("")
+	defer eng2.Close()
+	cat2 := catalog.New(eng2)
+	coord2 := engine.NewCoordinator(cat2, eng2, engine.Config{})
+
+	sessID := "%s_sess"
+	_, _ = coord1.GetOrCreateSession(sessID)
+	defer coord1.CloseSession(sessID)
+	_, _ = coord2.GetOrCreateSession(sessID)
+	defer coord2.CloseSession(sessID)
+
+	// Setup Schema & Data on both engines
+	_, err1 := coord1.ExecuteSessionSQL(sessID, %q)
+	_, err2 := coord2.ExecuteSessionSQL(sessID, %q)
+	if err1 != nil || err2 != nil {
+		t.Fatalf("setup DDL failed: eng1=%%v, eng2=%%v", err1, err2)
+	}
+
+	inserts := []string{
+%s
+	}
+	for _, dml := range inserts {
+		if _, err := coord1.ExecuteSessionSQL(sessID, dml); err != nil {
+			t.Fatalf("eng1 insert failed: %%v", err)
+		}
+		if _, err := coord2.ExecuteSessionSQL(sessID, dml); err != nil {
+			t.Fatalf("eng2 insert failed: %%v", err)
+		}
+	}
+
+	res1, err1 := coord1.ExecuteSessionSQL(sessID, %q)
+	res2, err2 := coord2.ExecuteSessionSQL(sessID, %q)
+	if (err1 != nil) != (err2 != nil) {
+		t.Fatalf("TDD RED DualEngine Error Discrepancy: eng1=%%v vs eng2=%%v", err1, err2)
+	}
+	if fmt.Sprintf("%%v", res1) != fmt.Sprintf("%%v", res2) {
+		t.Fatalf("TDD RED DualEngine Result Discrepancy: eng1=%%v vs eng2=%%v", res1, res2)
+	}
+}
+`, pkgName, testName, d.Type, d.Details, testName, defectID, testName, d.TableDDL, d.TableDDL, formatInserts(d.InsertDMLs), d.Query, d.Query)
+	}
+
 	return fmt.Sprintf(`package %s
 
 import (

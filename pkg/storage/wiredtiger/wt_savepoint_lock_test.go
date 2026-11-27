@@ -1,3 +1,5 @@
+//go:build cgo && wiredtiger
+
 package wiredtiger
 
 import (

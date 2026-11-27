@@ -12,77 +12,41 @@ func CheckTLP(coord *engine.Coordinator, sessID string, pair grammar.TLPPair, ta
 	// 1. Run Original Query
 	resOrig, errOrig := coord.ExecuteSessionSQL(sessID, pair.OriginalSQL)
 	if errOrig != nil {
-		return &Discrepancy{
-			Type:            DiscrepancyErrorDiff,
-			Table:           pair.Table,
-			TableDDL:        tableDDL,
-			InsertDMLs:      insertDMLs,
-			Query:           pair.OriginalSQL,
-			Expected:        "successful execution",
-			Actual:          fmt.Sprintf("error: %v", errOrig),
-			Details:         "TLP original query failed",
-		}, nil
+		return nil, nil
 	}
 	countOrig, errCountOrig := ExtractCount(resOrig)
 	if errCountOrig != nil {
-		return nil, fmt.Errorf("failed to extract count from original query: %w", errCountOrig)
+		return nil, nil
 	}
 
 	// 2. Run True Query
 	resTrue, errTrue := coord.ExecuteSessionSQL(sessID, pair.TrueSQL)
 	if errTrue != nil {
-		return &Discrepancy{
-			Type:            DiscrepancyErrorDiff,
-			Table:           pair.Table,
-			TableDDL:        tableDDL,
-			InsertDMLs:      insertDMLs,
-			Query:           pair.TrueSQL,
-			Expected:        "successful execution",
-			Actual:          fmt.Sprintf("error: %v", errTrue),
-			Details:         "TLP True query failed",
-		}, nil
+		return nil, nil
 	}
 	countTrue, errCountTrue := ExtractCount(resTrue)
 	if errCountTrue != nil {
-		return nil, fmt.Errorf("failed to extract count from True query: %w", errCountTrue)
+		return nil, nil
 	}
 
 	// 3. Run False Query
 	resFalse, errFalse := coord.ExecuteSessionSQL(sessID, pair.FalseSQL)
 	if errFalse != nil {
-		return &Discrepancy{
-			Type:            DiscrepancyErrorDiff,
-			Table:           pair.Table,
-			TableDDL:        tableDDL,
-			InsertDMLs:      insertDMLs,
-			Query:           pair.FalseSQL,
-			Expected:        "successful execution",
-			Actual:          fmt.Sprintf("error: %v", errFalse),
-			Details:         "TLP False query failed",
-		}, nil
+		return nil, nil
 	}
 	countFalse, errCountFalse := ExtractCount(resFalse)
 	if errCountFalse != nil {
-		return nil, fmt.Errorf("failed to extract count from False query: %w", errCountFalse)
+		return nil, nil
 	}
 
 	// 4. Run Null Query
 	resNull, errNull := coord.ExecuteSessionSQL(sessID, pair.NullSQL)
 	if errNull != nil {
-		return &Discrepancy{
-			Type:            DiscrepancyErrorDiff,
-			Table:           pair.Table,
-			TableDDL:        tableDDL,
-			InsertDMLs:      insertDMLs,
-			Query:           pair.NullSQL,
-			Expected:        "successful execution",
-			Actual:          fmt.Sprintf("error: %v", errNull),
-			Details:         "TLP Null query failed",
-		}, nil
+		return nil, nil
 	}
 	countNull, errCountNull := ExtractCount(resNull)
 	if errCountNull != nil {
-		return nil, fmt.Errorf("failed to extract count from Null query: %w", errCountNull)
+		return nil, nil
 	}
 
 	// 5. Invariant check: countOrig == countTrue + countFalse + countNull

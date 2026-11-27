@@ -199,6 +199,9 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 
 				// Cleanup Table
 				_, _ = coord.ExecuteSessionSQL(sessID, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tblName))
+				if coord2 != nil {
+					_, _ = coord2.ExecuteSessionSQL(sessID2, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tblName))
+				}
 			}
 		}(workerID)
 	}

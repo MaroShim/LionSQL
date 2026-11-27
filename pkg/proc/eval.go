@@ -659,7 +659,11 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		} else {
 			matched := false
 			for _, w := range e.Whens {
-				if EvalBoolExpr(w.Condition, row, execSubquery) {
+				condVal, condErr := EvalBoolExprWithErr(w.Condition, row, execSubquery)
+				if condErr != nil {
+					return nil, condErr
+				}
+				if condVal {
 					resultVal, resultErr = EvalRowExpr(w.Result, row, execSubquery)
 					matched = true
 					break
@@ -1792,7 +1796,11 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 				return nil, fmt.Errorf("An expression of non-boolean type specified in a context where a condition is expected, near ','.")
 			}
 		}
-		if EvalBoolExpr(args[0], row, execSubquery) {
+		condVal, condErr := EvalBoolExprWithErr(args[0], row, execSubquery)
+		if condErr != nil {
+			return nil, condErr
+		}
+		if condVal {
 			return EvalRowExpr(args[1], row, execSubquery)
 		}
 		return EvalRowExpr(args[2], row, execSubquery)

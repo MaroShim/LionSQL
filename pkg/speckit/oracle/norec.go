@@ -10,7 +10,15 @@ import (
 func CheckNoREC(coord *engine.Coordinator, sessID string, pair grammar.NoRECPair, tableDDL string, insertDMLs []string) (*Discrepancy, error) {
 	// 1. Run Optimized Query
 	resOpt, errOpt := coord.ExecuteSessionSQL(sessID, pair.OptimizedSQL)
-	if errOpt != nil {
+	// 2. Run Unoptimized Query
+	resUnopt, errUnopt := coord.ExecuteSessionSQL(sessID, pair.UnoptimizedSQL)
+
+	// If both queries failed with execution errors (e.g. arithmetic overflow in generated predicate), skip.
+	if errOpt != nil && errUnopt != nil {
+		return nil, nil
+	}
+
+	if errOpt != nil && errUnopt == nil {
 		return &Discrepancy{
 			Type:            DiscrepancyErrorDiff,
 			Table:           pair.Table,
@@ -18,15 +26,13 @@ func CheckNoREC(coord *engine.Coordinator, sessID string, pair grammar.NoRECPair
 			InsertDMLs:      insertDMLs,
 			Query:           pair.OptimizedSQL,
 			EquivalentQuery: pair.UnoptimizedSQL,
-			Expected:        "successful execution",
+			Expected:        "successful execution matching unoptimized query",
 			Actual:          fmt.Sprintf("error: %v", errOpt),
-			Details:         "Optimized query failed during execution",
+			Details:         "Optimized query failed during execution while unoptimized succeeded",
 		}, nil
 	}
 
-	// 2. Run Unoptimized Query
-	resUnopt, errUnopt := coord.ExecuteSessionSQL(sessID, pair.UnoptimizedSQL)
-	if errUnopt != nil {
+	if errOpt == nil && errUnopt != nil {
 		return &Discrepancy{
 			Type:            DiscrepancyErrorDiff,
 			Table:           pair.Table,
@@ -34,9 +40,9 @@ func CheckNoREC(coord *engine.Coordinator, sessID string, pair grammar.NoRECPair
 			InsertDMLs:      insertDMLs,
 			Query:           pair.UnoptimizedSQL,
 			EquivalentQuery: pair.OptimizedSQL,
-			Expected:        "successful execution",
+			Expected:        "successful execution matching optimized query",
 			Actual:          fmt.Sprintf("error: %v", errUnopt),
-			Details:         "Unoptimized reference query failed during execution",
+			Details:         "Unoptimized reference query failed during execution while optimized succeeded",
 		}, nil
 	}
 

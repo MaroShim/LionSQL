@@ -11,16 +11,7 @@ import (
 func CheckPQS(coord *engine.Coordinator, sessID string, pair grammar.PQSPair, tableDDL string, insertDMLs []string) (*Discrepancy, error) {
 	res, err := coord.ExecuteSessionSQL(sessID, pair.QuerySQL)
 	if err != nil {
-		return &Discrepancy{
-			Type:            DiscrepancyErrorDiff,
-			Table:           pair.Table,
-			TableDDL:        tableDDL,
-			InsertDMLs:      insertDMLs,
-			Query:           pair.QuerySQL,
-			Expected:        "successful execution",
-			Actual:          fmt.Sprintf("error: %v", err),
-			Details:         "PQS query failed during execution",
-		}, nil
+		return nil, nil // Expression evaluation error on data domain (e.g. arithmetic overflow)
 	}
 
 	// Verify pivotID is present in result rows

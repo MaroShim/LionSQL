@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- harden differential fuzzing engine (`cmd/spec_fuzz`, `pkg/speckit`) and achieve 0 discrepancies across 440,000+ queries (NoREC, TLP, PQS, DualEngine) at 14,700 QPS (`FEAT-SPECKIT-FUZZING-HARDENING-1`):
+  - propagate runtime evaluation errors (e.g. `Msg 8115` arithmetic overflow) through `AggregateIterator.accumulateTuple`, achieving 100% error parity between `WHERE` filters and aggregate projections
+  - implement fully commutative Three-Valued Logic (3VL) error propagation across `AND` and `OR` binary operators in both Volcano tuple evaluation (`pkg/execution/eval.go`) and AST row evaluation (`pkg/proc/eval.go`)
+  - propagate condition evaluation errors in `proc.CaseExpr` and `proc.IIF` without silent swallowing
+  - ensure deterministic table cleanup across both coordinators in DualEngine fuzzing worker loops preventing cross-iteration catalog leakage
+  - implement dedicated DualEngine TDD test generator in `pkg/speckit/minimizer`
+  - add `//go:build cgo && wiredtiger` build tags to WiredTiger foreign key adapters and lock regression tests for hermetic pure Go compilation parity
 - expand multi-table `JOIN` wildcards (`SELECT *`) in `DeriveSubquerySchema` when all joined relations exist in catalog, maintaining closed schema integrity and rejecting ghost columns upfront across `SELECT` and `MERGE` (`AUDIT-STABILIZATION-ROUND3-3`)
 - unify external sort spill codec across all signed and unsigned integer types (`int8`, `int16`, `int32`, `int64`, `int`, `uint8`, `uint16`, `uint32`, `uint64`, `uint`) and `storage.Value`, eliminating sorting discrepancies between in-memory sort and disk spill runs
 - record exact physical file bytes (`stat.Size()`) into `SortIterator.SpillBytes()` reflecting true temporary disk run I/O

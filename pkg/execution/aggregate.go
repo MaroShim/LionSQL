@@ -1173,7 +1173,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				if globalAcc.groupTuple.IsNil() {
 					globalAcc.groupTuple = tuple
 				}
-				a.accumulateTuple(globalAcc, tuple)
+				if err := a.accumulateTuple(globalAcc, tuple); err != nil {
+					_ = a.child.Close()
+					a.tuples = nil
+					return err
+				}
 			}
 
 			if err == io.EOF {
@@ -1219,7 +1223,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 
 			for _, tuple := range inChunk.Tuples {
 				if fallbackToSlotHash {
-					a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs)
+					if _, err := a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs); err != nil {
+						_ = a.child.Close()
+						a.tuples = nil
+						return err
+					}
 					continue
 				}
 
@@ -1235,7 +1243,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 						nullAcc = a.newGroupAccumulator(tuple, 1)
 						orderedAccs = append(orderedAccs, nullAcc)
 					}
-					a.accumulateTuple(nullAcc, tuple)
+					if err := a.accumulateTuple(nullAcc, tuple); err != nil {
+						_ = a.child.Close()
+						a.tuples = nil
+						return err
+					}
 					continue
 				}
 
@@ -1245,7 +1257,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 							nullAcc = a.newGroupAccumulator(tuple, 1)
 							orderedAccs = append(orderedAccs, nullAcc)
 						}
-						a.accumulateTuple(nullAcc, tuple)
+						if err := a.accumulateTuple(nullAcc, tuple); err != nil {
+							_ = a.child.Close()
+							a.tuples = nil
+							return err
+						}
 						continue
 					}
 				}
@@ -1257,7 +1273,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 						intGroups[iKey] = acc
 						orderedAccs = append(orderedAccs, acc)
 					}
-					a.accumulateTuple(acc, tuple)
+					if err := a.accumulateTuple(acc, tuple); err != nil {
+						_ = a.child.Close()
+						a.tuples = nil
+						return err
+					}
 				} else {
 					fallbackToSlotHash = true
 					slotMap = make(map[uint64]*groupSlot, len(orderedAccs)+16)
@@ -1265,7 +1285,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 						h := a.computeTupleGroupHash(existingAcc.groupTuple, 1)
 						slotMap[h] = &groupSlot{acc: existingAcc, hash: h}
 					}
-					a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs)
+					if _, err := a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs); err != nil {
+						_ = a.child.Close()
+						a.tuples = nil
+						return err
+					}
 				}
 			}
 
@@ -1297,7 +1321,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 
 			for _, tuple := range inChunk.Tuples {
 				for _, mask := range masks {
-					a.accumulateTupleSlotHash(tuple, mask, slotMap, &orderedAccs)
+					if _, err := a.accumulateTupleSlotHash(tuple, mask, slotMap, &orderedAccs); err != nil {
+						_ = a.child.Close()
+						a.tuples = nil
+						return err
+					}
 				}
 			}
 
@@ -1909,15 +1937,17 @@ func equalGroupVal(v1, v2 any, isCS bool) bool {
 	return CompareValues(v1, v2) == 0
 }
 
-func (a *AggregateIterator) accumulateTupleSlotHash(tuple Tuple, mask uint64, slotMap map[uint64]*groupSlot, orderedAccs *[]*groupAccumulator) *groupAccumulator {
+func (a *AggregateIterator) accumulateTupleSlotHash(tuple Tuple, mask uint64, slotMap map[uint64]*groupSlot, orderedAccs *[]*groupAccumulator) (*groupAccumulator, error) {
 	h := a.computeTupleGroupHash(tuple, mask)
 	head, exists := slotMap[h]
 	if exists {
 		slot := head
 		for slot != nil {
 			if slot.acc.groupMask == mask && a.matchTupleKeys(slot.acc.groupTuple, tuple, mask) {
-				a.accumulateTuple(slot.acc, tuple)
-				return slot.acc
+				if err := a.accumulateTuple(slot.acc, tuple); err != nil {
+					return nil, err
+				}
+				return slot.acc, nil
 			}
 			if slot.next == nil {
 				break
@@ -1927,18 +1957,22 @@ func (a *AggregateIterator) accumulateTupleSlotHash(tuple Tuple, mask uint64, sl
 		acc := a.newGroupAccumulator(tuple, mask)
 		slot.next = &groupSlot{acc: acc, hash: h}
 		*orderedAccs = append(*orderedAccs, acc)
-		a.accumulateTuple(acc, tuple)
-		return acc
+		if err := a.accumulateTuple(acc, tuple); err != nil {
+			return nil, err
+		}
+		return acc, nil
 	}
 
 	acc := a.newGroupAccumulator(tuple, mask)
 	slotMap[h] = &groupSlot{acc: acc, hash: h}
 	*orderedAccs = append(*orderedAccs, acc)
-	a.accumulateTuple(acc, tuple)
-	return acc
+	if err := a.accumulateTuple(acc, tuple); err != nil {
+		return nil, err
+	}
+	return acc, nil
 }
 
-func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) {
+func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) error {
 	for fIdx, f := range a.fields {
 		if f.isLiteral || f.fnType == aggGrouping {
 			continue
@@ -1971,6 +2005,9 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 		}
 		if !ok || val == nil {
 			continue
+		}
+		if evalErr, isErr := val.(error); isErr {
+			return evalErr
 		}
 
 		if f.isDistinct {
@@ -2237,6 +2274,9 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 						acc.strOrders = make([][]strOrderItem, len(a.fields))
 					}
 					ordVal, ok := EvalTupleExpr(tuple, f.orderByExpr)
+					if err, isErr := ordVal.(error); isErr {
+						return err
+					}
 					if !ok {
 						ordVal, _ = lookupVal(tuple, f.orderByExpr.String())
 					}
@@ -2265,6 +2305,7 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 			}
 		}
 	}
+	return nil
 }
 
 func (a *AggregateIterator) NextChunk(ctx context.Context, dest *Chunk) error {

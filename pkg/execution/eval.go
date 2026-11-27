@@ -204,6 +204,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 
 	case *proc.UnaryExpr:
 		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		if !ok {
 			return nil, false
 		}
@@ -293,6 +296,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 
 	case *proc.BetweenExpr:
 		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		if !ok || val == nil {
 			val = nil
 		}
@@ -300,6 +306,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 			val = nil
 		}
 		low, okL := EvalTupleExprWithContext(t, e.Low, execSubquery, sessionVars)
+		if err, isErr := low.(error); isErr {
+			return err, true
+		}
 		if !okL || low == nil {
 			low = nil
 		}
@@ -307,6 +316,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 			low = nil
 		}
 		high, okH := EvalTupleExprWithContext(t, e.High, execSubquery, sessionVars)
+		if err, isErr := high.(error); isErr {
+			return err, true
+		}
 		if !okH || high == nil {
 			high = nil
 		}
@@ -338,6 +350,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 			return e.Not, true
 		}
 		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		if !ok || val == nil {
 			return nil, true
 		}
@@ -419,6 +434,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 
 	case *proc.IsNullExpr:
 		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		if !ok || val == nil {
 			return !e.Not, true
 		}
@@ -429,6 +447,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 
 	case *proc.CastExpr:
 		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		if !ok || val == nil {
 			return nil, true
 		}
@@ -465,7 +486,13 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 
 	case *proc.LikeExpr:
 		val, okV := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		if err, isErr := val.(error); isErr {
+			return err, true
+		}
 		pat, okP := EvalTupleExprWithContext(t, e.Pattern, execSubquery, sessionVars)
+		if err, isErr := pat.(error); isErr {
+			return err, true
+		}
 		if !okV || !okP {
 			return nil, false
 		}
@@ -578,6 +605,12 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				}
 			}
 		}
+		if errL, isErr := leftVal.(error); isErr {
+			return errL, true
+		}
+		if errR, isErr := rightVal.(error); isErr {
+			return errR, true
+		}
 		if !okL || !okR {
 			return false, false
 		}
@@ -616,6 +649,12 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 					return true, true
 				}
 			}
+		}
+		if errL, isErr := leftVal.(error); isErr {
+			return errL, true
+		}
+		if errR, isErr := rightVal.(error); isErr {
+			return errR, true
 		}
 		if !okL || !okR {
 			return false, false
