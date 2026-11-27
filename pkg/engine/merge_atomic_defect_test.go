@@ -64,6 +64,68 @@ WHEN NOT MATCHED THEN
 	mustExec("COMMIT;")
 }
 
+func TestRegression_Merge_ZeroMatch_UpfrontSchemaValidation(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	sessID := "test_merge_zero_match"
+	coord.GetOrCreateSession(sessID)
+	defer coord.CloseSession(sessID)
+
+	mustExec := func(sql string) *engine.QueryResult {
+		t.Helper()
+		res, err := coord.ExecuteSessionSQL(sessID, sql)
+		if err != nil {
+			t.Fatalf("failed to execute %q: %v", sql, err)
+		}
+		return res
+	}
+
+	mustExec("CREATE TABLE m_target_empty (id INT PRIMARY KEY, name VARCHAR(50));")
+	mustExec("CREATE TABLE m_source_empty (id INT PRIMARY KEY, name VARCHAR(50));")
+	// 0 rows in source -> 0 rows will match!
+
+	// 1. UPDATE with ghost_col: Even with 0 matched rows, upfront validation must reject non-existent column!
+	sqlBadUpdate := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.ghost_col = 'invalid';
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadUpdate); err == nil {
+		t.Errorf("expected MERGE with non-existent column ghost_col in WHEN MATCHED UPDATE to fail upfront, got nil")
+	}
+
+	// 2. INSERT with non-existent column in WHEN NOT MATCHED: must fail upfront!
+	sqlBadInsert := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+    INSERT (id, invalid_col) VALUES (s.id, 'val');
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadInsert); err == nil {
+		t.Errorf("expected MERGE with non-existent column invalid_col in WHEN NOT MATCHED INSERT to fail upfront, got nil")
+	}
+
+	// 3. INSERT column count mismatch: must fail upfront!
+	sqlColMismatch := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+    INSERT (id, name) VALUES (s.id);
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlColMismatch); err == nil {
+		t.Errorf("expected MERGE with column count mismatch to fail upfront, got nil")
+	}
+}
+
 func TestDEFECT_Merge_Triggers_Executed(t *testing.T) {
 	eng := memengine.New()
 	defer eng.Close()

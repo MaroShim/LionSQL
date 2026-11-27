@@ -437,3 +437,58 @@ func TestSortIterator_DecimalSpillIntegrity(t *testing.T) {
 		_ = gotDec
 	}
 }
+
+func TestSortIterator_NegativeDecimalSpillIntegrity(t *testing.T) {
+	ctx := context.Background()
+	schema := []string{"id", "val"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+
+	// Negative decimals and different scales:
+	// -100.50, -10.0, -2.500, 0.00, 2.50
+	d_neg100_50, _ := storage.ParseDecimal("-100.50")
+	d_neg10_0, _ := storage.ParseDecimal("-10.0")
+	d_neg2_500, _ := storage.ParseDecimal("-2.500")
+	d_zero, _ := storage.ParseDecimal("0.00")
+	d_pos2_50, _ := storage.ParseDecimal("2.50")
+
+	tuples := []execution.Tuple{
+		{Values: []any{int64(1), d_pos2_50}, Index: colMap},
+		{Values: []any{int64(2), d_neg2_500}, Index: colMap},
+		{Values: []any{int64(3), d_neg100_50}, Index: colMap},
+		{Values: []any{int64(4), d_zero}, Index: colMap},
+		{Values: []any{int64(5), d_neg10_0}, Index: colMap},
+	}
+
+	mock := &mockTupleIterator{tuples: tuples, schema: schema}
+	sortIter := execution.NewSortIterator(mock, "val ASC")
+	sortIter.SetWorkMem(64) // force disk spill
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != 5 {
+		t.Fatalf("expected 5 tuples, got %d", len(results))
+	}
+
+	expectedIDs := []int64{3, 5, 2, 4, 1} // -100.50, -10.0, -2.500, 0.00, 2.50
+	for i, expID := range expectedIDs {
+		gotID := results[i].Get("id").(int64)
+		if gotID != expID {
+			t.Errorf("row %d: expected id %d, got %d (amount: %v)", i, expID, gotID, results[i].Get("val"))
+		}
+	}
+}

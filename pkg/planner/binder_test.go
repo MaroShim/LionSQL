@@ -1339,3 +1339,124 @@ func TestValidator_Hardening_DML_QualifiedColumnAndCorrelatedSubquery(t *testing
 	}
 }
 
+func TestValidator_Hardening_SubqueryWildcardArity_EdgeCases(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Scalar subquery with single column table (orders has id, user_id, amount -> 3 columns; we create a 1-column table)
+	singleColSchema := &storage.TableSchema{
+		Name: "single_col",
+		Columns: []storage.Column{
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	schemas["single_col"] = singleColSchema
+
+	// SELECT (SELECT * FROM single_col) -> exactly 1 column, MUST PASS
+	sqlSingleCol := "SELECT (SELECT * FROM single_col);"
+	parsedSingle, err := proc.ParseSQL(sqlSingleCol)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedSingle.(*proc.GeneralSelectStmt), schemas); err != nil {
+		t.Errorf("expected 1-column table wildcard in scalar subquery to pass, got: %v", err)
+	}
+
+	// 2. Scalar subquery with derived table expanding to multiple columns:
+	// SELECT (SELECT * FROM (SELECT id, name FROM users) d); -> 2 columns -> MUST FAIL (SQLSTATE 42601)
+	sqlMultiDerived := "SELECT (SELECT * FROM (SELECT id, name FROM users) d);"
+	parsedMultiDerived, err := proc.ParseSQL(sqlMultiDerived)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedMultiDerived.(*proc.GeneralSelectStmt), schemas); err == nil {
+		t.Errorf("expected 42601 error for multi-column derived table wildcard in scalar subquery, got nil")
+	} else if !strings.Contains(err.Error(), "42601") {
+		t.Errorf("expected SQLSTATE 42601, got: %v", err)
+	}
+
+	// 3. Scalar subquery with derived table expanding to single column:
+	// SELECT (SELECT * FROM (SELECT id FROM users) d); -> 1 column -> MUST PASS
+	sqlSingleDerived := "SELECT (SELECT * FROM (SELECT id FROM users) d);"
+	parsedSingleDerived, err := proc.ParseSQL(sqlSingleDerived)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedSingleDerived.(*proc.GeneralSelectStmt), schemas); err != nil {
+		t.Errorf("expected single-column derived table wildcard to pass, got: %v", err)
+	}
+}
+
+func TestValidator_Hardening_DivisionByZero_EdgeCases(t *testing.T) {
+	schemas := setupTestCatalog()
+
+	// 1. Division by literal zero in HAVING: SELECT user_id, COUNT(*) FROM orders GROUP BY user_id HAVING COUNT(*) / 0 > 1; -> MUST FAIL (22012)
+	sqlHavingDivZero := "SELECT user_id, COUNT(*) FROM orders GROUP BY user_id HAVING COUNT(*) / 0 > 1;"
+	parsedHaving, err := proc.ParseSQL(sqlHavingDivZero)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedHaving.(*proc.GeneralSelectStmt), schemas); err == nil {
+		t.Errorf("expected 22012 error in HAVING division by zero, got nil")
+	} else if !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected SQLSTATE 22012, got: %v", err)
+	}
+
+	// 2. Modulo by literal zero in JOIN ON: SELECT * FROM users u JOIN orders o ON u.id % 0 = o.user_id; -> MUST FAIL (22012)
+	sqlJoinModZero := "SELECT * FROM users u JOIN orders o ON u.id % 0 = o.user_id;"
+	parsedJoinMod, err := proc.ParseSQL(sqlJoinModZero)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedJoinMod.(*proc.GeneralSelectStmt), schemas); err == nil {
+		t.Errorf("expected 22012 error in JOIN ON modulo by zero, got nil")
+	} else if !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected SQLSTATE 22012, got: %v", err)
+	}
+
+	// 3. Modulo by literal zero in GROUP BY: SELECT user_id FROM orders GROUP BY user_id % 0; -> MUST FAIL (22012)
+	sqlGroupByModZero := "SELECT user_id FROM orders GROUP BY user_id % 0;"
+	parsedGroupByMod, err := proc.ParseSQL(sqlGroupByModZero)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	if err := planner.ValidateQueryAST(parsedGroupByMod.(*proc.GeneralSelectStmt), schemas); err == nil {
+		t.Errorf("expected 22012 error in GROUP BY modulo by zero, got nil")
+	} else if !strings.Contains(err.Error(), "22012") {
+		t.Errorf("expected SQLSTATE 22012, got: %v", err)
+	}
+}
+
+func TestBinder_Hardening_JoinDerivedTableBinding(t *testing.T) {
+	schemas := setupTestCatalog()
+	binder := planner.NewBinder(schemas)
+
+	// SELECT u.name, d.order_count FROM users u JOIN (SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id) d ON u.id = d.user_id;
+	sqlJoinDerived := "SELECT u.name, d.order_count FROM users u JOIN (SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id) d ON u.id = d.user_id;"
+	parsed, err := proc.ParseSQL(sqlJoinDerived)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	bound, err := binder.BindSelect(parsed.(*proc.GeneralSelectStmt))
+	if err != nil {
+		t.Fatalf("BindSelect failed on JOIN derived table: %v", err)
+	}
+	if len(bound.Projections) != 2 {
+		t.Fatalf("expected 2 projections, got %d", len(bound.Projections))
+	}
+	// Verify d.order_count is properly resolved to table index 1 and slot offset
+	bp2 := bound.Projections[1]
+	bCol2, ok := bp2.Expr.(*planner.BoundColumnRef)
+	if !ok {
+		t.Fatalf("expected *BoundColumnRef for d.order_count, got %T", bp2.Expr)
+	}
+	if bCol2.TableID != 1 {
+		t.Errorf("expected TableID 1 for d.order_count, got %d", bCol2.TableID)
+	}
+	if bCol2.ColumnIdx != 1 { // (user_id is 0, order_count is 1)
+		t.Errorf("expected ColumnIdx 1 for d.order_count, got %d", bCol2.ColumnIdx)
+	}
+	if bCol2.TupleSlot < 3 { // users has 3 columns (0, 1, 2), so d starts at 3; order_count is 3+1=4
+		t.Errorf("expected TupleSlot >= 3 for d.order_count, got %d", bCol2.TupleSlot)
+	}
+}
+
