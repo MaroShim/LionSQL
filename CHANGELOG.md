@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - enforce strict Table Column Primacy in `HAVING` and `GROUP BY` preventing unaggregated table columns from incorrectly resolving to projection aliases (`SQLSTATE 42803`)
   - support qualified column identifiers (`users.age`) and correlated subquery scopes referencing target table in DML `UPDATE` and `DELETE`
   - add upfront validation of `MERGE` clauses against target and source schemas to fail-closed on non-existent columns (in `ON`, `WHEN [NOT] MATCHED AND`, `UPDATE SET`, and `INSERT VALUES`) even when 0 rows match
+  - derive dynamic source schema for derived subqueries in `MERGE USING (SELECT ...) AS s` via `DeriveSubquerySchema`, ensuring upfront scope validation across subquery projections
+  - harden `MERGE` expression parsing with strict fail-closed rejection on parser errors, empty expressions, and unexpected trailing tokens
+  - enforce fail-closed error handling on `TableScope.Register` in `MERGE` statement setup preventing silent alias collision
+  - verify physical tuple generation and projection alignment across 3-table multi-join topologies with multiple derived tables in execution engine
+  - verify Decimal scale preservation and multi-run spill stability across varying scales and high-precision values
   - bind inner derived tables in `FROM` and `JOIN` within Dedicated Binder to synthesize physical `TableSchema` and accurate slot allocations (verified across 3-table multi-join topologies)
   - reset root `ScopeContext` on every `BindSelect` call preventing scope state leakage across independent queries
   - implement dedicated Tag `0x07` `Decimal` spill codec in external sort preserving mathematical ordering and scale across multi-run disk spills and k-way heap merges

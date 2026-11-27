@@ -279,6 +279,11 @@ func validateLimitOffset(limit, offset proc.Expr) error {
 	return nil
 }
 
+// DeriveSubquerySchema computes the projected TableSchema and open/closed state of a subquery.
+func DeriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) (*storage.TableSchema, bool) {
+	return deriveSubquerySchema(alias, subquery, schemas)
+}
+
 func deriveSubquerySchema(alias string, subquery *proc.GeneralSelectStmt, schemas map[string]*storage.TableSchema) (*storage.TableSchema, bool) {
 	if subquery == nil {
 		return nil, false

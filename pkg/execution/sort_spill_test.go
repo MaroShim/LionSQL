@@ -559,5 +559,90 @@ func TestSortIterator_LargeScaleMultiRunDecimalSpillMerge(t *testing.T) {
 		if !gotVal.Equal(expectedSortedDecs[i]) {
 			t.Fatalf("row %d: sort order mismatch! expected %v, got %v", i, expectedSortedDecs[i], gotVal)
 		}
+		if gotVal.Scale() != expectedSortedDecs[i].Scale() {
+			t.Fatalf("row %d: scale mismatch after spill! expected scale %d, got scale %d", i, expectedSortedDecs[i].Scale(), gotVal.Scale())
+		}
+	}
+}
+
+func TestSortIterator_DecimalMultiRunSpill_VaryingScalesAndLargePrecision(t *testing.T) {
+	ctx := context.Background()
+	schema := []string{"id", "val"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+
+	// Test decimals with same mathematical value but different scales (e.g. 10.5 vs 10.500)
+	// along with very high precision/scale values.
+	d1, _ := storage.ParseDecimal("10.500000000000000000") // 18 scale
+	d2, _ := storage.ParseDecimal("10.5")                  // 1 scale
+	d3, _ := storage.ParseDecimal("-999999999999999999999999.123456789")
+	d4, _ := storage.ParseDecimal("999999999999999999999999.987654321")
+	d5, _ := storage.ParseDecimal("0.00000000000000000000000000000001")
+	d6, _ := storage.ParseDecimal("-0.00000000000000000000000000000001")
+	d7, _ := storage.ParseDecimal("0")
+	d8, _ := storage.ParseDecimal("0.0000")
+
+	inputDecs := []storage.Decimal{d1, d2, d3, d4, d5, d6, d7, d8}
+
+	// Repeat rows with tiny work_mem=128 bytes to force multiple spill runs and k-way merge
+	var tuples []execution.Tuple
+	var allExpected []storage.Decimal
+	idCounter := int64(1)
+	for repeat := 0; repeat < 50; repeat++ {
+		for _, dec := range inputDecs {
+			tuples = append(tuples, execution.Tuple{
+				Values: []any{idCounter, dec},
+				Index:  colMap,
+			})
+			allExpected = append(allExpected, dec)
+			idCounter++
+		}
+	}
+
+	sort.SliceStable(allExpected, func(i, j int) bool {
+		cmp := allExpected[i].Cmp(allExpected[j])
+		if cmp != 0 {
+			return cmp < 0
+		}
+		// If mathematical value is equal, preserve scale stability
+		return allExpected[i].Scale() < allExpected[j].Scale()
+	})
+
+	mock := &mockTupleIterator{tuples: tuples, schema: schema}
+	sortIter := execution.NewSortIterator(mock, "val ASC")
+	sortIter.SetWorkMem(128)
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open error: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != len(allExpected) {
+		t.Fatalf("expected %d tuples, got %d", len(allExpected), len(results))
+	}
+
+	for i := 0; i < len(allExpected); i++ {
+		gotVal, ok := results[i].Get("val").(storage.Decimal)
+		if !ok {
+			t.Fatalf("row %d: expected storage.Decimal, got %T", i, results[i].Get("val"))
+		}
+		if !gotVal.Equal(allExpected[i]) {
+			t.Fatalf("row %d: expected %v, got %v", i, allExpected[i], gotVal)
+		}
+		// Verify scale was completely restored and never lost/truncated
+		if gotVal.Scale() < 0 {
+			t.Fatalf("row %d: invalid negative scale %d", i, gotVal.Scale())
+		}
 	}
 }

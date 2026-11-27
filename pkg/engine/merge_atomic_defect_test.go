@@ -161,6 +161,43 @@ WHEN MATCHED AND s.ghost_filter = 1 THEN
 	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadAnd); err == nil {
 		t.Errorf("expected MERGE with non-existent source column in WHEN AND condition to fail upfront, got nil")
 	}
+
+	// 7. Subquery Derived Source with nonexistent column in UPDATE SET:
+	// MERGE USING (SELECT id, name FROM m_source_empty) AS s
+	sqlBadDerivedSource := `
+MERGE m_target_empty AS t
+USING (SELECT id, name FROM m_source_empty) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.ghost_derived_col;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadDerivedSource); err == nil {
+		t.Errorf("expected MERGE with derived subquery source containing non-existent column s.ghost_derived_col to fail upfront, got nil")
+	}
+
+	// 8. Parser error / garbage trailing tokens in MERGE expressions:
+	sqlSyntaxErrorInExpr := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = (s.id +)
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.name;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlSyntaxErrorInExpr); err == nil {
+		t.Errorf("expected MERGE with invalid syntax in ON expression to fail upfront, got nil")
+	}
+
+	// 9. Valid subquery derived source passes upfront validation cleanly
+	sqlValidDerivedSource := `
+MERGE m_target_empty AS t
+USING (SELECT id, name FROM m_source_empty) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.name;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlValidDerivedSource); err != nil {
+		t.Errorf("expected valid derived subquery MERGE to pass upfront validation, got err: %v", err)
+	}
 }
 
 func TestDEFECT_Merge_Triggers_Executed(t *testing.T) {

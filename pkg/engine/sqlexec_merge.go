@@ -109,7 +109,7 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		return nil, fmt.Errorf("target table %q not found: %w", parsed.targetTable, err)
 	}
 
-	// Resolve source schema if source is a physical table or named columns
+	// Resolve source schema if source is a physical table, subquery, or named columns
 	var sourceSchema *storage.TableSchema
 	sourceTable := cleanIdentifier(parsed.sourceRaw)
 	if sourceTable != "" && !strings.HasPrefix(sourceTable, "(") {
@@ -128,16 +128,44 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 			Name:    parsed.sourceAlias,
 			Columns: srcCols,
 		}
+	} else if strings.HasPrefix(strings.TrimSpace(parsed.sourceRaw), "(") {
+		// Subquery derived source: (SELECT ...) AS alias
+		if inner, ok := sqlutil.StripParentheses(strings.TrimSpace(parsed.sourceRaw)); ok {
+			innerTrim := strings.TrimSpace(inner)
+			if parsedStmt, pErr := proc.ParseSQL(innerTrim); pErr == nil {
+				if selStmt, isSel := parsedStmt.(*proc.GeneralSelectStmt); isSel && selStmt != nil {
+					allCatalogSchemas := make(map[string]*storage.TableSchema)
+					if s.engine != nil {
+						if tables, tErr := s.engine.ListTables(); tErr == nil {
+							for _, t := range tables {
+								if t != nil {
+									allCatalogSchemas[strings.ToLower(t.Name)] = t
+									allCatalogSchemas[t.Name] = t
+								}
+							}
+						}
+					}
+					srcSch, _ := planner.DeriveSubquerySchema(parsed.sourceAlias, selStmt, allCatalogSchemas)
+					if srcSch != nil {
+						sourceSchema = srcSch
+					}
+				}
+			}
+		}
 	}
 
 	// Construct comprehensive TableScope for target and source to validate expressions upfront
 	mergeScope := planner.NewTableScope()
-	_ = mergeScope.Register(parsed.targetTable, parsed.targetAlias, targetSchema)
+	if err := mergeScope.Register(parsed.targetTable, parsed.targetAlias, targetSchema); err != nil {
+		return nil, fmt.Errorf("failed to register target table in scope: %w", err)
+	}
 	srcName := sourceTable
 	if srcName == "" {
 		srcName = parsed.sourceAlias
 	}
-	_ = mergeScope.Register(srcName, parsed.sourceAlias, sourceSchema)
+	if err := mergeScope.Register(srcName, parsed.sourceAlias, sourceSchema); err != nil {
+		return nil, fmt.Errorf("failed to register source relation in scope: %w", err)
+	}
 
 	// Helper to validate raw SQL expressions against the combined mergeScope
 	validateMergeExprString := func(exprStr string) error {
@@ -147,10 +175,16 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		}
 		p := proc.NewParser(proc.NewLexer(exprStr))
 		astExpr := p.ParseExpr()
-		if astExpr != nil && len(p.Errors()) == 0 {
-			return mergeScope.ValidateExpr(astExpr)
+		if len(p.Errors()) > 0 {
+			return fmt.Errorf("invalid SQL expression %q: %s", exprStr, strings.Join(p.Errors(), "; "))
 		}
-		return nil
+		if astExpr == nil {
+			return fmt.Errorf("empty SQL expression: %q", exprStr)
+		}
+		if !p.CurTokenIs(proc.TokenEOF) && !p.CurTokenIs(proc.TokenSemicolon) {
+			return fmt.Errorf("unexpected trailing token %q after expression %q", p.CurrentToken().Literal, exprStr)
+		}
+		return mergeScope.ValidateExpr(astExpr)
 	}
 
 	// 1. Upfront validate ON condition
