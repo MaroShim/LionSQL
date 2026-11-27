@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
@@ -108,14 +109,72 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		return nil, fmt.Errorf("target table %q not found: %w", parsed.targetTable, err)
 	}
 
-	// Upfront semantic validation of MERGE clauses against target table schema
-	// Prevents non-existent columns from passing silently when 0 rows match.
+	// Resolve source schema if source is a physical table or named columns
+	var sourceSchema *storage.TableSchema
+	sourceTable := cleanIdentifier(parsed.sourceRaw)
+	if sourceTable != "" && !strings.HasPrefix(sourceTable, "(") {
+		if srcSch, sErr := s.engine.GetTable(sourceTable); sErr == nil && srcSch != nil {
+			sourceSchema = srcSch
+		}
+	} else if len(parsed.sourceCols) > 0 {
+		var srcCols []storage.Column
+		for _, sc := range parsed.sourceCols {
+			srcCols = append(srcCols, storage.Column{
+				Name: sc,
+				Type: storage.TypeUnknown,
+			})
+		}
+		sourceSchema = &storage.TableSchema{
+			Name:    parsed.sourceAlias,
+			Columns: srcCols,
+		}
+	}
+
+	// Construct comprehensive TableScope for target and source to validate expressions upfront
+	mergeScope := planner.NewTableScope()
+	_ = mergeScope.Register(parsed.targetTable, parsed.targetAlias, targetSchema)
+	srcName := sourceTable
+	if srcName == "" {
+		srcName = parsed.sourceAlias
+	}
+	_ = mergeScope.Register(srcName, parsed.sourceAlias, sourceSchema)
+
+	// Helper to validate raw SQL expressions against the combined mergeScope
+	validateMergeExprString := func(exprStr string) error {
+		exprStr = strings.TrimSpace(exprStr)
+		if exprStr == "" {
+			return nil
+		}
+		p := proc.NewParser(proc.NewLexer(exprStr))
+		astExpr := p.ParseExpr()
+		if astExpr != nil && len(p.Errors()) == 0 {
+			return mergeScope.ValidateExpr(astExpr)
+		}
+		return nil
+	}
+
+	// 1. Upfront validate ON condition
+	if err := validateMergeExprString(parsed.onCondition); err != nil {
+		return nil, fmt.Errorf("invalid expression in ON clause: %w", err)
+	}
+
+	// 2. Upfront semantic validation of all MERGE clauses (target and source expressions)
+	// Prevents non-existent columns (e.g. s.ghost_col, invalid functions) from passing silently when 0 rows match.
 	for _, clause := range parsed.clauses {
-		if clause.clauseType == mergeMatchedUpdate {
+		if clause.andCond != "" {
+			if err := validateMergeExprString(clause.andCond); err != nil {
+				return nil, fmt.Errorf("invalid expression in WHEN AND condition: %w", err)
+			}
+		}
+
+		if clause.clauseType == mergeMatchedUpdate || clause.clauseType == mergeNotMatchedSourceUpdate {
 			for _, pair := range clause.setPairs {
 				colName := stripQualifier(pair.column)
 				if _, _, found := targetSchema.FindColumn(colName); !found {
 					return nil, fmt.Errorf("column %q not found in target table %q", colName, parsed.targetTable)
+				}
+				if err := validateMergeExprString(pair.expr); err != nil {
+					return nil, fmt.Errorf("invalid expression in UPDATE SET %s: %w", pair.column, err)
 				}
 			}
 		} else if clause.clauseType == mergeNotMatchedInsert {
@@ -142,6 +201,11 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				cleanedCol := stripQualifier(colName)
 				if _, _, found := targetSchema.FindColumn(cleanedCol); !found {
 					return nil, fmt.Errorf("column %q not found in target table %q", cleanedCol, parsed.targetTable)
+				}
+			}
+			for _, valExpr := range clause.insertVals {
+				if err := validateMergeExprString(valExpr); err != nil {
+					return nil, fmt.Errorf("invalid expression in INSERT VALUES: %w", err)
 				}
 			}
 		}

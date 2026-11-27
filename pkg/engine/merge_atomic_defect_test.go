@@ -124,6 +124,43 @@ WHEN NOT MATCHED THEN
 	if _, err := coord.ExecuteSessionSQL(sessID, sqlColMismatch); err == nil {
 		t.Errorf("expected MERGE with column count mismatch to fail upfront, got nil")
 	}
+
+	// 4. Source nonexistent column in UPDATE SET right-hand expression (0 rows matched):
+	// Even though 0 rows match, s.ghost_source_col must be detected upfront and fail!
+	sqlBadSourceUpdate := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.name = s.ghost_source_col;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadSourceUpdate); err == nil {
+		t.Errorf("expected MERGE with non-existent source column s.ghost_source_col in UPDATE SET to fail upfront, got nil")
+	}
+
+	// 5. Source nonexistent column in ON clause:
+	sqlBadOn := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.ghost_source_id
+WHEN NOT MATCHED THEN
+    INSERT (id, name) VALUES (s.id, s.name);
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadOn); err == nil {
+		t.Errorf("expected MERGE with non-existent source column in ON clause to fail upfront, got nil")
+	}
+
+	// 6. Source nonexistent column in WHEN MATCHED AND clause:
+	sqlBadAnd := `
+MERGE m_target_empty AS t
+USING m_source_empty AS s
+ON t.id = s.id
+WHEN MATCHED AND s.ghost_filter = 1 THEN
+    DELETE;
+`
+	if _, err := coord.ExecuteSessionSQL(sessID, sqlBadAnd); err == nil {
+		t.Errorf("expected MERGE with non-existent source column in WHEN AND condition to fail upfront, got nil")
+	}
 }
 
 func TestDEFECT_Merge_Triggers_Executed(t *testing.T) {

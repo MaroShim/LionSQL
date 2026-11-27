@@ -1460,3 +1460,72 @@ func TestBinder_Hardening_JoinDerivedTableBinding(t *testing.T) {
 	}
 }
 
+func TestBinder_Hardening_ThreeTableMultiJoinDerivedTableSlotLayout(t *testing.T) {
+	schemas := setupTestCatalog()
+	// users has 3 columns: id (0), name (1), age (2)
+	// orders has 3 columns: id (0), user_id (1), amount (2)
+	binder := planner.NewBinder(schemas)
+
+	// SELECT u.id, b.order_sum, c.avg_amount
+	// FROM users u
+	// JOIN (SELECT user_id, SUM(amount) AS order_sum FROM orders GROUP BY user_id) b ON u.id = b.user_id
+	// JOIN (SELECT user_id, AVG(amount) AS avg_amount FROM orders GROUP BY user_id) c ON u.id = c.user_id;
+	sqlThreeTable := `
+SELECT u.id, b.order_sum, c.avg_amount
+FROM users u
+JOIN (SELECT user_id, SUM(amount) AS order_sum FROM orders GROUP BY user_id) b ON u.id = b.user_id
+JOIN (SELECT user_id, AVG(amount) AS avg_amount FROM orders GROUP BY user_id) c ON u.id = c.user_id;
+`
+	parsed, err := proc.ParseSQL(sqlThreeTable)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	bound, err := binder.BindSelect(parsed.(*proc.GeneralSelectStmt))
+	if err != nil {
+		t.Fatalf("BindSelect failed on 3-table multi-join derived tables: %v", err)
+	}
+
+	// 1. Verify 3 registered tables
+	if len(bound.Tables) != 3 {
+		t.Fatalf("expected 3 tables, got %d", len(bound.Tables))
+	}
+
+	// Table 0: users (3 columns: id, name, age) -> SlotOffset = 0
+	if bound.Tables[0].TableID != 0 || bound.Tables[0].SlotOffset != 0 {
+		t.Errorf("table 0 (users) invalid: id=%d, slotOffset=%d", bound.Tables[0].TableID, bound.Tables[0].SlotOffset)
+	}
+
+	// Table 1: b (2 columns: user_id, order_sum) -> SlotOffset = 3 (after 3 cols of users)
+	if bound.Tables[1].TableID != 1 || bound.Tables[1].SlotOffset != 3 {
+		t.Errorf("table 1 (b) invalid: id=%d, slotOffset=%d (expected 3)", bound.Tables[1].TableID, bound.Tables[1].SlotOffset)
+	}
+
+	// Table 2: c (2 columns: user_id, avg_amount) -> SlotOffset = 3 + 2 = 5
+	if bound.Tables[2].TableID != 2 || bound.Tables[2].SlotOffset != 5 {
+		t.Errorf("table 2 (c) invalid: id=%d, slotOffset=%d (expected 5)", bound.Tables[2].TableID, bound.Tables[2].SlotOffset)
+	}
+
+	// 2. Verify projections tuple slots
+	if len(bound.Projections) != 3 {
+		t.Fatalf("expected 3 projections, got %d", len(bound.Projections))
+	}
+
+	// Proj 0: u.id -> TableID=0, ColumnIdx=0, TupleSlot=0
+	bp0, ok0 := bound.Projections[0].Expr.(*planner.BoundColumnRef)
+	if !ok0 || bp0.TableID != 0 || bp0.ColumnIdx != 0 || bp0.TupleSlot != 0 {
+		t.Errorf("proj 0 (u.id) mismatch: %+v", bp0)
+	}
+
+	// Proj 1: b.order_sum -> TableID=1, ColumnIdx=1, TupleSlot=3+1=4
+	bp1, ok1 := bound.Projections[1].Expr.(*planner.BoundColumnRef)
+	if !ok1 || bp1.TableID != 1 || bp1.ColumnIdx != 1 || bp1.TupleSlot != 4 {
+		t.Errorf("proj 1 (b.order_sum) mismatch: %+v (expected TableID=1, ColumnIdx=1, TupleSlot=4)", bp1)
+	}
+
+	// Proj 2: c.avg_amount -> TableID=2, ColumnIdx=1, TupleSlot=5+1=6
+	bp2, ok2 := bound.Projections[2].Expr.(*planner.BoundColumnRef)
+	if !ok2 || bp2.TableID != 2 || bp2.ColumnIdx != 1 || bp2.TupleSlot != 6 {
+		t.Errorf("proj 2 (c.avg_amount) mismatch: %+v (expected TableID=2, ColumnIdx=1, TupleSlot=6)", bp2)
+	}
+}
+

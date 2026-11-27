@@ -492,3 +492,72 @@ func TestSortIterator_NegativeDecimalSpillIntegrity(t *testing.T) {
 		}
 	}
 }
+
+func TestSortIterator_LargeScaleMultiRunDecimalSpillMerge(t *testing.T) {
+	ctx := context.Background()
+	schema := []string{"id", "val"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+
+	// Generate 1,000 distinct pseudo-random decimal values spanning negative, fractional, and large positive ranges
+	const rowCount = 1000
+	var tuples []execution.Tuple
+	var expectedSortedDecs []storage.Decimal
+
+	rnd := rand.New(rand.NewSource(42))
+	for i := 0; i < rowCount; i++ {
+		// e.g. -500.00 to +500.00 with varying fractional digits
+		intPart := rnd.Int63n(1000) - 500
+		fracPart := rnd.Int63n(10000)
+		strVal := fmt.Sprintf("%d.%04d", intPart, fracPart)
+		dec, err := storage.ParseDecimal(strVal)
+		if err != nil {
+			t.Fatalf("failed to parse decimal %s: %v", strVal, err)
+		}
+		tuples = append(tuples, execution.Tuple{
+			Values: []any{int64(i), dec},
+			Index:  colMap,
+		})
+		expectedSortedDecs = append(expectedSortedDecs, dec)
+	}
+
+	// Sort expected values mathematically in memory
+	sort.Slice(expectedSortedDecs, func(i, j int) bool {
+		return expectedSortedDecs[i].Cmp(expectedSortedDecs[j]) < 0
+	})
+
+	mock := &mockTupleIterator{tuples: tuples, schema: schema}
+	sortIter := execution.NewSortIterator(mock, "val ASC")
+	// Set very small work_mem (2KB) so 1,000 tuples (~40KB+) force multiple disk spill runs and k-way heap merge
+	sortIter.SetWorkMem(2048)
+
+	if err := sortIter.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer sortIter.Close()
+
+	var results []execution.Tuple
+	for {
+		tuple, err := sortIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next error: %v", err)
+		}
+		results = append(results, tuple)
+	}
+
+	if len(results) != rowCount {
+		t.Fatalf("expected %d tuples after multi-run spill merge, got %d", rowCount, len(results))
+	}
+
+	for i := 0; i < rowCount; i++ {
+		gotVal, ok := results[i].Get("val").(storage.Decimal)
+		if !ok {
+			t.Fatalf("row %d: expected storage.Decimal, got %T", i, results[i].Get("val"))
+		}
+		if !gotVal.Equal(expectedSortedDecs[i]) {
+			t.Fatalf("row %d: sort order mismatch! expected %v, got %v", i, expectedSortedDecs[i], gotVal)
+		}
+	}
+}
